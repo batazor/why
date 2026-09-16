@@ -256,53 +256,108 @@ main:focus {
   flex: 1;
 }
 
+/* Переключатель темы — ползунок, а не кнопка-иконка: у ползунка видно оба
+   состояния сразу, поэтому не нужно гадать, показывает иконка текущую тему
+   или ту, в которую переключит. Кружок стоит под активной иконкой.
+
+   Вся геометрия выведена из четырёх чисел ниже: ход ползунка равен разнице
+   ширины и высоты, так что размер меняется правкой одного значения. */
 .theme-toggle {
-  display: grid;
-  place-items: center;
-  width: 1.9rem;
-  height: 1.9rem;
+  --toggle-w: 3.25rem;
+  --toggle-h: 1.75rem;
+  --toggle-gap: 0.1875rem;
+  --toggle-icon: 0.875rem;
+  --toggle-thumb: calc(var(--toggle-h) - 2 * var(--toggle-gap) - 2px);
+  --toggle-travel: calc(var(--toggle-w) - var(--toggle-h));
+
+  position: relative;
+  flex: none;
+  width: var(--toggle-w);
+  height: var(--toggle-h);
   padding: 0;
   border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--panel);
+  border-radius: 999px;
+  background: var(--bg);
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .theme-toggle:hover {
   border-color: var(--accent);
 }
 
-/* Солнце в светлой теме, месяц в тёмной: иконка показывает текущее состояние,
-   а не то, во что переключит. Тот же охранный паттерн, что у токенов темы —
-   системную тёмную нельзя ловить одним `:not([data-theme='light'])`, иначе
-   месяц вылезет и на светлой системной. */
-.theme-toggle__icon {
-  width: 0.85rem;
-  height: 0.85rem;
+.theme-toggle__thumb {
+  position: absolute;
+  top: 50%;
+  left: var(--toggle-gap);
+  width: var(--toggle-thumb);
+  height: var(--toggle-thumb);
   border-radius: 50%;
-  background: var(--muted);
-  box-shadow:
-    0 0 0 2px var(--panel),
-    0 0 0 3.5px var(--muted);
+  background: var(--accent);
+  transform: translate(0, -50%);
+  transition: transform 0.22s cubic-bezier(0.3, 0.8, 0.4, 1);
 }
 
+/* Иконки стоят ровно там, где останавливается кружок: по центру его крайних
+   положений. Активная оказывается поверх кружка и потому перекрашивается в
+   цвет панели — по контрасту и видно, какая половина выбрана. */
+.theme-toggle__icon {
+  position: absolute;
+  top: 50%;
+  width: var(--toggle-icon);
+  height: var(--toggle-icon);
+  transform: translateY(-50%);
+  transition: color 0.22s ease;
+}
+
+.theme-toggle__icon--sun {
+  left: calc(var(--toggle-gap) + (var(--toggle-thumb) - var(--toggle-icon)) / 2);
+  color: var(--panel);
+}
+
+.theme-toggle__icon--moon {
+  right: calc(var(--toggle-gap) + (var(--toggle-thumb) - var(--toggle-icon)) / 2);
+  color: var(--muted);
+}
+
+/* Тёмное состояние описано тем же охранным триплетом, что и токены темы:
+   системную тёмную нельзя ловить без `:not([data-theme='light'])`, иначе
+   выбранная руками светлая её не перебьёт. Значения в обоих блоках совпадают.
+
+   Сдвиг и цвета переставляются самими правилами, а не общей переменной вроде
+   `--toggle-on: 0|1`: тогда у transform и color меняется объявленное значение,
+   а это ровно то, за чем следит transition. */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .theme-toggle__icon {
-    background: transparent;
-    box-shadow: inset -4px -1px 0 0 var(--muted);
+  :root:not([data-theme='light']) .theme-toggle__thumb {
+    transform: translate(var(--toggle-travel), -50%);
+  }
+
+  :root:not([data-theme='light']) .theme-toggle__icon--sun {
+    color: var(--muted);
+  }
+
+  :root:not([data-theme='light']) .theme-toggle__icon--moon {
+    color: var(--panel);
   }
 }
 
-:root[data-theme='dark'] .theme-toggle__icon {
-  background: transparent;
-  box-shadow: inset -4px -1px 0 0 var(--muted);
+:root[data-theme='dark'] .theme-toggle__thumb {
+  transform: translate(var(--toggle-travel), -50%);
 }
 
-:root[data-theme='light'] .theme-toggle__icon {
-  background: var(--muted);
-  box-shadow:
-    0 0 0 2px var(--panel),
-    0 0 0 3.5px var(--muted);
+:root[data-theme='dark'] .theme-toggle__icon--sun {
+  color: var(--muted);
+}
+
+:root[data-theme='dark'] .theme-toggle__icon--moon {
+  color: var(--panel);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-toggle__thumb,
+  .theme-toggle__icon {
+    transition: none;
+  }
 }
 
 .visually-hidden {
@@ -1626,12 +1681,21 @@ main:focus {
 
 /* ---------- shiki dual theme ---------- */
 
+/* Shiki кладёт обе темы в переменные, переключать их приходится вручную — и по
+   той же тройке селекторов, что и токены сайта. Одной медиазапросной ветки
+   мало: с ней код оставался бы тёмным при выбранной руками светлой теме. */
 @media (prefers-color-scheme: dark) {
-  .astro-code,
-  .astro-code span {
+  :root:not([data-theme='light']) .astro-code,
+  :root:not([data-theme='light']) .astro-code span {
     color: var(--shiki-dark) !important;
     background-color: var(--shiki-dark-bg) !important;
   }
+}
+
+:root[data-theme='dark'] .astro-code,
+:root[data-theme='dark'] .astro-code span {
+  color: var(--shiki-dark) !important;
+  background-color: var(--shiki-dark-bg) !important;
 }
 
 .astro-code .highlighted {

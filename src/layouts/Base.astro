@@ -85,8 +85,40 @@ const canonical = new URL(localePath(lang, path), Astro.site);
       <div class="wrap site-header__inner">
         <a class="site-header__brand" href={localePath(lang)}>{t('site.title')}</a>
         <span class="site-header__spacer"></span>
-        <button class="theme-toggle" type="button" data-theme-toggle title={t('nav.theme')}>
-          <span class="theme-toggle__icon" aria-hidden="true"></span>
+        {/* role="switch" вместо простой кнопки: у переключателя есть состояние,
+            и скринридер должен назвать его. aria-checked проставляет скрипт —
+            на сервере он неизвестен, пока тема приходит от системы. */}
+        <button
+          class="theme-toggle"
+          type="button"
+          role="switch"
+          aria-checked="false"
+          data-theme-toggle
+          title={t('nav.theme')}
+        >
+          <span class="theme-toggle__thumb" aria-hidden="true"></span>
+          <svg
+            class="theme-toggle__icon theme-toggle__icon--sun"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="4.2" fill="currentColor" stroke="none"></circle>
+            <path
+              d="M12 2.4v2.3M12 19.3v2.3M4.2 4.2l1.7 1.7M18.1 18.1l1.7 1.7M2.4 12h2.3M19.3 12h2.3M4.2 19.8l1.7-1.7M18.1 5.9l1.7-1.7"
+            ></path>
+          </svg>
+          <svg
+            class="theme-toggle__icon theme-toggle__icon--moon"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path d="M20.3 14.6A8.6 8.6 0 0 1 9.4 3.7a7.7 7.7 0 1 0 10.9 10.9Z"></path>
+          </svg>
           <span class="visually-hidden">{t('nav.theme')}</span>
         </button>
 
@@ -111,17 +143,27 @@ const canonical = new URL(localePath(lang, path), Astro.site);
     </main>
 
     <script>
-      // Кнопка переключает между светлой и тёмной, отталкиваясь от того, что
-      // читатель видит сейчас, — включая тему, пришедшую от системы.
-      document.querySelector('[data-theme-toggle]')?.addEventListener('click', () => {
-        const root = document.documentElement;
-        const current =
-          root.dataset.theme ??
-          (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-        const next = current === 'dark' ? 'light' : 'dark';
-        root.dataset.theme = next;
+      // Переключатель отталкивается от того, что читатель видит сейчас, —
+      // включая тему, пришедшую от системы.
+      const root = document.documentElement;
+      const toggle = document.querySelector('[data-theme-toggle]');
+      const systemDark = matchMedia('(prefers-color-scheme: dark)');
+
+      const current = () => root.dataset.theme ?? (systemDark.matches ? 'dark' : 'light');
+
+      // Картинку рисует CSS по data-theme и медиазапросу, скрипту остаётся
+      // только озвучить состояние. Пока выбора нет, оно меняется вместе с
+      // системной темой — отсюда подписка на matchMedia.
+      const sync = () => toggle?.setAttribute('aria-checked', String(current() === 'dark'));
+
+      sync();
+      systemDark.addEventListener('change', sync);
+
+      toggle?.addEventListener('click', () => {
+        root.dataset.theme = current() === 'dark' ? 'light' : 'dark';
+        sync();
         try {
-          localStorage.setItem('why:theme', next);
+          localStorage.setItem('why:theme', root.dataset.theme);
         } catch {
           /* не критично: тема не переживёт перезагрузку */
         }
