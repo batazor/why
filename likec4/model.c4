@@ -1,0 +1,56 @@
+/**
+ * Оценка, в которой живёт пример урока: ровно то, что нужно текущим экранам.
+ *
+ * Имена сервисов, агрегатов и событий взяты буква в букву из `examples/auth`
+ * в репозитории portolan — урок разбирает существующий сервис, а не показывает,
+ * как было бы красиво. Контексты, которые в истории не участвуют, здесь не
+ * перенесены: урок учит границе, а не размеру эстейта.
+ *
+ * Модель растёт вместе с уроком: каждый новый экран добавляет сюда ровно те
+ * элементы, которые на нём видно, и ни одного впрок.
+ */
+model {
+  customer = actor 'Customer'
+
+  risk = external 'risk.v1' {
+    technology 'gRPC'
+  }
+
+  bus = broker 'bus'
+
+  auth = context 'auth' {
+    style { color owner }
+
+    api = service 'auth' {
+      technology 'HTTP'
+      style { color owner }
+    }
+  }
+
+  shop = context 'shop' {
+    style { color neighbour }
+
+    cart = service 'cart' {
+      technology 'HTTP'
+      style { color neighbour }
+    }
+  }
+
+  // --- что пересекает границу контекста ---
+
+  customer -[calls]-> auth.api 'POST /v1/sessions'
+  customer -[calls]-> shop.cart 'GET /v1/basket'
+
+  // Единственное, что сосед спрашивает у auth: жив ли токен. Ни одного
+  // вопроса про пароль здесь нет и быть не может.
+  shop.cart -[calls]-> auth.api 'validateSession' {
+    technology 'HTTP'
+  }
+
+  auth.api -[calls]-> risk 'Assess' {
+    technology 'gRPC'
+  }
+
+  auth.api -[publishes]-> bus '5 events'
+  bus -[consumes]-> auth.api 'PasswordChanged'
+}

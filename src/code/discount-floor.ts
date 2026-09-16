@@ -10,7 +10,7 @@ import flowSpec from './discount-floor.flow.ts';
  * Исключение — разбор доказательства: шаги refute/instantiate/contradict
  * показывают один и тот же блок трижды, подсвечивая по строке за раз, поэтому
  * в файл он идёт один раз, а не три. Собирается целиком:
- * Lean 4.34, ноль ошибок, все семь #eval дают показанные числа. В `output`
+ * Lean 4.34, ноль ошибок, все #eval дают показанные числа. В `output`
  * лежит только настоящий вывод компилятора — никаких пояснений от автора,
  * иначе обещание «весь вывод настоящий» перестаёт быть правдой.
  *
@@ -64,11 +64,14 @@ def stack (price : Nat) : List Promo → Nat
     id: 'one',
     lang: 'lean',
     caption: 'Pricing.lean',
-    code: `-- {{oneTest}}
+    code: `def categorySale : Promo := .percent 25
+def coupon : Promo := .percent 25
+
+-- {{oneTest}}
 -- [!code pass]
-example : stack sneakers.price [.percent 20] = 4000 := by decide
+example : stack sneakers.price [categorySale] = 3750 := by decide
 -- [!code pass]
-example : stack sneakers.price [.fixed 500]  = 4500 := by decide`,
+example : stack sneakers.price [coupon] = 3750 := by decide`,
     output: `Pricing.lean: no errors`,
     outputTone: 'ok',
   },
@@ -76,11 +79,11 @@ example : stack sneakers.price [.fixed 500]  = 4500 := by decide`,
     id: 'stack',
     lang: 'lean',
     caption: 'Pricing.lean',
-    code: `def promos : List Promo := [.percent 50, .percent 60]
+    code: `def promos : List Promo := [categorySale, coupon]
 
 -- [!code highlight]
 #eval stack sneakers.price promos`,
-    output: `1000`,
+    output: `2813`,
     outputTone: 'bad',
   },
   {
@@ -99,7 +102,7 @@ def reported (i : Item) (ps : List Promo) : Nat :=
 #eval reported sneakers promos
 #eval sneakers.price - clamped sneakers promos`,
     output: `3200
-4000
+2187
 1800`,
     outputTone: 'bad',
   },
@@ -172,7 +175,9 @@ def margin (i : Item) : Nat := i.price - i.cost
 -- {{noOverdraw}}
 def spend (price : Nat) : Nat → List Promo → Nat
   | budget, []      => budget
-  | budget, p :: ps => spend price (budget - min (cut price p) budget) ps
+  | budget, p :: ps =>
+      let taken := min (cut price p) budget
+      spend (price - taken) (budget - taken) ps
 
 -- {{finalPrice}}
 def checkout (i : Item) (ps : List Promo) : Nat :=
@@ -182,10 +187,10 @@ theorem checkout_never_below_cost (i : Item) (ps : List Promo) :
     i.cost ≤ checkout i ps :=
   Nat.le_add_right _ _
 
-#eval checkout sneakers [.percent 20]
+#eval checkout sneakers [categorySale]
 #eval checkout sneakers promos
 #eval checkout sneakers [.percent 50, .fixed 9000, .percent 90]`,
-    output: `4000
+    output: `3750
 3200
 3200`,
     outputTone: 'ok',
@@ -202,7 +207,9 @@ def margin (i : Item) : Nat := i.price - i.cost
 def spend (price : Nat) : Nat → List Promo → Nat
   | budget, []      => budget
   -- [!code highlight]
-  | budget, p :: ps => spend price (budget - min (cut price p) budget) ps
+  | budget, p :: ps =>
+      let taken := min (cut price p) budget
+      spend (price - taken) (budget - taken) ps
 
 -- {{finalPrice}}
 def checkout (i : Item) (ps : List Promo) : Nat :=
@@ -212,10 +219,10 @@ theorem checkout_never_below_cost (i : Item) (ps : List Promo) :
     i.cost ≤ checkout i ps :=
   Nat.le_add_right _ _
 
-#eval checkout sneakers [.percent 20]
+#eval checkout sneakers [categorySale]
 #eval checkout sneakers promos
 #eval checkout sneakers [.percent 50, .fixed 9000, .percent 90]`,
-    output: `4000
+    output: `3750
 3200
 3200`,
     outputTone: 'ok',
@@ -231,7 +238,9 @@ def margin (i : Item) : Nat := i.price - i.cost
 -- {{noOverdraw}}
 def spend (price : Nat) : Nat → List Promo → Nat
   | budget, []      => budget
-  | budget, p :: ps => spend price (budget - min (cut price p) budget) ps
+  | budget, p :: ps =>
+      let taken := min (cut price p) budget
+      spend (price - taken) (budget - taken) ps
 
 -- {{finalPrice}}
 def checkout (i : Item) (ps : List Promo) : Nat :=
@@ -242,10 +251,10 @@ theorem checkout_never_below_cost (i : Item) (ps : List Promo) :
     i.cost ≤ checkout i ps :=
   Nat.le_add_right _ _
 
-#eval checkout sneakers [.percent 20]
+#eval checkout sneakers [categorySale]
 #eval checkout sneakers promos
 #eval checkout sneakers [.percent 50, .fixed 9000, .percent 90]`,
-    output: `4000
+    output: `3750
 3200
 3200`,
     outputTone: 'ok',

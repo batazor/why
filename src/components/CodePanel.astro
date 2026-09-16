@@ -13,9 +13,11 @@ interface Props {
   outputTone?: 'ok' | 'bad';
   /** Ссылка в песочницу Lean; отсутствует для нелиновых примеров. */
   runUrl?: string;
+  /** Вывод раскрывается после действия читателя. Без JS остаётся видимым. */
+  revealOutput?: boolean;
 }
 
-const { lang, caption, code, codeLang, output, outputTone, runUrl } = Astro.props;
+const { lang, caption, code, codeLang, output, outputTone, runUrl, revealOutput } = Astro.props;
 const t = useTranslations(lang);
 
 const shikiOptions = {
@@ -73,7 +75,7 @@ const shikiOptions = {
 
   {
     output && (
-      <div class:list={['output', outputTone === 'bad' && 'output--bad']}>
+      <div class:list={['output', outputTone === 'bad' && 'output--bad']} data-promo-result={revealOutput || undefined}>
         <p class="output__label">{t('lesson.output')}</p>
         <pre>{output}</pre>
       </div>

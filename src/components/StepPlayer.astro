@@ -3,10 +3,12 @@ import { Code } from 'astro:components';
 import { codeTransformers } from '../code/shiki';
 import { inlineMarkdown } from '../inline-markdown';
 import FlowDiagram from './FlowDiagram';
+import LikeC4Stage from './LikeC4Stage';
 import CodePanel from './CodePanel.astro';
 import { useTranslations, type Locale } from '../i18n/ui';
 import type { CodeDeck } from '../code/types';
 import type { FlowSpec } from '../code/flow';
+import type { LikeC4Spec } from '../code/likec4';
 
 interface NarrationStep {
   id: string;
@@ -20,17 +22,30 @@ interface Props {
   deck: CodeDeck;
   /** Схема разбора, если урок ведёт она, а не код. */
   flow?: FlowSpec;
+  /**
+   * Разбор ведёт модель LikeC4, а не нарисованная руками схема. Варианты
+   * взаимно исключающие: полотно на сцене одно, и двум схемам на нём тесно.
+   */
+  likec4?: LikeC4Spec;
   /** Локализованные тексты пометок поверх схемы. */
   notes?: { step: string; level: number; text: string }[];
   /** Локализованные тексты комментариев к коду. */
   comments?: Record<string, string>;
   /** Локализованные подписи для перетаскивания карточки в схему. */
-  drags?: { step: string; chip: string; slot: string }[];
+  drags?: { step: string; chip: string; slot: string; action?: string; applied?: string; result?: string }[];
   /** Локализованные подписи узлов и рёбер схемы. */
   labels?: Record<string, string>;
 }
 
-const { lang, steps, deck, flow, notes = [], comments = {}, drags = [], labels = {} } = Astro.props;
+const { lang, steps, deck, flow, likec4, notes = [], comments = {}, drags = [], labels = {} } = Astro.props;
+
+if (flow && likec4) {
+  throw new Error('StepPlayer: flow и likec4 вместе — на сцене одно полотно');
+}
+
+// Обёртка сцены общая для обоих вариантов: высота, прокрутка, прилипание.
+// Отличается только то, что внутри полотна.
+const stage = flow ?? likec4;
 
 /**
  * Код в колоде общий для всех локалей, поэтому комментарии в нём — ключи.
@@ -100,22 +115,26 @@ const shikiOptions = {
 ---
 
 <section
-  class:list={['player', flow && 'player--diagram', flow && 'player--scroll']}
+  class:list={['player', stage && 'player--diagram', stage && 'player--scroll']}
   data-player
   aria-label={t('lesson.walkthrough')}
 >
   <div class="player__body">
     {
-      flow && (
-        <figure class="player__stage" style={`--flow-height: ${flow.height}px`}>
-          <FlowDiagram
-            client:visible
-            spec={flow}
-            firstStep={merged[0].id}
-            notes={notes}
-            drags={drags}
-            labels={labels}
-          />
+      stage && (
+        <figure class="player__stage" style={`--flow-height: ${stage.height}px`}>
+          {flow ? (
+            <FlowDiagram
+              client:visible
+              spec={flow}
+              firstStep={merged[0].id}
+              notes={notes}
+              drags={drags}
+              labels={labels}
+            />
+          ) : (
+            <LikeC4Stage client:visible views={likec4!.views} firstStep={merged[0].id} />
+          )}
         </figure>
       )
     }
@@ -129,16 +148,33 @@ const shikiOptions = {
             <div>
               <p class="step__index">{t('lesson.stepOf', { n: i + 1, total: merged.length })}</p>
               <h3 class="step__title">{merged[i].title}</h3>
-              <p class="step__narration" set:html={inlineMarkdown(merged[i].narration)} />
+              <p class="step__narration" data-promo-question={flow?.drop?.step === merged[i].id || undefined} set:html={inlineMarkdown(merged[i].narration)} />
 
               {
                 drags.find((drag) => drag.step === merged[i].id) && (
                   /* Карточка живёт в тексте, а слот — в схеме: чтобы донести
                      одну до другого, читателю приходится смотреть на обе. */
-                  <span class="promo-chip" role="button" tabindex="0" draggable="true" data-drag-chip>
-                    <span class="promo-chip__grip" aria-hidden="true">⠿</span>
-                    {drags.find((drag) => drag.step === merged[i].id)!.chip}
-                  </span>
+                  <>
+                  <div aria-live="polite" aria-atomic="true" id={`promo-result-${merged[i].id}`}>
+                    <p class="promo-result" data-promo-result set:html={inlineMarkdown(drags.find((drag) => drag.step === merged[i].id)!.result ?? '')} />
+                  </div>
+                  <div class="promo-experiment">
+                    <span class="promo-chip" draggable="true" data-drag-chip>
+                      <span class="promo-chip__grip" aria-hidden="true">⠿</span>
+                      {drags.find((drag) => drag.step === merged[i].id)!.chip}
+                    </span>
+                    <button
+                      class="btn promo-apply"
+                      type="button"
+                      data-promo-apply
+                      data-applied-label={drags.find((drag) => drag.step === merged[i].id)!.applied}
+                      aria-expanded="false"
+                      aria-controls={`promo-result-${merged[i].id}`}
+                    >
+                      {drags.find((drag) => drag.step === merged[i].id)!.action ?? drags.find((drag) => drag.step === merged[i].id)!.slot}
+                    </button>
+                  </div>
+                  </>
                 )
               }
             </div>
@@ -154,6 +190,7 @@ const shikiOptions = {
                 output={merged[i].panel!.output}
                 outputTone={merged[i].panel!.outputTone}
                 runUrl={playgrounds[i]}
+                revealOutput={flow?.drop?.step === merged[i].id}
               />
             );
 
@@ -320,6 +357,15 @@ const shikiOptions = {
         const ids = slots.map((slot) => Number(slot.dataset.panelFor));
         const shown = Math.min(Math.max(index, ids[0]), ids[ids.length - 1]);
         slots.forEach((slot, n) => slot.classList.toggle('is-shown', ids[n] === shown));
+        // Прокручиваем только панель, не страницу: нужная строка длинного
+        // доказательства должна быть видна под закреплённой схемой.
+        requestAnimationFrame(() => {
+          const line = stage.querySelector<HTMLElement>('.is-shown .highlighted');
+          if (getComputedStyle(stage).position !== 'sticky') return;
+          stage.scrollTop = line
+            ? Math.max(0, line.getBoundingClientRect().top - stage.getBoundingClientRect().top + stage.scrollTop - 72)
+            : 0;
+        });
       });
     }
 
@@ -397,25 +443,68 @@ const shikiOptions = {
 
 
     if (scrolly) {
-      const goTo = (to: number) => {
-        const target = steps[Math.max(0, Math.min(steps.length - 1, to))];
-        target.scrollIntoView({ block: 'center', behavior: smooth as ScrollBehavior });
+      const stage = player.querySelector<HTMLElement>('.player__stage')!;
+      const controls = player.querySelector<HTMLElement>('.player__controls')!;
+      const contentTop = (step: HTMLElement) => step.firstElementChild!.getBoundingClientRect().top;
+      const readingTop = () => stage.getBoundingClientRect().height + 24;
+      let navigating = false;
+      let scrollFrame = 0;
+      let settleTimer: ReturnType<typeof setTimeout>;
+
+      // Активный шаг определяется в области чтения ПОД схемой. Середина
+      // всего экрана могла лежать внутри схемы и включать уже скрытый текст.
+      const followScroll = () => {
+        if (navigating) return;
+        const boundary = readingTop() + 8;
+        let active = 0;
+        steps.forEach((step, i) => {
+          if (contentTop(step) <= boundary) active = i;
+        });
+        if (active !== index) mark(active);
       };
 
-      // Активен тот шаг, который пересёк среднюю полосу экрана. Полоса узкая,
-      // поэтому в каждый момент в неё попадает ровно один шаг.
-      const spotlight = new IntersectionObserver(
-        (entries) => {
-          for (const entry of entries) {
-            if (!entry.isIntersecting) continue;
-            mark(steps.indexOf(entry.target as HTMLElement));
-          }
-        },
-        { rootMargin: '-48% 0px -48% 0px' },
-      );
-      steps.forEach((step) => spotlight.observe(step));
+      const goTo = (to: number, behavior: ScrollBehavior = smooth) => {
+        const destination = Math.max(0, Math.min(steps.length - 1, to));
+        navigating = true;
+        mark(destination);
+        window.scrollTo({ top: window.scrollY + contentTop(steps[destination]) - readingTop(), behavior });
+        clearTimeout(settleTimer);
+        settleTimer = setTimeout(() => { navigating = false; followScroll(); }, 180);
+      };
 
+      window.addEventListener('scroll', () => {
+        cancelAnimationFrame(scrollFrame);
+        scrollFrame = requestAnimationFrame(followScroll);
+        clearTimeout(settleTimer);
+        settleTimer = setTimeout(() => { navigating = false; followScroll(); }, 180);
+      }, { passive: true });
 
+      const measure = () => {
+        player.style.setProperty('--reading-top', `${readingTop()}px`);
+        player.style.setProperty('--controls-height', `${controls.getBoundingClientRect().height}px`);
+      };
+      const layout = new ResizeObserver(measure);
+      layout.observe(stage);
+      layout.observe(controls);
+      measure();
+
+    // Плеер — единственный источник состояния опыта: кнопка, перетаскивание
+    // и слот раскрывают один и тот же результат. Он сохраняется между шагами.
+    player.addEventListener('why:promo-placed', () => {
+      player.dataset.promoPlaced = 'true';
+      player.querySelectorAll<HTMLButtonElement>('[data-promo-apply]').forEach((button) => {
+        button.setAttribute('aria-expanded', 'true');
+        button.disabled = true;
+        if (button.dataset.appliedLabel) button.textContent = button.dataset.appliedLabel;
+      });
+      // Кнопка могла быть ниже сгиба экрана. После замены вопроса ответом
+      // возвращаем начало опыта в область чтения, вместе с выводом справа.
+      const experiment = steps.findIndex((step) => step.querySelector('[data-promo-apply]'));
+      if (experiment >= 0) goTo(experiment, 'auto');
+    });
+    player.querySelectorAll<HTMLButtonElement>('[data-promo-apply]').forEach((button) => {
+      button.addEventListener('click', () => player.dispatchEvent(new CustomEvent('why:promo-placed')));
+    });
 
     // Карточка акции переезжает из текста в схему обычным HTML5-перетаскиванием:
     // React-остров слушает drop у себя, общий словарь между ними — тип данных.
@@ -458,16 +547,28 @@ const shikiOptions = {
         // переход по ссылке: на время перехода берём управление себе.
         const restore = history.scrollRestoration;
         history.scrollRestoration = 'manual';
-        steps[start].scrollIntoView({ block: 'center', behavior: 'auto' });
+        goTo(start, 'auto');
         requestAnimationFrame(() => {
-          steps[start].scrollIntoView({ block: 'center', behavior: 'auto' });
+          goTo(start, 'auto');
           history.scrollRestoration = restore;
         });
+        // Восстановление фокуса и загрузка шрифтов могут сдвинуть страницу
+        // позже первого кадра. Доводим прямую ссылку после загрузки, но уже
+        // не трогаем прокрутку, если читатель начал взаимодействовать.
+        let touched = false;
+        for (const event of ['pointerdown', 'wheel', 'touchstart', 'keydown']) {
+          window.addEventListener(event, () => { touched = true; }, { once: true, passive: true });
+        }
+        const alignStart = () => requestAnimationFrame(() => {
+          if (!touched && hashIndex() === start) goTo(start, 'auto');
+        });
+        window.addEventListener('pageshow', alignStart, { once: true });
+        document.fonts.ready.then(alignStart);
       }
 
       window.addEventListener('hashchange', () => {
         const to = hashIndex();
-        if (to >= 0 && to !== index) goTo(to);
+        if (to >= 0) goTo(to);
       });
       return;
     }

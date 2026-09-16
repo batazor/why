@@ -66,6 +66,9 @@ const lessons = defineCollection({
             .object({
               chip: z.string(),
               slot: z.string(),
+              action: z.string().optional(),
+              applied: z.string().optional(),
+              result: z.string().optional(),
             })
             .optional(),
         }),

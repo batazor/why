@@ -1,0 +1,95 @@
+/**
+ * Виды элементов и связей для схем урока.
+ *
+ * Модель — общий для локалей ассет, как колода кода и схема на React Flow:
+ * значит в ней только английский и только идентификаторы. Проза переводится и
+ * живёт в нарративе урока, поэтому в title и description ей места нет.
+ */
+specification {
+  color owner #4a86c8
+  color neighbour #c4703f
+
+  /**
+   * Ограниченный контекст — рамка, а не карточка: владеет им контекст, а
+   * сервисов внутри может быть и три. Прозрачная заливка работает только у
+   * составных узлов, поэтому в view контекст всегда показывается вместе с тем,
+   * что внутри него.
+   */
+  element context {
+    style {
+      shape rectangle
+      opacity 10%
+      border dashed
+    }
+  }
+
+  element service {
+    style {
+      shape rectangle
+      size sm
+    }
+  }
+
+  /** Вертикальный слайс контекста: своя способность, свои слои. */
+  element slice {
+    style {
+      shape rectangle
+      opacity 20%
+    }
+  }
+
+  element aggregate {
+    style {
+      shape rectangle
+      opacity 25%
+    }
+  }
+
+  element event {
+    style {
+      shape rectangle
+      opacity 30%
+      color green
+    }
+  }
+
+  element actor {
+    style {
+      shape person
+      color muted
+      size sm
+    }
+  }
+
+  element store {
+    style {
+      shape storage
+      color muted
+      size sm
+    }
+  }
+
+  element broker {
+    style {
+      shape queue
+      color muted
+      size sm
+    }
+  }
+
+  element external {
+    style {
+      shape rectangle
+      color muted
+      border dashed
+      size sm
+    }
+  }
+
+  relationship calls
+  relationship consumes
+  relationship publishes
+  relationship persists
+  relationship owns
+  relationship refers
+}

@@ -17,8 +17,42 @@ import { codeTransformers } from '../src/code/shiki.ts';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const lessonsDir = path.join(root, 'src/content/lessons');
 const codeDir = path.join(root, 'src/code');
+const likec4Dir = path.join(root, 'likec4');
 
 const CYRILLIC = /[\u0400-\u04FF]/;
+
+/**
+ * Какие view объявлены в модели LikeC4.
+ *
+ * Читается из исходников, а не из сгенерированного компонента: генерация — шаг
+ * сборки, а проверка обязана работать и до него. Плюс `index`: его LikeC4
+ * создаёт сам для корня модели.
+ */
+async function likec4Views() {
+  if (!existsSync(likec4Dir)) return null;
+
+  const files = (await readdir(likec4Dir)).filter((file) => file.endsWith('.c4'));
+  const views = new Set(['index']);
+
+  for (const file of files) {
+    const source = await readFile(path.join(likec4Dir, file), 'utf8');
+
+    for (const match of source.matchAll(/^\s*view\s+([A-Za-z_][\w]*)/gm)) {
+      views.add(match[1]);
+    }
+
+    // Модель — общий для локалей ассет, как колода и схема, поэтому текст в ней
+    // только английский. Проверяются строки в кавычках, а не файл целиком:
+    // комментарии здесь — обычные комментарии в исходниках и пишутся по-русски.
+    for (const [, quoted] of source.matchAll(/'([^']*)'/g)) {
+      if (CYRILLIC.test(quoted)) {
+        errors.push(`likec4/${file}: кириллица в "${quoted}" — общий ассет, только английский`);
+      }
+    }
+  }
+
+  return views;
+}
 
 /** Пометка на схеме должна умещаться в две строки. */
 const NOTE_LIMIT = 80;
@@ -47,6 +81,9 @@ const locales = (await readdir(lessonsDir, { withFileTypes: true }))
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name)
   .sort();
+
+/** Какие view объявлены в модели; null — модели в проекте нет. */
+const likec4ViewIds = await likec4Views();
 
 /** locale -> slug -> frontmatter */
 const bySlug = new Map();
@@ -244,6 +281,38 @@ for (const [slug, perLocale] of bySlug) {
     }
   } else {
     warnings.push(`колода "${deckName}": нет постера — карточка в каталоге будет без иллюстрации`);
+  }
+
+  /**
+   * Разбор ведёт либо нарисованная схема, либо модель LikeC4. Полотно на сцене
+   * одно, поэтому две схемы разом — не выбор варианта, а забытая правка.
+   */
+  if (deckModule.flow && deckModule.likec4) {
+    errors.push(`колода "${deckName}": объявлены и flow, и likec4 — на сцене одно полотно`);
+  }
+
+  if (deckModule.likec4) {
+    if (!likec4ViewIds) {
+      errors.push(`колода "${deckName}": ведёт разбор по likec4, но каталога likec4/ нет`);
+    }
+
+    for (const [step, viewId] of Object.entries(deckModule.likec4.views)) {
+      if (!deckIds.includes(step)) {
+        errors.push(`колода "${deckName}": likec4 ссылается на несуществующий шаг "${step}"`);
+      }
+      // Опечатка в id иначе доезжает до читателя пустым полотном: LikeC4 не
+      // находит view и молча не рисует ничего.
+      if (likec4ViewIds && !likec4ViewIds.has(viewId)) {
+        errors.push(`колода "${deckName}", шаг "${step}": нет view "${viewId}" в likec4/`);
+      }
+    }
+
+    // Первый шаг обязан принести картинку: шаг без своего view оставляет
+    // предыдущую, а до первого никакой предыдущей нет.
+    const first = deckIds[0];
+    if (!deckModule.likec4.views[first]) {
+      errors.push(`колода "${deckName}": у первого шага "${first}" нет view — полотно откроется пустым`);
+    }
   }
 
   // Эталон порядка шагов — первая локаль по алфавиту; остальные обязаны совпасть.

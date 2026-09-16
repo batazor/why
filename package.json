@@ -5,10 +5,15 @@
   "private": true,
   "scripts": {
     "dev": "astro dev",
+    "predev": "npm run likec4:gen",
     "build": "node scripts/check-steps.mjs && astro build",
+    "prebuild": "npm run likec4:gen",
     "preview": "astro preview",
+    "likec4:gen": "likec4 gen react likec4 -o src/likec4/generated.jsx --no-use-dot",
+    "likec4:validate": "likec4 validate likec4",
     "check:steps": "node scripts/check-steps.mjs",
-    "check:types": "astro check"
+    "check:types": "astro check",
+    "check:pricing": "node scripts/check-pricing.mjs"
   },
   "dependencies": {
     "@astrojs/mdx": "^8.0.1",
@@ -22,7 +27,8 @@
     "react-dom": "^19.3.0"
   },
   "devDependencies": {
-    "js-yaml": "^5.4.2"
+    "js-yaml": "^5.4.2",
+    "likec4": "^1.59.3"
   },
   "engines": {
     "node": ">=22.18"

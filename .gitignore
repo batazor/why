@@ -2,3 +2,5 @@ node_modules/
 dist/
 .astro/
 .DS_Store
+src/likec4/generated.jsx
+src/likec4/generated.d.ts

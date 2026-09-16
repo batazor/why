@@ -123,7 +123,10 @@ function SlotNode({ data }: NodeProps) {
       tabIndex={0}
       onClick={() => slot.onDrop()}
       onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') slot.onDrop();
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          slot.onDrop();
+        }
       }}
       onDragOver={(event) => {
         // Без preventDefault браузер не считает элемент целью и не даст drop.
@@ -225,23 +228,23 @@ export default function FlowDiagram({
   // Постер — схема из одного состояния: плеера у неё нет и слушать нечего.
   const pinned = spec.fixedStep;
   const [step, setStep] = useState(pinned ?? firstStep ?? '');
-  // Донесли ли карточку. Сбрасывается при уходе с шага: вернувшись, читатель
-  // должен увидеть ту же незаконченную цепочку, а не чужой результат.
+  // Состояние опыта хранится в плеере и сохраняется при возврате на шаг.
   const [dropped, setDropped] = useState(false);
+  const hostRef = useRef<HTMLDivElement>(null);
 
   // Шагами по-прежнему управляет плеер — он живёт вне React.
   useEffect(() => {
     if (pinned) return;
-    const host = document.querySelector<HTMLElement>('[data-player]');
+    const host = hostRef.current?.closest<HTMLElement>('[data-player]');
     if (!host) return;
 
     // Остров монтируется лениво, поэтому сначала догоняем текущий шаг: к этому
     // моменту читатель мог уже пролистать разбор, и стартовать с первого нельзя.
     if (host.dataset.stepId) setStep(host.dataset.stepId);
+    setDropped(host.dataset.promoPlaced === 'true');
 
     const handle = (event: Event) => {
       setStep((event as CustomEvent<{ id: string }>).detail.id);
-      setDropped(false);
     };
     // Клик по карточке делает то же, что перетаскивание: тащить мышью умеют не
     // все и не везде, а с клавиатуры — вообще никто.
@@ -317,7 +320,7 @@ export default function FlowDiagram({
               style: { width: spec.drop.width ?? 190 },
               data: {
                 label: drags.find((d) => d.step === step)?.slot ?? '',
-                onDrop: () => setDropped(true),
+                onDrop: () => hostRef.current?.closest('[data-player]')?.dispatchEvent(new CustomEvent('why:promo-placed')),
               },
             },
           ]
@@ -351,7 +354,6 @@ export default function FlowDiagram({
   const bounds = useMemo(() => visibleBounds(nodes), [nodes]);
 
   // Пересчёт при смене размера полотна: масштаб считается от него.
-  const hostRef = useRef<HTMLDivElement>(null);
   const fitted = useRef(false);
   const [instance, setInstance] = useState<{
     fitBounds: (b: ReturnType<typeof visibleBounds>, o?: object) => void;

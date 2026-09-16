@@ -1,10 +1,13 @@
 import type { CodeDeck } from './types';
 import type { FlowSpec } from './flow';
+import type { LikeC4Spec } from './likec4';
 
 export type DeckModule = {
   default: CodeDeck;
   /** Схема разбора: рисуется React Flow, состояния зависят от активного шага. */
   flow?: FlowSpec;
+  /** Разбор ведёт модель LikeC4: шаг выбирает view, раскладку считает генератор. */
+  likec4?: LikeC4Spec;
   /** Постер: суть проблемы одной схемой (FlowSpec с fixedStep). */
   poster?: FlowSpec;
 };

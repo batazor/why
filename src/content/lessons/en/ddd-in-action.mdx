@@ -1,0 +1,44 @@
+---
+title: DDD in action
+description: One request, followed from the edge of a bounded context down to the transport that answers it.
+problem: >-
+  Every level of a service decides something. When it is not written down which
+  level decides what, the rule ends up in whichever function ran first — and in
+  the next entry point nobody remembers it.
+tags: [ddd, architecture, boundaries]
+order: 4
+deck: ddd-in-action
+draft: true
+terms:
+  bounded context: >-
+    The stretch of a system inside which one word has one meaning. Outside it
+    the same word may mean something else, and the translation happens at the
+    border.
+  opaque id: >-
+    An identifier a consumer may store and compare but never read anything out
+    of. It says which user, and nothing about them.
+steps:
+  - id: context
+    title: A context is a decision about ownership
+    narration: >-
+      `auth` owns two things: who somebody is, and whether they are still logged
+      in. It is the only service in the estate that stores a credential, and the
+      only one allowed to mint or revoke a session. Now read the second half of
+      the file — it is the longer half. No profiles, no addresses, no roles: each
+      of those is a real requirement somewhere, and a decision was made that it
+      is not here. A boundary is that list, not the directory the code sits in.
+      Look at what crosses it on the diagram. Three questions go in — a login,
+      `validateSession`, and the risk service `auth` asks before it issues
+      anything — and facts come out onto the bus. `cart` never asks about a
+      password: it holds an opaque user id and one question, "is this token
+      still good?". Everything else about a customer, the shop keeps itself.
+---
+
+The walkthrough follows one service, [examples/auth](https://github.com/shortlink-org/portolan/tree/main/examples/auth),
+from the edge of its <span data-term="bounded context">bounded context</span>
+down to the code it answers with. At every level it asks the same question:
+what is this level allowed to decide?
+
+Nothing outside that boundary ever sees a credential. Other contexts keep their
+own view of a customer and point at this one with an
+<span data-term="opaque id">opaque id</span>.

@@ -610,6 +610,8 @@ main:focus {
 
 .player {
   margin: 2.5rem 0;
+  /* Раскрытие результата не должно двигать страницу вслед за соседним шагом. */
+  overflow-anchor: none;
 }
 
 .player__steps {
@@ -1192,6 +1194,26 @@ main:focus {
   line-height: 1;
 }
 
+.promo-experiment {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.promo-experiment .promo-chip { margin-top: 0; }
+.promo-result { margin: 0; }
+.promo-apply:disabled { cursor: default; opacity: 0.65; }
+
+/* Без JS опыт читается как обычный разобранный пример. */
+.player:not(.is-enhanced) .promo-chip,
+.player:not(.is-enhanced) .promo-apply,
+.player.is-enhanced[data-promo-placed='true'] [data-promo-question],
+.player.is-enhanced:not([data-promo-placed='true']) [data-promo-result] {
+  display: none;
+}
+
 /* Пустое место в цепочке: пока карточку не принесли, цена дальше не считается.
    pointer-events обязателен: узлы объявлены неперетаскиваемыми, и React Flow
    гасит им pointer-events на обёртке — слот выпадает из hit-testing целиком,
@@ -1320,7 +1342,7 @@ main:focus {
 
 .player--scroll.is-enhanced .step {
   display: grid;
-  align-content: center;
+  align-content: start;
   min-height: 62vh;
   border-top: 0;
   /* Неактивные шаги приглушены, но читаемы: глаз должен видеть, что впереди. */
@@ -1359,7 +1381,7 @@ main:focus {
 .player--scroll.is-enhanced .step--in-run {
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   grid-template-columns: none;
   min-height: 62vh;
   padding: 0;
@@ -1373,7 +1395,10 @@ main:focus {
    * 1.25rem. Отсчитывать `top` от неё значит положить карточку вплотную к
    * линии, поэтому сверху добавлен зазор.
    */
-  top: calc(44vh + 1.25rem + 1.5rem);
+  top: var(--reading-top, calc(44vh + 2.75rem));
+  max-height: calc(100dvh - var(--reading-top, 48vh) - var(--controls-height, 4rem) - 1rem);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
   display: grid;
 }
 
@@ -1416,6 +1441,8 @@ main:focus {
 
   .player--scroll.is-enhanced .step-run__stage {
     position: static;
+    max-height: none;
+    overflow: visible;
   }
 }
 
@@ -1735,4 +1762,21 @@ main:focus {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ---------- LikeC4 ---------- */
+
+/* Полотно LikeC4 живёт по тому же контракту, что и схема на React Flow:
+   высоту сцены задаёт страница переменной, а схема вписывается в коробку.
+   Без этого контейнер схлопывается в ноль: LikeC4 рисует внутри себя. */
+.likec4-stage {
+  width: 100%;
+  height: var(--flow-height, 400px);
+}
+
+.player--scroll .likec4-stage {
+  height: min(var(--flow-height, 400px), 44vh);
+  /* В скролл-режиме схема прилипла полосой сверху и является картинкой:
+     события мыши проходят сквозь неё, иначе над ней мёртвая зона прокрутки. */
+  pointer-events: none;
 }

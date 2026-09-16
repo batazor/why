@@ -10,7 +10,7 @@ const poster: FlowSpec = {
     {
       id: 'paid',
       kind: '{{kindResult}}',
-      title: '{{paid}} 10.00',
+      title: '{{paid}} 28.13',
       sub: '{{costWas}} 32.00',
       position: { x: 240, y: 30 },
       bad: ['problem'],

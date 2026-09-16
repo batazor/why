@@ -58,7 +58,7 @@ const notes = lesson.data.steps
 
 const drags = lesson.data.steps
   .filter((step) => step.drag)
-  .map((step) => ({ step: step.id, chip: step.drag!.chip, slot: step.drag!.slot }));
+  .map((step) => ({ step: step.id, ...step.drag! }));
 
 const { Content } = await render(lesson);
 
@@ -100,6 +100,7 @@ const siblingHref = (entry: CollectionEntry<'lessons'>) =>
       steps={lesson.data.steps}
       deck={deck.default}
       flow={deck.flow}
+      likec4={deck.likec4}
       notes={notes}
       comments={lesson.data.comments}
       drags={drags}

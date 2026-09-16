@@ -10,16 +10,16 @@ deck: discount-floor
 comments:
   twoPrices: what we sell it for, and what we paid
   mechanics: 'two mechanics: a percentage and a flat amount'
-  oneCut: 'what a single promo takes off: −20% of 50.00 is 10.00, a flat 5.00 is always 5.00'
-  oneTest: 'one test per mechanic — Lean checks the equality instead of printing it'
-  sequential: 'each off the already reduced price: 50.00 → −50% → 25.00 → −60% → 10.00'
+  oneCut: 'discount in cents: −25% of 50.00 is 12.50, a flat 5.00 is always 5.00'
+  oneTest: 'each of these two promos alone leaves the price above cost'
+  sequential: 'one at a time: each percentage uses the already reduced price'
   clampIt: clamp the total at cost
   reportAsks: the report reads the promo engine and skips the receipt
   rulePromise: 'what the business meant all along:'
   ruleInWords: no matter how many promos, the total never drops below cost
   assumeIt: 'intro takes the premise and names it rule: "the rule holds"'
-  pickThePair: 'have applies rule to these sneakers: bad is 3200 ≤ 1000'
-  contradiction: 'bad is 3200 ≤ 1000, and (by decide) computes it and proves it false'
+  pickThePair: 'have applies rule to these sneakers: bad is 3200 ≤ 2813'
+  contradiction: 'bad is 3200 ≤ 2813, and (by decide) computes it and proves it false'
   contradictionEnd: 'absurd turns a claim and its negation into False, exact hands it to the goal'
   counterExample: '"false" — which also has to be proved'
   pool: the entire discount pool is the margin
@@ -64,8 +64,9 @@ steps:
     title: An item has two prices
     narration: >-
       One is what we sell it for. The other is what we paid, and it lives
-      somewhere else: in procurement, in the ERP, in a supplier feed. The pricing
-      engine never sees the second one.
+      elsewhere: in procurement, in the ERP, in a supplier feed. The pricing
+      engine never sees it. The code stores cents: 5000 means 50.00, and 3200
+      means 32.00.
     note: An item has two prices. The engine sees one.
   - id: promo
     title: Marketing sets up the mechanics
@@ -77,43 +78,49 @@ steps:
   - id: cut
     title: The size of one discount
     narration: >-
-      `cut` takes a price and one promo and returns the size of the discount. A
-      percentage is worked out from the price it was handed. A flat amount does
-      not look at the price at all.
+      `cut` takes a price and one promo and returns the discount amount.
+      Percentages use the price passed in. Money is stored in cents, so division
+      rounds the discount down to a whole cent. A flat amount does not look at the
+      price at all.
     note: One promo, one discount amount.
   - id: engine
     title: How they stack
     narration: >-
       `stack` walks the list and hands `cut` the already reduced price each time.
-      That is where 25.00 → −60% → 10.00 comes from: the second percentage never
-      touches the list price. Nothing here mentions cost.
+      After the first 25% discount, 37.50 remains; the next promo uses that
+      amount. Nothing here mentions cost.
     note: The engine never hears about cost.
   - id: one
     title: One promo
     narration: >-
-      Take 20% off 50.00 and you get 40.00 against a cost of 32.00. The flat one
-      takes its 5.00 and leaves 45.00. Both mechanics have a test, both pass, and
-      the rule really does hold.
-    note: Both mechanics have a test.
+      The category sale and the coupon each offer 25% off. On its own, each
+      reduces 50.00 to 37.50, above the cost of 32.00. These are the very same two
+      promos we will combine next: both individual tests pass.
+    note: Each promo leaves 37.50, above cost.
   - id: stack
     title: What if two land together?
     narration: >-
       One marketer set up the category sale in May. Another set up the coupon in
-      June. Both passed their own tests. But what happens when they land on the
-      same item? No test asks that: there are 30 promos and 435 pairs between
-      them. On these sneakers the pair pays out 10.00 against a cost of 32.00.
+      June. Each is safe on its own. And together? There are 30 promos and 435
+      pairs, and nobody tested this pair. After the first promo, 37.50 remains
+      against a cost of 32.00. Do you think the coupon will keep the price above
+      cost?
     note: Both passed. And together?
     drag:
-      chip: −60% coupon
-      slot: drop the coupon here
+      chip: −25% coupon
+      slot: apply the coupon
+      action: Apply coupon
+      applied: Coupon applied
+      result: >-
+        The result is 28.13, which is 3.87 below cost. The second 25% uses 37.50: the discount of 9.375 rounds down to 9.37. Combining two individually safe promos breaks the rule.
   - id: clamp
     title: Clamp it at cost
     narration: >-
-      This is the first fix anyone reaches for. The customer pays 32.00 and the
-      incident is closed. Three numbers under the code: 3200 paid, 1800 actually
-      discounted, 4000 in the report. The report reads the promo engine and skips
-      the receipt. The money problem is gone, but a new one showed up in the
-      books.
+      The customer now pays 32.00. But the report still calculates its discount
+      through the old engine, bypassing the receipt: 3200 paid, 2187 reported as
+      discounted, 1800 actually discounted. Two different calculations cause the
+      mismatch, not `max` itself. Reading the discount from the final receipt
+      fixes the reporting issue too.
     note: The number is fixed. The report is not.
   - id: rule
     title: State the rule
@@ -127,7 +134,7 @@ steps:
   - id: refute
     title: Assume it holds
     narration: >-
-      The pair already dropped the price to 10.00, but so far that is an
+      The pair already dropped the price to 28.13, but so far that is an
       observation: the compiler knows nothing about it and will not bring it up
       the next time someone edits the engine. To make it know, you state the
       negation of the rule as a theorem and prove it. In Lean `¬P` is shorthand
@@ -140,14 +147,14 @@ steps:
     title: Apply it to one item
     narration: >-
       `rule` speaks about every item and every set of promos at once. Apply it to
-      one — these sneakers and that very pair. Out comes `bad`: 3200 ≤ 1000. The
+      one — these sneakers and that very pair. Out comes `bad`: 3200 ≤ 2813. The
       numbers plainly do not add up, and that is the point — `bad` rests on the
       assumption made a step earlier, and it falls together with it.
     note: Applied to a single pair.
   - id: contradict
     title: Reach a contradiction
     narration: >-
-      Take the line apart. `bad` is "3200 ≤ 1000", obtained from the assumption.
+      Take the line apart. `bad` is "3200 ≤ 2813", obtained from the assumption.
       `(by decide)` proves the opposite: Lean simply evaluates the same
       inequality and gets "false". `absurd` takes a claim together with its
       negation and produces anything at all — from a contradiction everything
@@ -166,18 +173,19 @@ steps:
   - id: spend
     title: You cannot draw on an empty wallet
     narration: >-
-      `spend` walks the list and for each promo subtracts the `min` of two
-      numbers: what it asks for and what is left in the pool. The pool never goes
-      negative — a greedy promo simply takes the remainder and nothing beyond it.
+      `spend` takes the smaller amount: what the promo requests or what remains in
+      the pool. It subtracts `taken` from both the price and the pool. The next
+      percentage still uses the already reduced price. The first promo takes
+      12.50; the second asks for 9.37 but receives only the remaining 5.50.
     note: A promo takes its cut or the remainder, whichever is smaller.
   - id: proof
     title: A one-line proof
     narration: >-
-      The total is cost plus whatever is left of the pool, and what is left is a
-      natural number, never negative. So the total is never below cost, and that
-      is visible from the shape of the expression: `Nat.le_add_right` says "a
-      number is no greater than itself plus something". Nothing left to check — a
-      lone 20% still pays 40.00, three greedy promos land on 32.00.
+      The total is cost plus the remaining pool. The remainder has type `Nat` and
+      cannot be negative. `Nat.le_add_right` proves that a number is no greater
+      than itself plus a non-negative number. One promo gives 37.50; the pair and
+      three greedy promos give 32.00. The guarantee covers the receipt total, not
+      every expense the shop incurs.
     note: Total is cost plus a non-negative remainder.
   - id: evolve
     title: The next mechanic
@@ -189,23 +197,23 @@ steps:
   - id: declare
     title: Declare its share
     narration: >-
-      Cashback is paid back after the purchase, so it takes nothing off the price
-      — `cut` returns 0 for it. One line is enough for the file to compile again.
-      And `checkout_never_below_cost` is unchanged word for word: the proof never
-      looks inside `cut`, so a new mechanic does not concern it.
+      Cashback is paid after the purchase, so it leaves the receipt total
+      unchanged: `cut` returns 0. The file compiles again and the proof stays the
+      same. It guarantees only that the receipt total is at least cost. A later
+      cashback payment can reduce net proceeds below cost; accounting for it
+      requires a different model and a separate rule.
     note: Mechanic declared. The proof is unchanged.
 quiz:
-  - question: Why does clamping the total at cost not actually fix the problem?
+  - question: Why does the report disagree after clamping in this example?
     options:
       - It is too slow on large carts
-      - The paid amount and the reported discount stop agreeing
+      - The report uses the old engine instead of the receipt
       - Clamping only works for percentage promos
     answer: 1
     explanation: >-
-      The customer pays 32.00 and the money stops leaking. But the report reads
-      the promo engine: there the discount is 4000, while 18.00 went through the
-      till. The error did not go away, it moved into the books — and the books
-      get looked at once a month.
+      The customer pays 32.00, making the actual discount 18.00. The report
+      uses the old calculation and shows 21.87. The max function does not
+      prevent correct reporting: derive the discount from the receipt total.
   - question: Why can the budget version never go below cost?
     options:
       - It checks the total after applying every promo
@@ -236,8 +244,8 @@ discount — cashback, say — the file stops compiling. The function that compu
 the size of a discount matches on the promo type case by case, the new case has
 no branch, and Lean names the missing one out loud. Until that branch is written,
 until somebody decides what cashback takes off the price, there is no build. The
-rule itself is never at risk: the proof never looks inside a mechanic, so cashback
-cannot push the total below cost whatever it computes.
+rule itself is never at risk: the proof never looks inside a mechanic and
+bounds the receipt total. Later cashback payments are outside that guarantee.
 
 ## Where else rules add up
 
@@ -251,6 +259,11 @@ assistant</span>. The question is what kind of sentence you need.
 <span class="claim">"This pair is fine"</span> is a test, and there will never be
 enough of them. <span class="claim">"No set of promos takes the price below
 cost"</span> is what the business asked for in the first place.
+
+The proof only bounds the receipt total. Later cashback payments, shipping,
+and other expenses are outside the model, so the theorem does not establish
+profitability. If the list price starts below cost, this model raises the total
+to cost even without promos — a chosen policy, not a property of Lean.
 
 The `Pricing.lean` file from this lesson compiles as a whole: Lean 4.34, no
 errors. The numbers in the output are what the compiler printed.
