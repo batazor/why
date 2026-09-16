@@ -7,6 +7,25 @@ problem: >-
 tags: [distributed-systems, api-design, reliability]
 order: 1
 deck: idempotency
+labels:
+  kindService: service
+  kindExternal: external
+  kindStorage: storage
+  client: Client
+  checkoutFlow: checkout flow
+  yourService: your service
+  moneyMoves: money moves here
+  keyIsPk: key is the primary key
+  notIdempotent: not idempotent
+  charge: charge
+  attempts: attempt
+  responseLost: response lost
+  key: key
+  insertIfAbsent: insert if absent
+  sameKeyRetry: same key, retry
+  keyClaimed: key already claimed
+  sameChargeId: same chargeId
+  retrySameBody: retry, same body → charged twice
 steps:
   - id: naive
     title: The handler that looks fine

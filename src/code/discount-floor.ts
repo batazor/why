@@ -6,8 +6,11 @@ import flowSpec from './discount-floor.flow.ts';
 /**
  * Урок «скидки не должны пробивать закупочную цену».
  *
- * Шаги складываются в один файл Pricing.lean, который собирается целиком:
- * Lean 4.34, ноль ошибок, все восемь #eval дают показанные числа. В `output`
+ * Шаги складываются в один файл Pricing.lean, который собирается целиком.
+ * Исключение — разбор доказательства: шаги refute/instantiate/contradict
+ * показывают один и тот же блок трижды, подсвечивая по строке за раз, поэтому
+ * в файл он идёт один раз, а не три. Собирается целиком:
+ * Lean 4.34, ноль ошибок, все семь #eval дают показанные числа. В `output`
  * лежит только настоящий вывод компилятора — никаких пояснений от автора,
  * иначе обещание «весь вывод настоящий» перестаёт быть правдой.
  *
@@ -39,25 +42,34 @@ inductive Promo where
   | fixed   (cents : Nat)`,
   },
   {
-    id: 'engine',
+    id: 'cut',
     lang: 'lean',
     caption: 'Pricing.lean',
     code: `-- {{oneCut}}
 def cut (price : Nat) : Promo → Nat
   | .percent p => price * p / 100
-  | .fixed c   => c
-
--- {{sequential}}
-def naive (price : Nat) : List Promo → Nat
+  | .fixed c   => c`,
+  },
+  {
+    id: 'engine',
+    lang: 'lean',
+    caption: 'Pricing.lean',
+    code: `-- {{sequential}}
+def stack (price : Nat) : List Promo → Nat
   | []      => price
-  | p :: ps => naive (price - cut price p) ps`,
+  -- [!code highlight]
+  | p :: ps => stack (price - cut price p) ps`,
   },
   {
     id: 'one',
     lang: 'lean',
     caption: 'Pricing.lean',
-    code: `#eval naive sneakers.price [.percent 20]`,
-    output: `4000`,
+    code: `-- {{oneTest}}
+-- [!code pass]
+example : stack sneakers.price [.percent 20] = 4000 := by decide
+-- [!code pass]
+example : stack sneakers.price [.fixed 500]  = 4500 := by decide`,
+    output: `Pricing.lean: no errors`,
     outputTone: 'ok',
   },
   {
@@ -67,7 +79,7 @@ def naive (price : Nat) : List Promo → Nat
     code: `def promos : List Promo := [.percent 50, .percent 60]
 
 -- [!code highlight]
-#eval naive sneakers.price promos`,
+#eval stack sneakers.price promos`,
     output: `1000`,
     outputTone: 'bad',
   },
@@ -77,11 +89,11 @@ def naive (price : Nat) : List Promo → Nat
     caption: 'Pricing.lean',
     code: `-- {{clampIt}}
 def clamped (i : Item) (ps : List Promo) : Nat :=
-  max i.cost (naive i.price ps)
+  max i.cost (stack i.price ps)
 
 -- {{reportAsks}}
 def reported (i : Item) (ps : List Promo) : Nat :=
-  i.price - naive i.price ps
+  i.price - stack i.price ps
 
 #eval clamped sneakers promos
 #eval reported sneakers promos
@@ -96,17 +108,91 @@ def reported (i : Item) (ps : List Promo) : Nat :=
     lang: 'lean',
     caption: 'Pricing.lean',
     code: `-- {{rulePromise}}
-theorem naive_breaks_the_rule :
-    ¬ ∀ (i : Item) (ps : List Promo), i.cost ≤ naive i.price ps := by
+-- {{ruleInWords}}
+def never_below_cost : Prop :=
+  ∀ (i : Item) (ps : List Promo), i.cost ≤ stack i.price ps`,
+  },
+  {
+    id: 'refute',
+    lang: 'lean',
+    caption: 'Pricing.lean',
+    code: `-- {{counterExample}}
+theorem stack_breaks_the_rule : ¬ never_below_cost := by
+  -- {{assumeIt}}
+  -- [!code highlight]
   intro rule
-  -- {{counterExample}}
+  -- {{pickThePair}}
   have bad := rule sneakers promos
+  -- {{contradiction}}
+  -- {{contradictionEnd}}
+  exact absurd bad (by decide)`,
+  },
+  {
+    id: 'instantiate',
+    repeatsPrevious: true,
+    lang: 'lean',
+    caption: 'Pricing.lean',
+    code: `-- {{counterExample}}
+theorem stack_breaks_the_rule : ¬ never_below_cost := by
+  -- {{assumeIt}}
+  intro rule
+  -- {{pickThePair}}
+  -- [!code highlight]
+  have bad := rule sneakers promos
+  -- {{contradiction}}
+  -- {{contradictionEnd}}
+  exact absurd bad (by decide)`,
+  },
+  {
+    id: 'contradict',
+    repeatsPrevious: true,
+    lang: 'lean',
+    caption: 'Pricing.lean',
+    code: `-- {{counterExample}}
+theorem stack_breaks_the_rule : ¬ never_below_cost := by
+  -- {{assumeIt}}
+  intro rule
+  -- {{pickThePair}}
+  have bad := rule sneakers promos
+  -- {{contradiction}}
+  -- {{contradictionEnd}}
+  -- [!code highlight]
   exact absurd bad (by decide)`,
     output: `Pricing.lean: no errors`,
     outputTone: 'ok',
   },
   {
     id: 'budget',
+    lang: 'lean',
+    caption: 'Pricing.lean',
+    code: `-- {{pool}}
+-- [!code highlight]
+def margin (i : Item) : Nat := i.price - i.cost
+
+-- {{noOverdraw}}
+def spend (price : Nat) : Nat → List Promo → Nat
+  | budget, []      => budget
+  | budget, p :: ps => spend price (budget - min (cut price p) budget) ps
+
+-- {{finalPrice}}
+def checkout (i : Item) (ps : List Promo) : Nat :=
+  i.cost + spend i.price (margin i) ps
+
+theorem checkout_never_below_cost (i : Item) (ps : List Promo) :
+    i.cost ≤ checkout i ps :=
+  Nat.le_add_right _ _
+
+#eval checkout sneakers [.percent 20]
+#eval checkout sneakers promos
+#eval checkout sneakers [.percent 50, .fixed 9000, .percent 90]`,
+    output: `4000
+3200
+3200`,
+    outputTone: 'ok',
+  },
+  {
+    id: 'spend',
+    repeatsPrevious: true,
     lang: 'lean',
     caption: 'Pricing.lean',
     code: `-- {{pool}}
@@ -135,7 +221,42 @@ theorem checkout_never_below_cost (i : Item) (ps : List Promo) :
     outputTone: 'ok',
   },
   {
+    id: 'proof',
+    repeatsPrevious: true,
+    lang: 'lean',
+    caption: 'Pricing.lean',
+    code: `-- {{pool}}
+def margin (i : Item) : Nat := i.price - i.cost
+
+-- {{noOverdraw}}
+def spend (price : Nat) : Nat → List Promo → Nat
+  | budget, []      => budget
+  | budget, p :: ps => spend price (budget - min (cut price p) budget) ps
+
+-- {{finalPrice}}
+def checkout (i : Item) (ps : List Promo) : Nat :=
+  i.cost + spend i.price (margin i) ps
+
+-- [!code highlight]
+theorem checkout_never_below_cost (i : Item) (ps : List Promo) :
+    i.cost ≤ checkout i ps :=
+  Nat.le_add_right _ _
+
+#eval checkout sneakers [.percent 20]
+#eval checkout sneakers promos
+#eval checkout sneakers [.percent 50, .fixed 9000, .percent 90]`,
+    output: `4000
+3200
+3200`,
+    outputTone: 'ok',
+  },
+  {
     id: 'evolve',
+    // Правка, а не новый код: в файле уже есть Promo, и кешбэк дописывается в
+    // него. Тогда `cut` перестаёт покрывать все случаи — ровно ошибка из output.
+    playground: [
+      { find: '  | fixed   (cents : Nat)', replace: '  | fixed   (cents : Nat)\n  | cashback (p : Nat)' },
+    ],
     lang: 'lean',
     caption: 'Pricing.lean',
     code: `inductive Promo where
@@ -150,6 +271,35 @@ def cut (price : Nat) : Promo → Nat
   | .fixed c   => c`,
     output: `error: Missing cases:
 (Promo.cashback _)`,
+    outputTone: 'ok',
+  },
+  {
+    id: 'declare',
+    lang: 'lean',
+    caption: 'Pricing.lean',
+    // Те же две правки, что и в evolve, плюс закрывающая ветка: файл снова
+    // собирается, и открыть в песочнице надо именно собирающийся.
+    playground: [
+      { find: '  | fixed   (cents : Nat)', replace: '  | fixed   (cents : Nat)\n  | cashback (p : Nat)' },
+      { find: '  | .fixed c   => c', replace: '  | .fixed c   => c\n  | .cashback _ => 0' },
+    ],
+    code: `inductive Promo where
+  | percent  (p : Nat)
+  | fixed    (cents : Nat)
+  | cashback (p : Nat)
+
+def cut (price : Nat) : Promo → Nat
+  | .percent p => price * p / 100
+  | .fixed c   => c
+  -- {{cashbackShare}}
+  -- [!code ++]
+  | .cashback _ => 0
+
+-- {{proofUntouched}}
+theorem checkout_never_below_cost (i : Item) (ps : List Promo) :
+    i.cost ≤ checkout i ps :=
+  Nat.le_add_right _ _`,
+    output: `Pricing.lean: no errors`,
     outputTone: 'ok',
   },
 ];

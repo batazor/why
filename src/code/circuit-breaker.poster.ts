@@ -6,12 +6,12 @@ const poster: FlowSpec = {
   fixedStep: 'problem',
   compact: true,
   nodes: [
-    { id: 'client', kind: 'service', title: 'Client', sub: '× 400 instances', position: { x: 0, y: 30 } },
+    { id: 'client', kind: '{{kindService}}', title: '{{client}}', sub: '× 400 {{instances}}', position: { x: 0, y: 30 } },
     {
       id: 'payments',
-      kind: 'external',
+      kind: '{{kindExternal}}',
       title: 'Payments API',
-      sub: 'down',
+      sub: '{{down}}',
       position: { x: 240, y: 30 },
       bad: ['problem'],
     },
@@ -23,7 +23,7 @@ const poster: FlowSpec = {
       target: 'payments',
       sourceHandle: 'r',
       targetHandle: 'l',
-      label: 'retry × 5',
+      label: '{{retry}} × 5',
       tone: 'bad',
     },
     {
@@ -32,7 +32,7 @@ const poster: FlowSpec = {
       target: 'payments',
       sourceHandle: 'b',
       targetHandle: 'b',
-      label: '10 000 rps, 0 served',
+      label: '10 000 rps, {{zeroServed}}',
       tone: 'bad',
       dashed: true,
     },

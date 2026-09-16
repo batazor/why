@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   Background,
   BackgroundVariant,
@@ -155,34 +155,31 @@ const nodeTypes = { card: CardNode, annotation: AnnotationNode, slot: SlotNode }
 const ARROW = { none: '#8a93a3', ok: '#2fa36b', bad: '#e5484d' } as const;
 const GRID = 'rgba(128, 134, 148, 0.35)';
 
+/** Высота узла в координатах схемы: рендер её не задаёт, она измеренная. */
+function nodeHeight(node: Node) {
+  if (node.type === 'annotation') return NODE_SIZE.note;
+  if ((node.data as { variant?: string }).variant === 'bar') return NODE_SIZE.bar;
+  return NODE_SIZE.card;
+}
+
 /**
- * Границы всей схемы, а не текущего шага.
+ * Границы того, что нарисовано на текущем шаге.
  *
- * fitView подгоняет масштаб по тому, что видно в момент инициализации. На
- * первом шаге видно три узла, и полотно зумится под них; на пятом цепочка
- * уходит вниз и вылезает за край — то есть ровно то, ради чего урок написан,
- * оказывается за кадром. Поэтому масштаб считается один раз по объединению
- * всех шагов и дальше не меняется: высота узла означает цену одинаково на
- * всём разборе.
+ * Пересчитываются на каждое появление и исчезновение узла, поэтому шаг с двумя
+ * карточками занимает полотно так же плотно, как шаг с пятью, и ничего не
+ * уезжает за край. Пометки считаются наравне с узлами: они тоже должны влезать
+ * в полотно целиком.
  */
-function fullBounds(spec: FlowSpec) {
-  const boxes = [
-    ...spec.nodes.map((n) => ({
-      x: n.position.x,
-      y: n.position.y,
-      w: n.width ?? NODE_SIZE.width,
-      h: n.variant === 'bar' ? NODE_SIZE.bar : NODE_SIZE.card,
-    })),
-    ...(spec.annotations ?? []).map((a) => ({
-      x: a.position.x,
-      y: a.position.y,
-      w: a.width ?? 190,
-      h: NODE_SIZE.note,
-    })),
-  ];
-  if (spec.drop) {
-    boxes.push({ x: spec.drop.slot.x, y: spec.drop.slot.y, w: spec.drop.width ?? NODE_SIZE.width, h: NODE_SIZE.card });
-  }
+function visibleBounds(nodes: Node[]) {
+  // Пустой шаг: fitBounds делит на ширину, нулевая обращает масштаб в бесконечность.
+  if (nodes.length === 0) return { x: 0, y: 0, width: 1, height: 1 };
+
+  const boxes = nodes.map((node) => ({
+    x: node.position.x,
+    y: node.position.y,
+    w: (node.style?.width as number | undefined) ?? NODE_SIZE.width,
+    h: nodeHeight(node),
+  }));
 
   const x = Math.min(...boxes.map((b) => b.x));
   const y = Math.min(...boxes.map((b) => b.y));
@@ -192,6 +189,15 @@ function fullBounds(spec: FlowSpec) {
     width: Math.max(...boxes.map((b) => b.x + b.w)) - x,
     height: Math.max(...boxes.map((b) => b.y + b.h)) - y,
   };
+}
+
+/**
+ * Подстановка локализованных подписей. Ключ без перевода остаётся видимым как
+ * `{{ключ}}` — молчаливый пустой ярлык на схеме нашли бы сильно позже.
+ */
+function localize(text: string | undefined, labels: Record<string, string>) {
+  if (!text) return text;
+  return text.replace(/\{\{(\w+)\}\}/g, (whole, key) => labels[key] ?? whole);
 }
 
 function on(list: string[] | undefined, step: string) {
@@ -205,9 +211,12 @@ export default function FlowDiagram({
   firstStep,
   notes = [],
   drags = [],
+  labels = {},
 }: {
   spec: FlowSpec;
   firstStep?: string;
+  /** Локализованные подписи узлов и рёбер: `{{ключ}}` → текст. */
+  labels?: Record<string, string>;
   /** Локализованные тексты пометок; геометрию задаёт spec.annotations. */
   notes?: Note[];
   /** Локализованные подписи карточки и слота по шагам. */
@@ -263,10 +272,10 @@ export default function FlowDiagram({
           selectable: false,
           style: node.width ? { width: node.width } : undefined,
           data: {
-            kind: node.kind,
+            kind: localize(node.kind, labels)!,
             variant: node.variant ?? 'card',
-            title: node.title,
-            sub: node.sub,
+            title: localize(node.title, labels)!,
+            sub: localize(node.sub, labels),
             bad: (node.bad ?? []).includes(step),
             state: (node.focus ?? []).includes(step)
               ? 'focus'
@@ -315,7 +324,7 @@ export default function FlowDiagram({
         : [];
 
     return [...cards, ...slots, ...stickies];
-  }, [spec, step, notes, awaitingDrop, drags]);
+  }, [spec, step, notes, awaitingDrop, drags, labels]);
 
   const edges = useMemo<Edge[]>(
     () =>
@@ -328,7 +337,7 @@ export default function FlowDiagram({
           target: edge.target,
           sourceHandle: edge.sourceHandle,
           targetHandle: edge.targetHandle,
-          label: edge.label,
+          label: localize(edge.label, labels),
           type: 'smoothstep',
           animated: edge.tone === 'bad',
           markerEnd: { type: MarkerType.ArrowClosed, color: ARROW[edge.tone ?? 'none'], width: 18, height: 18 },
@@ -336,23 +345,51 @@ export default function FlowDiagram({
             .filter(Boolean)
             .join(' '),
         })),
-    [spec, step, awaitingDrop],
+    [spec, step, awaitingDrop, labels],
   );
 
-  const bounds = useMemo(() => fullBounds(spec), [spec]);
+  const bounds = useMemo(() => visibleBounds(nodes), [nodes]);
 
-  // Пересчёт при смене ширины колонки: масштаб зависит от размера полотна.
-  const [instance, setInstance] = useState<{ fitBounds: (b: typeof bounds, o?: object) => void } | null>(null);
+  // Пересчёт при смене размера полотна: масштаб считается от него.
+  const hostRef = useRef<HTMLDivElement>(null);
+  const fitted = useRef(false);
+  const [instance, setInstance] = useState<{
+    fitBounds: (b: ReturnType<typeof visibleBounds>, o?: object) => void;
+  } | null>(null);
   useEffect(() => {
-    if (!instance) return;
-    const fit = () => instance.fitBounds(bounds, { padding: 0.06 });
-    fit();
-    window.addEventListener('resize', fit);
-    return () => window.removeEventListener('resize', fit);
+    if (!instance || !hostRef.current) return;
+    // Масштаб меняется от шага к шагу, поэтому переход анимируется: мгновенный
+    // скачок зума читается как подмена картинки. Первый фит — без анимации:
+    // до него полотно стоит в zoom 1 и обрезано, и этот кадр видно.
+    const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const fit = (duration = 0) => instance.fitBounds(bounds, { padding: 0.12, duration });
+    /**
+     * Кадр задержки обязателен. Сразу после onInit полотно ещё не обмерено, и
+     * мгновенный fitBounds (duration 0) уходит в никуда — схема остаётся в
+     * zoom 1 и обрезанной. Анимированный вызов это скрывал, потому что сам
+     * стартует со следующего кадра.
+     */
+    const frame = requestAnimationFrame(() => {
+      fit(fitted.current && smooth ? 260 : 0);
+      fitted.current = true;
+    });
+    /**
+     * ResizeObserver, а не window.resize: полотно меняет размер и при
+     * неподвижном окне. Сетка разбора схлопывается в одну колонку по
+     * медиазапросу, колонка со схемой при этом становится шире — окно не
+     * резайзится, событие не приходит, и масштаб остаётся от старой ширины.
+     */
+    const observer = new ResizeObserver(() => fit(0));
+    observer.observe(hostRef.current);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
   }, [instance, bounds]);
 
   return (
     <div
+      ref={hostRef}
       className={['flow', pinned ? 'flow--static' : '', spec.compact ? 'flow--compact' : '']
         .filter(Boolean)
         .join(' ')}

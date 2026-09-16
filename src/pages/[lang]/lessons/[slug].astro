@@ -84,13 +84,13 @@ const siblingHref = (entry: CollectionEntry<'lessons'>) =>
         poster && (
           /* Постер дублирует текст рядом, поэтому для скринридера он декоративный. */
           <figure class="callout__figure" aria-hidden="true">
-            <FlowDiagram client:visible spec={poster} />
+            <FlowDiagram client:visible spec={poster} labels={lesson.data.labels} />
           </figure>
         )
       }
     </div>
 
-    <div class="prose">
+    <div class="prose" data-terms={JSON.stringify(lesson.data.terms)}>
       <Content />
     </div>
 
@@ -103,6 +103,7 @@ const siblingHref = (entry: CollectionEntry<'lessons'>) =>
       notes={notes}
       comments={lesson.data.comments}
       drags={drags}
+      labels={lesson.data.labels}
     />
 
     <Quiz lang={lang} slug={slug!} items={lesson.data.quiz} />
@@ -132,3 +133,69 @@ const siblingHref = (entry: CollectionEntry<'lessons'>) =>
     </nav>
   </article>
 </Base>
+
+<script>
+  /**
+   * Тултипы терминов. Слово в тексте помечено `data-term="ключ"`, определение
+   * лежит в глоссарии урока (frontmatter `terms`) и приезжает сюда JSON'ом.
+   *
+   * Разметку строит скрипт, а не автор: иначе одно и то же определение пришлось
+   * бы дублировать в каждом упоминании, и они бы разъехались.
+   */
+  const prose = document.querySelector<HTMLElement>('.prose[data-terms]');
+
+  if (prose) {
+    const glossary: Record<string, string> = JSON.parse(prose.dataset.terms || '{}');
+    let open: HTMLElement | null = null;
+
+    const hide = () => {
+      if (open) open.dataset.open = 'false';
+      open = null;
+    };
+
+    prose.querySelectorAll<HTMLElement>('[data-term]').forEach((el, i) => {
+      const definition = glossary[el.dataset.term!];
+      // Слова без определения остаются обычным текстом: пунктир обещает
+      // расшифровку, и пустой тултип это обещание нарушал бы.
+      if (!definition) return;
+
+      el.classList.add('term');
+      el.tabIndex = 0;
+
+      const tip = document.createElement('span');
+      tip.className = 'term__tip';
+      tip.id = `term-${i}`;
+      tip.setAttribute('role', 'tooltip');
+      tip.textContent = definition;
+      el.append(tip);
+      el.setAttribute('aria-describedby', tip.id);
+
+      const show = () => {
+        hide();
+        // Сдвиг сбрасывается до замера: иначе второе открытие считает
+        // положение от уже сдвинутой подсказки и уезжает дальше.
+        tip.style.left = '';
+        tip.dataset.placement = 'above';
+        el.dataset.open = 'true';
+        open = el;
+
+        // visibility:hidden сохраняет геометрию, поэтому мерить можно и до показа.
+        if (tip.getBoundingClientRect().top < 8) tip.dataset.placement = 'below';
+        const overflow = tip.getBoundingClientRect().right - (window.innerWidth - 8);
+        if (overflow > 0) tip.style.left = `${-overflow}px`;
+      };
+
+      el.addEventListener('pointerenter', show);
+      el.addEventListener('focus', show);
+      el.addEventListener('pointerleave', hide);
+      el.addEventListener('blur', hide);
+      // Тач: наведения нет, поэтому тап переключает.
+      el.addEventListener('click', () => (el.dataset.open === 'true' ? hide() : show()));
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') hide();
+    });
+    window.addEventListener('scroll', hide, { passive: true });
+  }
+</script>

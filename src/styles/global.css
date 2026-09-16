@@ -40,6 +40,9 @@
   --bad: #b42318;
   --bad-soft: #fdeceb;
   --radius: 10px;
+  /* Белая галочка для маркера прошедшего теста: рисуется поверх зелёного
+     круга фоновой картинкой, поэтому путь белый, а не чёрный. */
+  --check-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23fff' stroke-width='2.8' stroke-linecap='round' stroke-linejoin='round' d='M3.5 8.5 6.5 11.5 12.5 4.5'/%3E%3C/svg%3E");
   --measure: 34rem;
   --shadow: rgba(16, 18, 22, 0.12);
   --font-note: 'Caveat', 'Segoe Script', 'Bradley Hand', cursive;
@@ -124,6 +127,72 @@ pre {
 
 .prose :is(h2, h3) {
   margin-top: 2.25rem;
+}
+
+/* Ключевое слово абзаца. Полужирный берётся отдельным правилом, потому что
+   системные шрифты прыгают с 400 сразу на 700, и на подложке это грязно. */
+.prose strong {
+  font-weight: 600;
+}
+
+/* Высказывание, вокруг которого крутится урок: «эта пара в порядке» против
+   «ни один набор не опустит цену». Подложка нужна, чтобы при пролистывании
+   эти две формулировки было видно глазом и можно было сравнить. */
+.prose .claim {
+  background: var(--accent-soft);
+  border-radius: 4px;
+  padding: 0.12em 0.35em;
+  /* Без clone подложка у переноса строки теряет отступы и скругление. */
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* Термин с определением. Пунктир — обещание, что при наведении будет
+   расшифровка; ставит его скрипт, и только когда определение действительно есть. */
+.term {
+  position: relative;
+  border-bottom: 1px dotted var(--accent);
+  cursor: help;
+}
+
+.term__tip {
+  position: absolute;
+  bottom: calc(100% + 0.5rem);
+  left: 0;
+  z-index: 20;
+  width: max-content;
+  max-width: min(22rem, 78vw);
+  padding: 0.6rem 0.75rem;
+  background: var(--panel);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 20px var(--shadow);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  font-weight: 400;
+  text-align: left;
+  opacity: 0;
+  /* visibility, а не display: скрытая подсказка сохраняет геометрию, и скрипт
+     может померить её до показа, чтобы решить, куда раскрывать. */
+  visibility: hidden;
+  transition: opacity 0.12s ease;
+}
+
+.term__tip[data-placement='below'] {
+  bottom: auto;
+  top: calc(100% + 0.5rem);
+}
+
+.term[data-open='true'] .term__tip {
+  opacity: 1;
+  visibility: visible;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .term__tip {
+    transition: none;
+  }
 }
 
 /* Видимый фокус одинаковый по всему сайту: браузерный outline на кнопках и
@@ -532,6 +601,16 @@ main:focus {
   color: var(--fg);
 }
 
+/* Имя из кода внутри фразы. Фон мягкий: в абзаце прозы тёмная плашка на каждом
+   `cut` спорит с текстом сильнее, чем помогает его найти. */
+.step__narration code {
+  padding: 0.1em 0.3em;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--muted) 14%, transparent);
+  font-size: 0.88em;
+}
+
+
 .panel {
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -539,12 +618,118 @@ main:focus {
   background: var(--panel);
 }
 
+.panel__copy {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+
+.panel__copy[hidden] {
+  display: none;
+}
+
+/* Запуск в песочнице Lean. Стоит рядом с копированием и живёт по тем же
+   правилам: иконка, проявляется цветом по наведению. */
+.panel__run {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--muted);
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+
+.panel__run:hover {
+  color: var(--fg);
+  border-color: var(--border);
+}
+
+.panel__run svg {
+  width: 13px;
+  height: 13px;
+  fill: currentColor;
+}
+
+.panel__copy:hover {
+  color: var(--fg);
+  border-color: var(--border);
+}
+
+.panel__copy svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.panel__copy-done {
+  display: none;
+}
+
+.panel__copy.is-copied {
+  color: var(--ok);
+}
+
+.panel__copy.is-copied .panel__copy-icon {
+  display: none;
+}
+
+.panel__copy.is-copied .panel__copy-done {
+  display: block;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel__copy {
+    transition: none;
+  }
+}
+
+/* Шапка блока: имя файла слева, копирование справа. */
 .panel__caption {
-  padding: 0.4rem 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  /* Справа отступ меньше: его добирает сама кнопка своей рамкой. */
+  padding: 0.25rem 0.3rem 0.25rem 0.85rem;
+  /* Высота шапки задана явно, иначе она прыгала бы у блоков без подписи. */
+  min-height: 2rem;
   border-bottom: 1px solid var(--border);
   font-size: 0.75rem;
   color: var(--muted);
   font-family: ui-monospace, monospace;
+}
+
+.panel__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Действия держатся вместе у правого края. Без обёртки space-between развёл бы
+   три элемента по всей ширине шапки, и копирование уехало бы в середину. */
+.panel__actions {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.15rem;
 }
 
 .panel .astro-code {
@@ -556,6 +741,43 @@ main:focus {
 .panel .astro-code .line {
   padding: 0 0.95rem;
 }
+
+/**
+ * Зелёная галка напротив прошедшего теста — маркер в гуттере, как в IDE.
+ *
+ * Гуттер появляется только у блоков, где такие строки есть: сдвигать отступ у
+ * всех примеров ради двух строк в одном шаге незачем. Поэтому :has().
+ */
+.panel:has(.line--pass) .astro-code .line {
+  padding-left: 2.4rem;
+}
+
+.panel .line--pass {
+  position: relative;
+}
+
+.panel .line--pass::before {
+  content: '';
+  position: absolute;
+  left: 0.5rem;
+  /* Кружок центрируется по строке: em привязан к её кеглю, а не к кеглю страницы. */
+  top: 50%;
+  width: 1.35em;
+  height: 1.35em;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  /* Кольцо вокруг круга: тенью, а не border — border съедал бы размер самого
+     круга, и галочка внутри стала бы мельче. */
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ok) 26%, transparent);
+  /* Два слоя: зелёный круг заливкой, белая галочка картинкой поверх. Маской
+     этого не сделать — она вырезала бы из круга саму галку. */
+  background-color: var(--ok);
+  background-image: var(--check-glyph);
+  background-position: center;
+  background-size: 0.85em 0.85em;
+  background-repeat: no-repeat;
+}
+
 
 .output {
   border-top: 1px solid var(--border);
@@ -780,6 +1002,53 @@ main:focus {
 
 .flow--compact .react-flow__edge-text {
   font-size: 11px;
+}
+
+/**
+ * Появление узла и ребра.
+ *
+ * Анимация висит на монтировании, а не на смене шага: React Flow держит узлы
+ * по id, поэтому карточка, живущая на обоих шагах, свой DOM-узел сохраняет и
+ * второй раз не проигрывается. Проявляются ровно те, что появились.
+ *
+ * Масштаб полотна при этом едет своей анимацией (fitBounds duration), так что
+ * зум и новый узел приходят одним движением.
+ */
+@keyframes flow-node-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+}
+
+@keyframes flow-edge-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.flow .react-flow__node {
+  animation: flow-node-in 260ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+.flow .react-flow__edge {
+  animation: flow-edge-in 260ms ease both;
+  /* Ребро появляется вслед за узлами: линия, приезжающая в пустоту, читается
+     как сбой отрисовки. */
+  animation-delay: 90ms;
+}
+
+/* Постер статичен, у него шагов нет и проявлять нечего. */
+.flow--static .react-flow__node,
+.flow--static .react-flow__edge {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow .react-flow__node,
+  .flow .react-flow__edge {
+    animation: none;
+  }
 }
 
 /* Узел — HTML-карточка, а не текст в SVG: переносы считает браузер,
@@ -1008,6 +1277,93 @@ main:focus {
   opacity: 1;
 }
 
+/**
+ * Группа шагов с общим блоком кода.
+ *
+ * Слева — нарративы шагов один под другим, справа одна панель, прилипшая под
+ * схемой. Читатель идёт по шагам, панель стоит, меняется только подсветка.
+ * Три копии одного блока, проезжающие мимо, читались бы как три разных примера.
+ */
+.player--scroll.is-enhanced .step-run {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  gap: 1.5rem;
+  align-items: start;
+  /* Тот же отступ сверху, что у обычного шага: без него панель группы липнет
+     к предыдущему блоку вплотную. */
+  padding: 1.75rem 0;
+}
+
+/**
+ * Внутри группы шаг занимает всю левую колонку.
+ *
+ * От `.step` ему достаётся сетка в две колонки, и текст сжимался бы в 0.85 от
+ * уже суженной колонки — переносы получались бы совсем не те. Колонки здесь
+ * задаёт сама группа, шагу остаётся вертикальное центрирование.
+ */
+.player--scroll.is-enhanced .step--in-run {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  grid-template-columns: none;
+  min-height: 62vh;
+  padding: 0;
+}
+
+.player--scroll.is-enhanced .step-run__stage {
+  position: sticky;
+  /**
+   * Схема прилипла сверху. Её нижняя граница — это 44vh плюс собственные
+   * поля (0.6rem сверху и снизу) и линия под ней, то есть примерно 44vh +
+   * 1.25rem. Отсчитывать `top` от неё значит положить карточку вплотную к
+   * линии, поэтому сверху добавлен зазор.
+   */
+  top: calc(44vh + 1.25rem + 1.5rem);
+  display: grid;
+}
+
+/* Слоты лежат друг на друге: высота панели не прыгает при смене шага. */
+.step-run__slot {
+  grid-area: 1 / 1;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease;
+}
+
+.step-run__slot.is-shown {
+  opacity: 1;
+  visibility: visible;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .step-run__slot {
+    transition: none;
+  }
+}
+
+/* Пошаговый режим: группа видна, только пока активен один из её шагов. */
+.player.is-enhanced:not(.player--scroll) .step-run {
+  display: none;
+}
+
+.player.is-enhanced:not(.player--scroll) .step-run:has(.step.is-active) {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 52rem) {
+  .player--scroll.is-enhanced .step-run,
+  .player.is-enhanced:not(.player--scroll) .step-run:has(.step.is-active) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .player--scroll.is-enhanced .step-run__stage {
+    position: static;
+  }
+}
+
 /* Первый и последний шаг должны доезжать до середины экрана, иначе первый
    никогда не станет активным, а последний не досматривается. */
 .player--scroll.is-enhanced .player__steps::before,
@@ -1024,8 +1380,10 @@ main:focus {
 }
 
 /* Высота контейнера едет вслед за активным шагом. Без этого каждое
-   переключение меняет высоту страницы, и всё, что ниже, дёргается. */
-.player.is-enhanced .player__steps {
+   переключение меняет высоту страницы, и всё, что ниже, дёргается.
+   Только пошаговый режим: в скролл-режиме высота и так auto, а overflow:hidden
+   здесь ломал бы position:sticky у панели группы. */
+.player.is-enhanced:not(.player--scroll) .player__steps {
   overflow: hidden;
   transition: height 0.28s ease;
 }
@@ -1090,6 +1448,84 @@ main:focus {
 
 .player__dot[aria-current='true'] {
   background: var(--accent);
+}
+
+/**
+ * Подсказка с названием шага.
+ *
+ * Полоски различимы только положением, и на длинном разборе «какой это был
+ * шаг» по ним не прочесть. Раскрывается вверх: панель управления прилипла к
+ * низу экрана, и вниз раскрывать некуда.
+ *
+ * Внешний слой только позиционирует, внутренний анимируется пружиной из
+ * скрипта. Разделены потому, что центрирование здесь — тоже transform, и
+ * анимация затирала бы его.
+ */
+.player__dot {
+  position: relative;
+}
+
+.player__dot-tip {
+  position: absolute;
+  bottom: calc(100% + 0.55rem);
+  left: 50%;
+  z-index: 6;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.player__dot:first-child .player__dot-tip {
+  left: 0;
+  transform: none;
+}
+
+.player__dot:last-child .player__dot-tip {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+.player__dot-tip__box {
+  display: block;
+  position: relative;
+  width: max-content;
+  max-width: min(15rem, 62vw);
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--fg);
+  box-shadow: 0 10px 28px var(--shadow);
+  font-size: 0.8rem;
+  line-height: 1.35;
+  text-align: center;
+  /* Стартовое состояние: дальше им управляет animate. */
+  opacity: 0;
+  visibility: hidden;
+}
+
+/* Хвостик к полоске. Ромб под коробкой, две трети видно из-под неё. */
+.player__dot-tip__box::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  transform: rotate(45deg);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.player__dot:first-child .player__dot-tip__box::after {
+  left: 0.85rem;
+}
+
+.player__dot:last-child .player__dot-tip__box::after {
+  left: auto;
+  right: 0.5rem;
 }
 
 .btn {

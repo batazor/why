@@ -12,7 +12,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { load as parseYaml } from 'js-yaml';
 import { createHighlighter } from 'shiki';
-import { transformerNotationHighlight, transformerNotationDiff, transformerNotationFocus } from '@shikijs/transformers';
+import { codeTransformers } from '../src/code/shiki.ts';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const lessonsDir = path.join(root, 'src/content/lessons');
@@ -337,11 +337,7 @@ for (const [slug, perLocale] of bySlug) {
 if (snippets.length) {
   const langs = [...new Set(snippets.map((s) => s.lang))];
   const highlighter = await createHighlighter({ themes: ['github-light'], langs });
-  const transformers = [
-    transformerNotationHighlight(),
-    transformerNotationDiff(),
-    transformerNotationFocus(),
-  ];
+  const transformers = codeTransformers();
 
   for (const snippet of snippets) {
     if (!snippet.code.includes('[!code')) continue;

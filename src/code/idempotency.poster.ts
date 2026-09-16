@@ -6,12 +6,12 @@ const poster: FlowSpec = {
   fixedStep: 'problem',
   compact: true,
   nodes: [
-    { id: 'client', kind: 'service', title: 'Client', sub: 'checkout flow', position: { x: 0, y: 30 } },
+    { id: 'client', kind: '{{kindService}}', title: '{{client}}', sub: '{{checkoutFlow}}', position: { x: 0, y: 30 } },
     {
       id: 'payments',
-      kind: 'external',
+      kind: '{{kindExternal}}',
       title: 'Payments API',
-      sub: 'not idempotent',
+      sub: '{{notIdempotent}}',
       position: { x: 240, y: 30 },
       bad: ['problem'],
     },
@@ -23,7 +23,7 @@ const poster: FlowSpec = {
       target: 'payments',
       sourceHandle: 'r',
       targetHandle: 'l',
-      label: 'charge 99.00',
+      label: '{{charge}} 99.00',
     },
     {
       id: 'retry',
@@ -31,7 +31,7 @@ const poster: FlowSpec = {
       target: 'payments',
       sourceHandle: 'b',
       targetHandle: 'b',
-      label: 'retry, same body → charged twice',
+      label: '{{retrySameBody}}',
       tone: 'bad',
       dashed: true,
     },

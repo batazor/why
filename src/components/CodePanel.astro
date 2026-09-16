@@ -1,0 +1,82 @@
+---
+import { Code } from 'astro:components';
+import { codeTransformers } from '../code/shiki';
+import { useTranslations, type Locale } from '../i18n/ui';
+
+interface Props {
+  lang: Locale;
+  caption?: string;
+  /** Уже локализованный код: комментарии подставлены вызывающим. */
+  code: string;
+  codeLang: string;
+  output?: string;
+  outputTone?: 'ok' | 'bad';
+  /** Ссылка в песочницу Lean; отсутствует для нелиновых примеров. */
+  runUrl?: string;
+}
+
+const { lang, caption, code, codeLang, output, outputTone, runUrl } = Astro.props;
+const t = useTranslations(lang);
+
+const shikiOptions = {
+  themes: { light: 'github-light', dark: 'github-dark' },
+  transformers: codeTransformers(),
+} as const;
+---
+
+<div class="panel">
+  {/* Шапка рендерится всегда: подпись есть не у каждого блока, а кнопкам нужно
+      постоянное место. hidden с копирования снимает скрипт — без
+      navigator.clipboard оно молча не работало бы, а мёртвая кнопка хуже
+      её отсутствия. */}
+  <div class="panel__caption">
+    <span class="panel__name">{caption}</span>
+    <span class="panel__actions">
+      {
+        runUrl && (
+          <a
+            class="panel__run"
+            href={runUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={t('lesson.runInLean')}
+            title={t('lesson.runInLean')}
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M5.5 3.4v9.2l7-4.6z" />
+            </svg>
+          </a>
+        )
+      }
+      <button
+        class="panel__copy"
+        type="button"
+        data-copy
+        data-copied-label={t('lesson.copied')}
+        data-copy-label={t('lesson.copy')}
+        aria-label={t('lesson.copy')}
+        title={t('lesson.copy')}
+        hidden
+      >
+        <svg class="panel__copy-icon" viewBox="0 0 16 16" aria-hidden="true">
+          <rect x="5.75" y="5.75" width="8.5" height="9.5" rx="1.5" />
+          <path d="M11 3.25v-1a1.5 1.5 0 0 0-1.5-1.5h-7a1.5 1.5 0 0 0-1.5 1.5v9a1.5 1.5 0 0 0 1.5 1.5h1" />
+        </svg>
+        <svg class="panel__copy-done" viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M3 8.5 6.5 12 13 4.75" />
+        </svg>
+      </button>
+    </span>
+  </div>
+
+  <Code code={code} lang={codeLang as any} {...shikiOptions} />
+
+  {
+    output && (
+      <div class:list={['output', outputTone === 'bad' && 'output--bad']}>
+        <p class="output__label">{t('lesson.output')}</p>
+        <pre>{output}</pre>
+      </div>
+    )
+  }
+</div>

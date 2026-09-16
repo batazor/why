@@ -1,11 +1,9 @@
 ---
 import { Code } from 'astro:components';
-import {
-  transformerNotationHighlight,
-  transformerNotationDiff,
-  transformerNotationFocus,
-} from '@shikijs/transformers';
+import { codeTransformers } from '../code/shiki';
+import { inlineMarkdown } from '../inline-markdown';
 import FlowDiagram from './FlowDiagram';
+import CodePanel from './CodePanel.astro';
 import { useTranslations, type Locale } from '../i18n/ui';
 import type { CodeDeck } from '../code/types';
 import type { FlowSpec } from '../code/flow';
@@ -28,9 +26,11 @@ interface Props {
   comments?: Record<string, string>;
   /** Локализованные подписи для перетаскивания карточки в схему. */
   drags?: { step: string; chip: string; slot: string }[];
+  /** Локализованные подписи узлов и рёбер схемы. */
+  labels?: Record<string, string>;
 }
 
-const { lang, steps, deck, flow, notes = [], comments = {}, drags = [] } = Astro.props;
+const { lang, steps, deck, flow, notes = [], comments = {}, drags = [], labels = {} } = Astro.props;
 
 /**
  * Код в колоде общий для всех локалей, поэтому комментарии в нём — ключи.
@@ -39,6 +39,37 @@ const { lang, steps, deck, flow, notes = [], comments = {}, drags = [] } = Astro
 function localizeComments(code: string): string {
   return code.replace(/\{\{(\w+)\}\}/g, (_, key: string) => comments[key] ?? `{{${key}}}`);
 }
+
+/**
+ * Ссылка на песочницу Lean.
+ *
+ * Открывать один фрагмент бессмысленно: `inductive Promo` сам по себе не
+ * соберётся. Поэтому собирается файл из всех шагов по текущий включительно —
+ * ровно то, что компилируется локально.
+ *
+ * Маркеры `[!code …]` вырезаются: они управляют подсветкой на странице, а в
+ * редакторе были бы мусорными комментариями.
+ */
+const NOTATION = /^[ \t]*(--|\/\/)[ \t]*\[!code [^\]]*\][ \t]*\r?\n/gm;
+
+function playgroundUrl(index: number): string | undefined {
+  const step = merged[index];
+  if (step.panel?.lang !== 'lean') return undefined;
+
+  const patches = step.panel.playground ?? [];
+  const parts = merged
+    .slice(0, index + 1)
+    .filter((item) => item.panel?.lang === 'lean' && item.panel.code)
+    // Шаг с правкой в файл не дописывается: он меняет то, что уже написано.
+    .filter((item) => item.panel!.playground === undefined && !item.panel!.repeatsPrevious)
+    .map((item) => item.panel!.code!);
+
+  let code = localizeComments(parts.join('\n\n')).replace(NOTATION, '');
+  for (const patch of patches) {
+    code = code.replace(localizeComments(patch.find), localizeComments(patch.replace));
+  }
+  return `https://live.lean-lang.org/#code=${encodeURIComponent(code)}`;
+}
 const t = useTranslations(lang);
 
 const byId = new Map(deck.map((step) => [step.id, step]));
@@ -46,13 +77,25 @@ const byId = new Map(deck.map((step) => [step.id, step]));
 // Шаг без кода — легальный случай (диаграммный или чисто концептуальный).
 const merged = steps.map((step) => ({ ...step, panel: byId.get(step.id) }));
 
+// Считается один раз на шаг: ссылка длинная, а в разметке она нужна дважды.
+const playgrounds = merged.map((_, index) => playgroundUrl(index));
+
+/**
+ * Группы шагов, показывающих один и тот же блок кода.
+ *
+ * Такая группа получает одну панель на всех: она стоит на месте, пока читатель
+ * идёт по её шагам, и меняется только подсветка. Три копии одного блока,
+ * проезжающие мимо, читались бы как три разных примера.
+ */
+const groups: number[][] = [];
+merged.forEach((step, index) => {
+  if (index > 0 && step.panel?.repeatsPrevious) groups[groups.length - 1].push(index);
+  else groups.push([index]);
+});
+
 const shikiOptions = {
   themes: { light: 'github-light', dark: 'github-dark' },
-  transformers: [
-    transformerNotationHighlight(),
-    transformerNotationDiff(),
-    transformerNotationFocus(),
-  ],
+  transformers: codeTransformers(),
 } as const;
 ---
 
@@ -71,6 +114,7 @@ const shikiOptions = {
             firstStep={merged[0].id}
             notes={notes}
             drags={drags}
+            labels={labels}
           />
         </figure>
       )
@@ -78,54 +122,77 @@ const shikiOptions = {
 
     <ol class="player__steps">
       {
-        merged.map((step, i) => (
-          <li
-            class:list={['step', !step.panel?.code && 'step--text', i === 0 && 'is-active']}
-            data-step={i}
-            data-step-id={step.id}
-            aria-current={i === 0 ? 'step' : undefined}
-          >
+        groups.map((group) => {
+          const solo = group.length === 1;
+
+          const body = (i: number) => (
             <div>
               <p class="step__index">{t('lesson.stepOf', { n: i + 1, total: merged.length })}</p>
-              <h3 class="step__title">{step.title}</h3>
-              <p class="step__narration">{step.narration}</p>
+              <h3 class="step__title">{merged[i].title}</h3>
+              <p class="step__narration" set:html={inlineMarkdown(merged[i].narration)} />
 
               {
-                drags.find((drag) => drag.step === step.id) && (
+                drags.find((drag) => drag.step === merged[i].id) && (
                   /* Карточка живёт в тексте, а слот — в схеме: чтобы донести
                      одну до другого, читателю приходится смотреть на обе. */
-                  <span
-                    class="promo-chip"
-                    role="button"
-                    tabindex="0"
-                    draggable="true"
-                    data-drag-chip
-                  >
+                  <span class="promo-chip" role="button" tabindex="0" draggable="true" data-drag-chip>
                     <span class="promo-chip__grip" aria-hidden="true">⠿</span>
-                    {drags.find((drag) => drag.step === step.id)!.chip}
+                    {drags.find((drag) => drag.step === merged[i].id)!.chip}
                   </span>
                 )
               }
             </div>
+          );
 
-            {step.panel?.code && (
-              <div class="panel">
-                {step.panel.caption && <div class="panel__caption">{step.panel.caption}</div>}
-                <Code
-                  code={localizeComments(step.panel.code)}
-                  lang={(step.panel.lang ?? 'text') as any}
-                  {...shikiOptions}
-                />
-                {step.panel.output && (
-                  <div class:list={['output', step.panel.outputTone === 'bad' && 'output--bad']}>
-                    <p class="output__label">{t('lesson.output')}</p>
-                    <pre>{step.panel.output}</pre>
+          const panel = (i: number) =>
+            merged[i].panel?.code && (
+              <CodePanel
+                lang={lang}
+                caption={merged[i].panel!.caption}
+                code={localizeComments(merged[i].panel!.code!)}
+                codeLang={merged[i].panel!.lang ?? 'text'}
+                output={merged[i].panel!.output}
+                outputTone={merged[i].panel!.outputTone}
+                runUrl={playgrounds[i]}
+              />
+            );
+
+          if (solo) {
+            const i = group[0];
+            return (
+              <li
+                class:list={['step', !merged[i].panel?.code && 'step--text', i === 0 && 'is-active']}
+                data-step={i}
+                data-step-id={merged[i].id}
+                aria-current={i === 0 ? 'step' : undefined}
+              >
+                {body(i)}
+                {panel(i)}
+              </li>
+            );
+          }
+
+          /* Группа шагов с общим блоком кода: панель одна на всех и стоит на
+             месте, пока читатель идёт по шагам — меняется только подсветка. */
+          return (
+            <li class="step-run">
+              <div class="step-run__text">
+                {group.map((i) => (
+                  <div class="step step--in-run" data-step={i} data-step-id={merged[i].id}>
+                    {body(i)}
                   </div>
-                )}
+                ))}
               </div>
-            )}
-          </li>
-        ))
+              <div class="step-run__stage">
+                {group.map((i) => (
+                  <div class:list={['step-run__slot', i === group[0] && 'is-shown']} data-panel-for={i}>
+                    {panel(i)}
+                  </div>
+                ))}
+              </div>
+            </li>
+          );
+        })
       }
     </ol>
 
@@ -142,8 +209,16 @@ const shikiOptions = {
             data-goto={i}
             role="tab"
             aria-current={i === 0 ? 'true' : 'false'}
-            aria-label={t('lesson.stepOf', { n: i + 1, total: merged.length })}
-          />
+            /* Название шага и в подписи, а не только в подсказке: подсказка
+               видна по наведению, а мышь есть не у всех. */
+            aria-label={`${t('lesson.stepOf', { n: i + 1, total: merged.length })} — ${step.title}`}
+          >
+            {/* Внешний span только позиционирует, внутренний анимируется:
+                иначе пружина затирала бы центрирующий translateX(-50%). */}
+            <span class="player__dot-tip">
+              <span class="player__dot-tip__box">{step.title}</span>
+            </span>
+          </button>
         ))
       }
     </div>
@@ -154,6 +229,8 @@ const shikiOptions = {
 <p class="hint">{t('lesson.keyboardHint')}</p>
 
 <script>
+  import { animate } from 'motion';
+
   /**
    * Два режима на одних и тех же данных.
    *
@@ -174,6 +251,41 @@ const shikiOptions = {
     if (steps.length < 2) return;
 
     const scrolly = player.classList.contains('player--scroll');
+
+    /**
+     * Шаг в адресе: `#step-<id>`.
+     *
+     * Ссылка ведёт на конкретный шаг и переживает перезагрузку. Пишется через
+     * replaceState: в скролл-режиме шаг меняется на каждой прокрутке, и push
+     * набил бы историю так, что «назад» перестало бы уводить со страницы.
+     *
+     * До первой отметки адрес не трогаем: читатель, пришедший без хеша, не
+     * должен получить его сам собой.
+     */
+    const stepHash = (i: number) => `#step-${steps[i].dataset.stepId ?? ''}`;
+    const hashIndex = () => steps.findIndex((step, i) => stepHash(i) === location.hash);
+    let urlReady = false;
+    let hashTimer: ReturnType<typeof setTimeout>;
+
+    /**
+     * Запись откладывается и оборачивается в try.
+     *
+     * В скролл-режиме шаг меняется на каждой прокрутке, а браузер троттлит
+     * частые replaceState и на превышении бросает исключение. Брошенное прямо
+     * из колбэка IntersectionObserver, оно убивало подсветку шагов целиком:
+     * адрес застывал, и активный шаг вместе с ним.
+     */
+    function syncHash() {
+      clearTimeout(hashTimer);
+      hashTimer = setTimeout(() => {
+        if (!urlReady || location.hash === stepHash(index)) return;
+        try {
+          history.replaceState(null, '', stepHash(index));
+        } catch {
+          // Браузер придержал историю — адрес догонит на следующем шаге.
+        }
+      }, 250);
+    }
     const smooth = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
 
     let index = 0;
@@ -192,11 +304,97 @@ const shikiOptions = {
       // монтируется лениво и к своему появлению может опоздать на пять шагов.
       const stepId = steps[index].dataset.stepId ?? '';
       player.dataset.stepId = stepId;
+      syncHash();
       player.dispatchEvent(new CustomEvent('why:step', { detail: { id: stepId, index } }));
 
       if (prev) prev.disabled = index === 0;
       if (next) next.disabled = index === steps.length - 1;
+
+      /**
+       * Панель группы показывает шаг, на котором читатель стоит. Если он вышел
+       * за пределы группы, она держит ближний к нему край: пустая панель на
+       * месте кода читалась бы как сбой.
+       */
+      player.querySelectorAll<HTMLElement>('.step-run__stage').forEach((stage) => {
+        const slots = [...stage.querySelectorAll<HTMLElement>('[data-panel-for]')];
+        const ids = slots.map((slot) => Number(slot.dataset.panelFor));
+        const shown = Math.min(Math.max(index, ids[0]), ids[ids.length - 1]);
+        slots.forEach((slot, n) => slot.classList.toggle('is-shown', ids[n] === shown));
+      });
     }
+
+    /* Подсказки и копирование нужны в обоих режимах, поэтому стоят до
+       ветвления: раньше они жили внутри scrolly, и в уроке без схемы
+       кнопка копирования оставалась скрытой навсегда. */
+      /**
+     * Подсказки на полосках навигации.
+     *
+     * Пружина, а не линейное проявление: подсказка живёт доли секунды, и на
+     * такой дистанции затухание читается как подвисание, а отскок — как ответ
+     * на наведение. Полоски — обычный DOM, поэтому берётся ванильный animate,
+     * без React-острова ради одного тултипа.
+     */
+    const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    player.querySelectorAll<HTMLElement>('.player__dot').forEach((dot) => {
+      const box = dot.querySelector<HTMLElement>('.player__dot-tip__box');
+      if (!box) return;
+
+      let leaving: ReturnType<typeof setTimeout>;
+
+      const show = () => {
+        clearTimeout(leaving);
+        box.style.visibility = 'visible';
+        animate(
+          box,
+          { opacity: 1, y: 0, scale: 1 },
+          calm ? { duration: 0 } : { type: 'spring', stiffness: 640, damping: 28 },
+        );
+      };
+
+      const hide = () => {
+        animate(box, { opacity: 0, y: 4, scale: 0.94 }, { duration: calm ? 0 : 0.12 });
+        // visibility снимается после ухода: иначе подсказка пропадает рывком,
+        // не дождавшись собственной анимации.
+        leaving = setTimeout(() => (box.style.visibility = 'hidden'), calm ? 0 : 130);
+      };
+
+      dot.addEventListener('pointerenter', show);
+      dot.addEventListener('focus', show);
+      dot.addEventListener('pointerleave', hide);
+      dot.addEventListener('blur', hide);
+    });
+
+    /**
+     * Копирование кода. Берём текст из подсвеченного блока, а не из исходной
+     * колоды: в разметке уже подставлены локализованные комментарии, и читатель
+     * копирует ровно то, что видит.
+     */
+    if (navigator.clipboard) {
+      player.querySelectorAll<HTMLButtonElement>('[data-copy]').forEach((button) => {
+        button.hidden = false;
+        let reset: ReturnType<typeof setTimeout>;
+
+        button.addEventListener('click', async () => {
+          const code = button.closest('.panel')?.querySelector('.astro-code')?.textContent ?? '';
+          try {
+            await navigator.clipboard.writeText(code);
+          } catch {
+            // В доступе отказали — молчим и не показываем галочку: соврать о
+            // скопированном хуже, чем не отреагировать.
+            return;
+          }
+          clearTimeout(reset);
+          button.classList.add('is-copied');
+          button.setAttribute('aria-label', button.dataset.copiedLabel ?? '');
+          reset = setTimeout(() => {
+            button.classList.remove('is-copied');
+            button.setAttribute('aria-label', button.dataset.copyLabel ?? '');
+          }, 1600);
+        });
+      });
+    }
+
 
     if (scrolly) {
       const goTo = (to: number) => {
@@ -217,7 +415,9 @@ const shikiOptions = {
       );
       steps.forEach((step) => spotlight.observe(step));
 
-      // Карточка акции переезжает из текста в схему обычным HTML5-перетаскиванием:
+
+
+    // Карточка акции переезжает из текста в схему обычным HTML5-перетаскиванием:
     // React-остров слушает drop у себя, общий словарь между ними — тип данных.
     player.querySelectorAll<HTMLElement>('[data-drag-chip]').forEach((chip) => {
       chip.addEventListener('dragstart', (event) => {
@@ -250,7 +450,25 @@ const shikiOptions = {
       });
       player.tabIndex = 0;
 
-      mark(0);
+      const start = hashIndex();
+      mark(start >= 0 ? start : 0);
+      urlReady = true;
+      if (start >= 0) {
+        // Браузер восстанавливает прокрутку после перезагрузки и перебивал бы
+        // переход по ссылке: на время перехода берём управление себе.
+        const restore = history.scrollRestoration;
+        history.scrollRestoration = 'manual';
+        steps[start].scrollIntoView({ block: 'center', behavior: 'auto' });
+        requestAnimationFrame(() => {
+          steps[start].scrollIntoView({ block: 'center', behavior: 'auto' });
+          history.scrollRestoration = restore;
+        });
+      }
+
+      window.addEventListener('hashchange', () => {
+        const to = hashIndex();
+        if (to >= 0 && to !== index) goTo(to);
+      });
       return;
     }
 
@@ -290,7 +508,14 @@ const shikiOptions = {
     player.tabIndex = 0;
 
     list.style.transition = 'none';
-    render(0);
+    const start = hashIndex();
+    render(start >= 0 ? start : 0);
+    urlReady = true;
     requestAnimationFrame(() => (list.style.transition = ''));
+
+    window.addEventListener('hashchange', () => {
+      const to = hashIndex();
+      if (to >= 0 && to !== index) render(to);
+    });
   });
 </script>
