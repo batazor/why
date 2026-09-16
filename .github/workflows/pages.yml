@@ -1,0 +1,63 @@
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Разрешения нужны только деплою, но задаются на весь workflow.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Параллельные деплои одной страницы конфликтуют. Незаконченный отменяем:
+# выкатывать предыдущее состояние поверх нового смысла нет.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 24, а не что-нибудь постарше, по одной причине: scripts/check-steps.mjs
+      # импортирует колоды уроков прямо из .ts, без сборки. Это работает только
+      # там, где включено стирание типов.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci --prefer-offline --no-audit --fund=false
+
+      # Отдаёт base_url вида https://user.github.io/why — из него astro.config
+      # выводит и site, и base.
+      - id: pages
+        uses: actions/configure-pages@v5
+
+      # npm run build прогоняет check-steps: расхождение локалей, пометки поверх
+      # узлов, утёкшие маркеры подсветки. Гоняется и на pull request, чтобы
+      # ломалось в ветке, а не после слияния.
+      - run: npm run build
+        env:
+          SITE_URL: ${{ steps.pages.outputs.base_url }}
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    # На pull request собираем, но не публикуем.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

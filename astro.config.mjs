@@ -9,13 +9,13 @@ import {
 } from '@shikijs/transformers';
 
 /**
- * Адрес берётся из CI_PAGES_URL, который GitLab выдаёт джобе pages. Он бывает
- * двух видов: корень домена и подпуть вида https://user.gitlab.io/why. Второй
- * случай требует base, иначе все ссылки и шрифты уедут в корень и отдадут 404.
+ * Адрес, по которому сайт будет жить. В CI его подставляет workflow: у GitHub
+ * Pages это https://user.github.io/why, то есть подпуть, а не корень домена.
+ * Подпуть требует base, иначе все ссылки и шрифты уедут в корень и отдадут 404.
  *
  * Локально переменной нет — тогда плейсхолдер и пустой base.
  */
-const PAGES_URL = new URL(process.env.CI_PAGES_URL ?? 'https://why.example.com');
+const PAGES_URL = new URL(process.env.SITE_URL ?? 'https://why.example.com');
 const SITE = PAGES_URL.origin;
 const BASE = PAGES_URL.pathname.replace(/\/+$/, '');
 

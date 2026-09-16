@@ -211,24 +211,25 @@ scripts/check-steps.mjs       проверка консистентности л
 
 ## Деплой
 
-`.gitlab-ci.yml` собирает на любой ветке и публикует на GitLab Pages только с
-дефолтной. Джоба `pages` ничего не пересобирает — берёт `dist` артефактом и
-переименовывает в `public`, каталог которого требует Pages. Шрифты из
-репозиторного `public/` к этому моменту уже лежат внутри `dist`, так что
-замена каталога ничего не теряет.
+`.github/workflows/pages.yml` собирает на push и на pull request, публикует на
+GitHub Pages только с `main`. Сборка на PR нужна затем, что `npm run build`
+прогоняет `check-steps` — ломаться это должно в ветке, а не после слияния.
 
-Адрес берётся из `CI_PAGES_URL`. Он бывает двух видов — корень домена и подпуть
-вида `https://user.gitlab.io/why`, — поэтому из него выводятся и `site`, и
-`base`. Все ссылки строятся через `localePath()` и `assetPath()`, так что
-префикс задаётся в одном месте. Шрифты в CSS подключены относительным путём
+Адрес берётся из `SITE_URL`, который workflow подставляет из вывода
+`actions/configure-pages`. У GitHub Pages это подпуть вида
+`https://user.github.io/why`, поэтому из адреса выводятся и `site`, и `base`.
+Все ссылки строятся через `localePath()` и `assetPath()`, так что префикс
+задаётся в одном месте. Шрифты в CSS подключены относительным путём
 `../fonts/`: стили всегда лежат в `_astro/` (`inlineStylesheets: 'never'`),
 поэтому глубина известна и путь верен при любом префиксе.
 
 Проверить подпуть локально:
 
 ```bash
-CI_PAGES_URL=https://user.gitlab.io/why npm run build
+SITE_URL=https://user.github.io/why npm run build
 ```
+
+Разово в настройках репозитория: Settings → Pages → Source → GitHub Actions.
 
 ## Что ещё не сделано
 
