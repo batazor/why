@@ -8,12 +8,29 @@ import {
   transformerNotationFocus,
 } from '@shikijs/transformers';
 
-// TODO: подставить реальный домен — от него зависят sitemap и canonical/hreflang.
-const SITE = 'https://why.example.com';
+/**
+ * Адрес берётся из CI_PAGES_URL, который GitLab выдаёт джобе pages. Он бывает
+ * двух видов: корень домена и подпуть вида https://user.gitlab.io/why. Второй
+ * случай требует base, иначе все ссылки и шрифты уедут в корень и отдадут 404.
+ *
+ * Локально переменной нет — тогда плейсхолдер и пустой base.
+ */
+const PAGES_URL = new URL(process.env.CI_PAGES_URL ?? 'https://why.example.com');
+const SITE = PAGES_URL.origin;
+const BASE = PAGES_URL.pathname.replace(/\/+$/, '');
 
 export default defineConfig({
   site: SITE,
+  base: BASE || undefined,
   output: 'static',
+  build: {
+    /**
+     * Стили всегда отдельным файлом в _astro/. Шрифты в нём подключены
+     * относительным путём ../fonts/, и он обязан считаться от известной
+     * глубины: при инлайне в HTML глубина стала бы разной у каждой страницы.
+     */
+    inlineStylesheets: 'never',
+  },
   // Каталожные URL со слешем на конце — тогда canonical совпадает с тем,
   // что реально отдаёт статический хостинг.
   trailingSlash: 'always',

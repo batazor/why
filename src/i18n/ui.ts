@@ -95,8 +95,20 @@ export function useTranslations(locale: Locale) {
   };
 }
 
+/**
+ * Префикс, под которым живёт сайт: пустая строка в корне домена и что-то вроде
+ * `/why` под GitLab Pages. Astro отдаёт его с завершающим слешем, здесь он
+ * лишний — слеш ставится ниже.
+ */
+const BASE = import.meta.env.BASE_URL.replace(/\/+$/, '');
+
 /** Путь с префиксом локали. Все ссылки строятся только через неё. */
 export function localePath(locale: Locale, path = ''): string {
   const clean = path.replace(/^\/+/, '');
-  return clean ? `/${locale}/${clean}/` : `/${locale}/`;
+  return clean ? `${BASE}/${locale}/${clean}/` : `${BASE}/${locale}/`;
+}
+
+/** Путь к файлу в public/. Тот же префикс, что и у страниц. */
+export function assetPath(file: string): string {
+  return `${BASE}/${file.replace(/^\/+/, '')}`;
 }

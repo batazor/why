@@ -22,5 +22,8 @@
   },
   "devDependencies": {
     "js-yaml": "^5.4.2"
+  },
+  "engines": {
+    "node": ">=22.18"
   }
 }

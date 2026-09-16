@@ -6,6 +6,7 @@ import {
   defaultLocale,
   useTranslations,
   localePath,
+  assetPath,
   type Locale,
 } from '../i18n/ui';
 
@@ -41,7 +42,7 @@ const canonical = new URL(localePath(lang, path), Astro.site);
       as="font"
       type="font/woff2"
       crossorigin
-      href={lang === 'ru' ? '/fonts/caveat-cyrillic.woff2' : '/fonts/caveat-latin.woff2'}
+      href={assetPath(lang === 'ru' ? 'fonts/caveat-cyrillic.woff2' : 'fonts/caveat-latin.woff2')}
     />
     {
       locales.map((loc) => (
