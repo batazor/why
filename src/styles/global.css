@@ -1784,13 +1784,27 @@ main:focus {
 /* ---------- Редактор с деревом файлов ---------- */
 
 /* Разбор про раскладку сервиса: слева текст, справа редактор, который стоит на
-   месте и заполняется по шагам. Пропорции те же, что у шага с панелью кода, —
-   иначе два разбора на одном сайте читались бы по-разному. */
-.player--editor .player__body {
+   месте и заполняется по шагам.
+   Текст получает фиксированную колонку по длине строки, а не долю ширины: всё
+   остальное нужно коду, и делить пополам с текстом, которому больше не надо,
+   значит оставить файлу полторы сотни пикселей. */
+/* Селектор с двумя режимами сразу: скролл-режим раскладывает тело схемы
+   блоком (полосой сверху), а здесь прилипшая половина стоит сбоку. */
+.player--editor .player__body,
+.player--editor.player--scroll .player__body {
   display: grid;
   gap: 1.5rem;
-  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  grid-template-columns: minmax(0, 24rem) minmax(0, 1fr);
   align-items: start;
+}
+
+/* На широком окне редактор уходит за колонку текста к правому краю: страница
+   центрована по 68rem, и справа от неё простаивает половина свободного места.
+   1.5rem остаётся полем, чтобы панель не упиралась в край окна. */
+@media (min-width: 68rem) {
+  .player--editor {
+    margin-right: calc(1.5rem - (100vw - 68rem) / 2);
+  }
 }
 
 /* Редактор объявлен в разметке раньше шагов: без JS читатель видит сначала
@@ -1892,6 +1906,69 @@ main:focus {
 .editor__panes {
   overflow: auto;
   max-height: 70vh;
+}
+
+/* Что показывает редактор, решает шаг.
+   `tree` — файл только появился, читать в нём нечего: дерево во всю панель.
+   `file` — про содержимое: дерево растворяется, код получает всю ширину, а
+   какой это файл, по-прежнему написано строкой пути над кодом.
+
+   Половина не выключается display'ем, а сжимается в ноль и гаснет: переход
+   между шагами тогда виден как движение, а не как подмена панели. */
+.editor,
+.editor__tree,
+.editor__panes {
+  transition:
+    grid-template-columns 0.3s ease,
+    opacity 0.2s ease;
+}
+
+.editor[data-view='tree'] {
+  grid-template-columns: minmax(0, 1fr) 0;
+}
+
+.editor[data-view='tree'] .editor__panes {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.editor[data-view='file'] {
+  grid-template-columns: 0 minmax(0, 1fr);
+}
+
+.editor[data-view='file'] .editor__tree {
+  padding: 0;
+  border-right: 0;
+  opacity: 0;
+  visibility: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editor,
+  .editor__tree,
+  .editor__panes {
+    transition: none;
+  }
+}
+
+/* Файл, появившийся на этом шаге. Точка слева, а не цвет всей строки: строка
+   останется в дереве навсегда, а «новое» — состояние одного шага. */
+.editor__file.is-new::before,
+.editor__dir.is-new::before {
+  content: '';
+  position: absolute;
+  left: 0.1rem;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.editor__file,
+.editor__dir {
+  position: relative;
 }
 
 .editor__path {

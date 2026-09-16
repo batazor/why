@@ -84,7 +84,7 @@ function build(files: FileTreeSpec['files']): Node[] {
 const nodes = build(tree.files);
 ---
 
-<div class="editor" data-editor>
+<div class="editor" data-editor data-view="both">
   <nav class="editor__tree" aria-label={t('lesson.files')}>
     <p class="editor__root">{tree.root}/</p>
     {
@@ -146,7 +146,10 @@ const nodes = build(tree.files);
   const player = document.querySelector<HTMLElement>('[data-player]');
 
   if (editor && player) {
-    const open = JSON.parse(player.dataset.editorOpen || '{}') as Record<string, string>;
+    const steps = JSON.parse(player.dataset.editorSteps || '{}') as Record<
+      string,
+      { open?: string; view?: 'tree' | 'file' | 'both' }
+    >;
     const order = JSON.parse(player.dataset.editorOrder || '[]') as string[];
     const panes = [...editor.querySelectorAll<HTMLElement>('[data-pane]')];
     const files = [...editor.querySelectorAll<HTMLElement>('[data-file]')];
@@ -161,7 +164,13 @@ const nodes = build(tree.files);
     };
 
     const grow = (index: number) => {
-      for (const row of rows) row.hidden = Number(row.dataset.appears) > index;
+      for (const row of rows) {
+        const appears = Number(row.dataset.appears);
+        row.hidden = appears > index;
+        // Файл, появившийся именно на этом шаге, помечен: иначе в дереве из
+        // десяти строк читателю придётся искать, что изменилось.
+        row.classList.toggle('is-new', appears === index);
+      }
     };
 
     for (const file of files) {
@@ -172,10 +181,13 @@ const nodes = build(tree.files);
       const index = order.indexOf(id);
       if (index === -1) return;
       grow(index);
-      // Файл шага открывается только если он уже появился: иначе шаг показал бы
-      // содержимое файла, которого в дереве ещё нет.
-      const path = open[id];
-      if (path) show(path);
+
+      const step = steps[id] ?? {};
+      // Режим панели объявлен шагом: показать дерево, показать файл или и то и
+      // другое. Ширины на всё сразу не хватает, и делить её всегда пополам
+      // значит всегда показывать половину ненужного.
+      editor.dataset.view = step.view ?? 'both';
+      if (step.open) show(step.open);
     };
 
     goTo(player.dataset.stepId || order[0]);

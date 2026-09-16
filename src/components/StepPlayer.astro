@@ -126,11 +126,13 @@ const shikiOptions = {
   class:list={[
     'player',
     stage && 'player--diagram',
-    stage && 'player--scroll',
+    /* Скроллителлинг включает любая прилипшая половина разбора — схема или
+       редактор: шаги листаются прокруткой, а половина следует за текстом. */
+    (stage || tree) && 'player--scroll',
     tree && 'player--editor',
   ]}
   data-player
-  data-editor-open={tree && JSON.stringify(tree.open)}
+  data-editor-steps={tree && JSON.stringify(tree.steps)}
   data-editor-order={tree && JSON.stringify(merged.map((step) => step.id))}
   aria-label={t('lesson.walkthrough')}
 >
@@ -467,10 +469,26 @@ const shikiOptions = {
 
 
     if (scrolly) {
-      const stage = player.querySelector<HTMLElement>('.player__stage')!;
+      /**
+       * Прилипшая половина разбора: полоса схемы сверху или редактор сбоку.
+       *
+       * Раньше здесь стоял `.player__stage` с восклицательным знаком, и в
+       * разборе с редактором весь скролл-режим падал на первом же обращении:
+       * шаги не отмечались, прокрутка ничего не листала.
+       */
+      const stage = player.querySelector<HTMLElement>('.player__stage');
+      const sticky = stage ?? player.querySelector<HTMLElement>('.player__editor');
       const controls = player.querySelector<HTMLElement>('.player__controls')!;
       const contentTop = (step: HTMLElement) => step.firstElementChild!.getBoundingClientRect().top;
-      const readingTop = () => stage.getBoundingClientRect().height + 24;
+      /**
+       * Где начинается область чтения.
+       *
+       * Под полосой схемы — сразу под ней: середина экрана попадала внутрь
+       * схемы и включала шаг, текста которого ещё не видно. Рядом с
+       * редактором текст идёт от самого верха, и такой границы нет — берётся
+       * верхняя треть экрана, то есть то место, куда смотрят при чтении.
+       */
+      const readingTop = () => (stage ? stage.getBoundingClientRect().height + 24 : window.innerHeight * 0.34);
       let navigating = false;
       let scrollFrame = 0;
       let settleTimer: ReturnType<typeof setTimeout>;
@@ -508,7 +526,7 @@ const shikiOptions = {
         player.style.setProperty('--controls-height', `${controls.getBoundingClientRect().height}px`);
       };
       const layout = new ResizeObserver(measure);
-      layout.observe(stage);
+      if (sticky) layout.observe(sticky);
       layout.observe(controls);
       measure();
 
