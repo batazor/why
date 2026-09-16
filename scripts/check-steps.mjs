@@ -154,6 +154,14 @@ for (const [slug, perLocale] of bySlug) {
     }
   }
 
+  // Комментарии в коде — placeholder'ы {{ключ}}. Собираем, что код требует.
+  const neededComments = new Set();
+  for (const step of deck) {
+    for (const match of (step.code ?? '').matchAll(/\{\{(\w+)\}\}/g)) {
+      neededComments.add(match[1]);
+    }
+  }
+
   // Схема разбора: шаги те же, что в колоде.
   if (deckModule.flow) {
     const unknownNotes = annotatedSteps.filter((id) => !deckIds.includes(id));
@@ -165,6 +173,13 @@ for (const [slug, perLocale] of bySlug) {
     if (never.length) {
       warnings.push(`схема колоды "${deckName}": на шагах ${never.join(', ')} схема не меняется`);
     }
+  }
+
+  // Перетаскивание: шаг, на котором оно работает, обязан иметь подписи в
+  // каждой локали — иначе читателю предложат тащить безымянную карточку.
+  const dragStep = deckModule.flow?.drop?.step;
+  if (dragStep && !deckIds.includes(dragStep)) {
+    errors.push(`схема колоды "${deckName}": drop ссылается на несуществующий шаг "${dragStep}"`);
   }
 
   // Постер: схема из одного состояния, шаг у неё ровно один.
@@ -211,6 +226,21 @@ for (const [slug, perLocale] of bySlug) {
       if (step.note && step.note.length > NOTE_LIMIT) {
         errors.push(`${where}: note шага "${step.id}" — ${step.note.length} символов при лимите ${NOTE_LIMIT}`);
       }
+    }
+
+    // Комментарии к коду: набор ключей обязан совпадать с тем, что требует код.
+    const given = Object.keys(data.comments ?? {});
+    const missingComments = [...neededComments].filter((key) => !given.includes(key));
+    if (missingComments.length) {
+      errors.push(`${where}: нет переводов комментариев к коду — ${missingComments.join(', ')}`);
+    }
+    const strayComments = given.filter((key) => !neededComments.has(key));
+    if (strayComments.length) {
+      warnings.push(`${where}: комментарии ${strayComments.join(', ')} не используются ни в одном шаге`);
+    }
+
+    if (dragStep && !data.steps.find((step) => step.id === dragStep)?.drag) {
+      errors.push(`${where}: нет подписей drag для шага "${dragStep}" — схема ждёт карточку`);
     }
 
     const noted = data.steps.filter((step) => step.note).map((step) => step.id);

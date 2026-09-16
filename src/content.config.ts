@@ -22,6 +22,14 @@ const lessons = defineCollection({
     draft: z.boolean().default(false),
     /** Ключ колоды кода в src/code/. По умолчанию равен slug урока. */
     deck: z.string().optional(),
+    /**
+     * Тексты комментариев к коду. Код общий для всех локалей, поэтому
+     * комментарии в нём стоят placeholder'ами `{{ключ}}`, а сами тексты живут
+     * здесь — как и всё остальное, что является прозой.
+     *
+     * Набор ключей обязан совпадать между локалями; это проверяет check:steps.
+     */
+    comments: z.record(z.string(), z.string()).default({}),
     steps: z
       .array(
         z.object({
@@ -34,6 +42,17 @@ const lessons = defineCollection({
            * для этого шага объявлена annotation — связь проверяет check:steps.
            */
           note: z.string().optional(),
+          /**
+           * Подписи для перетаскивания: текст карточки в нарративе и подсказка
+           * в пустом слоте схемы. Нужны, когда схема объявляет `drop` на этом
+           * шаге; связь проверяет check:steps.
+           */
+          drag: z
+            .object({
+              chip: z.string(),
+              slot: z.string(),
+            })
+            .optional(),
         }),
       )
       .min(1),

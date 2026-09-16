@@ -1,64 +1,91 @@
 ---
 title: Why discounts need a floor
-description: Every promo is sane on its own. Nobody tests the pairs, and there are hundreds of them.
+description: Each promo is sane on its own. Nobody checks the pairs, and there are hundreds.
 problem: >-
-  Two promotions, each approved and each reasonable, land on the same item and
-  sell it below what you paid for it. No line of code was wrong — that pair was
-  simply never added up.
+  Two promos landed on the same item and sold it below what we paid for it. Both
+  were approved, both work correctly. Nobody ever added that pair up.
 tags: [lean, pricing, invariants]
 order: 3
 deck: discount-floor
+comments:
+  twoPrices: what we sell it for, and what we paid
+  mechanics: 'two mechanics: a percentage and a flat amount'
+  oneCut: what a single promo takes off
+  sequential: one after another, each off the already reduced price
+  clampIt: clamp the total at cost
+  reportAsks: the report asks the promo engine, not the receipt
+  rulePromise: 'the whole rule: any item, any set of promos'
+  counterExample: the pair it breaks on
+  pool: the entire discount pool is the margin
+  noOverdraw: take what you ask for, or what is left
+  finalPrice: 'total: cost plus whatever is left of the pool'
+  newMechanic: a new mechanic from marketing
 steps:
-  - id: one
-    title: One promo, and you can see the rule
+  - id: item
+    title: An item has two prices
     narration: >-
-      A single mechanic is easy to reason about: list price, one percentage off,
-      and a human can check that the result stays above what the item cost us.
-      The rule is never written down anywhere, because with one promo it does not
-      need to be.
+      One is what we sell it for, the other is what we paid. The second usually
+      lives in a different system — procurement, the ERP, a supplier feed. The
+      pricing engine does not see it. Everything else grows from there.
+    note: An item has two prices. The engine sees one.
+  - id: promo
+    title: Marketing sets up the mechanics
+    narration: >-
+      A percentage and a flat amount. Both are configured in an admin panel. No
+      deploy, no review, no developer involved.
+    note: Promos ship without a deploy or a review.
+  - id: engine
+    title: How they are applied
+    narration: >-
+      `cut` works out what a single promo takes off. `naive` walks the list, each
+      promo applied to the already reduced price. Nothing here mentions cost.
+    note: The engine never hears about cost.
+  - id: one
+    title: One promo
+    narration: >-
+      Twenty percent off. Forty against a cost of thirty-two. Nothing to check
+      here - you can see it.
     note: One promo. The rule is checked by eye.
   - id: stack
-    title: The second one arrives three weeks later
+    title: The second one
     narration: >-
-      Both promos are approved, both are tested, and each is correct. What nobody
-      tested is the pair — and with thirty active promotions there are 435 pairs
-      and four thousand triples, changing every week without a single deploy. This
-      one sells a 32.00 item for 10.00.
+      One marketer set up the category sale in May. Another set up the coupon in
+      June. Both were tested. The pair was not: there are thirty promos and 435
+      pairs. On this item the pair pays out ten against a cost of thirty-two.
     note: Each promo is fine. The pair is not.
+    drag:
+      chip: −60% coupon
+      slot: drop the coupon here
   - id: clamp
-    title: The fix everyone reaches for first
+    title: Clamp it at cost
     narration: >-
-      Clamp the result at cost. The customer now pays 32.00 and the incident is
-      closed. Look at the three numbers though: the customer paid 32.00, the
-      discount actually given was 18.00, and the report still says 40.00, because
-      it asks the promo engine rather than the receipt. The money stopped leaking
-      and the books started lying.
+      This is the first fix anyone reaches for. The customer pays 32.00, the
+      incident is closed. Three numbers under the code: 3200 paid, 1800 actually
+      discounted, 4000 in the report. The report asks the promo engine, not the
+      receipt. The money stopped leaking and the books started lying.
     note: The number is fixed. The report is not.
   - id: rule
-    title: Write the rule down as a claim
+    title: Write the whole rule down
     narration: >-
-      Not a test on a known pair - a claim about every item and every set of
-      promos. And the first thing that claim buys you is bad news: Lean does not
-      merely fail to prove it, it proves the opposite, and the counterexample
-      becomes part of the build. You now know the model is wrong rather than
-      suspecting it.
+      Any item, any set of promos. Lean does not answer "could not prove it" - it
+      answers "false", and demands the pair that shows it. The pair goes into the
+      build and stays there. This is no longer a suspicion.
     note: Not unproven — disproven, with the pair attached.
   - id: budget
-    title: Make the promos share a budget
+    title: One shared pool
     narration: >-
-      The margin is 18.00, and that is the whole pool the promos have. Each one
-      takes what it asks for or what is left, whichever is smaller. Normal cases
-      are untouched — a lone 20% still gives 40.00 — and the catastrophic set now
-      lands exactly on the floor. The proof is one line, because the rule is no
-      longer something we check: it is something the model cannot break.
+      The margin is 18.00 and that is everything the promos have. Each takes what
+      it asks for, or what is left. A lone 20% still pays out 40.00, so ordinary
+      cases are untouched. Three greedy promos in a row land on 32.00. The proof
+      is one line: the total is cost plus what remains, and what remains is never
+      negative.
     note: Discounts spend margin. There is no more to spend.
   - id: evolve
-    title: The next mechanic cannot sneak in
+    title: The next mechanic
     narration: >-
-      Marketing asks for cashback. The new mechanic does not silently default to
-      something - it simply does not compile until someone says what it takes out
-      of the pool. That is the difference the whole lesson is about: the question
-      is asked at the moment the mechanic is added, not during the incident.
+      Marketing asks for cashback. The file stops compiling until someone says
+      what this mechanic takes out of the pool. The question gets asked when the
+      mechanic is added, not during the incident review.
     note: A new mechanic must declare its share.
 quiz:
   - question: Why does clamping the total at cost not actually fix the problem?
@@ -68,9 +95,9 @@ quiz:
       - Clamping only works for percentage promos
     answer: 1
     explanation: >-
-      The customer pays 32.00 and the real discount is 18.00, but the promo engine
-      still reports 40.00. The leak moves from the payment into the accounting,
-      where it is much harder to notice.
+      The customer pays 32.00, the real discount is 18.00, and the promo engine
+      reports 4000. The leak moves from the payment into the books, where it is
+      harder to spot.
   - question: What makes the budget version impossible to break?
     options:
       - It checks the total after applying every promo
@@ -78,32 +105,30 @@ quiz:
       - It rejects promos larger than 50%
     answer: 1
     explanation: >-
-      The final price is cost plus whatever is left of the pool, so it is at least
-      cost no matter what the promos do. That is why the proof is a single line -
-      there is nothing left to verify.
+      The total is cost plus what remains of the pool. What remains is never
+      negative, so the total is never below cost. There is nothing left to check.
 ---
 
-Discount engines fail in a particular way. Not because a mechanic is wrong, but
-because mechanics multiply and nobody owns their combinations. Marketing adds
-promos through an admin panel, without a deploy and without a review, and the
-number of pairs grows quadratically while the number of tests stays flat.
+Discount engines do not fail because a mechanic is wrong. They fail because
+mechanics multiply and nobody owns their combinations.
 
-The damage is quiet: you do not get an exception, you get a sale. It is noticed
-when someone looks at margin by SKU at the end of the month, or when a deal site
-finds the combination first and posts it.
+Marketing sets up promos through an admin panel. No developer hears about it. The
+number of pairs grows quadratically; the number of tests does not.
+
+The damage is quiet - not an exception, a sale. It surfaces either at month end,
+in margin per SKU, or when a deal site finds the combination first.
 
 ## Where this shows up
 
-Anywhere rules compose without an owner: promotions, shipping-cost rules, tariff
-plans, loyalty tiers, commission schedules for marketplaces.
+Shipping rules, tariff plans, loyalty tiers, marketplace commission schedules.
+Anywhere rules compose and nobody owns the sum.
 
 ## What this is not
 
-This is not an argument that you cannot ship pricing without a proof assistant.
-It is an argument about what kind of statement you need. "This pair is fine" is a
-test, and there will never be enough of them. "No set of promos can take the price
-below cost" is a different kind of sentence, and it is the one the business
-actually meant.
+This is not a claim that pricing cannot ship without a proof assistant. It is a
+claim about what kind of sentence you need. "This pair is fine" is a test, and
+there will never be enough of them. "No set of promos takes the price below cost"
+is a different sentence, and it is the one the business meant.
 
-All the code here is compiled by Lean 4.34, and every number in the output is real
-compiler output.
+The `Pricing.lean` file from this lesson compiles as a whole: Lean 4.34, no
+errors. The numbers in the output are what the compiler printed.

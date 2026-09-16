@@ -56,6 +56,10 @@ const notes = lesson.data.steps
   .map((step, i) => ({ step: step.id, level: i + 1, text: step.note ?? '' }))
   .filter((note) => note.text);
 
+const drags = lesson.data.steps
+  .filter((step) => step.drag)
+  .map((step) => ({ step: step.id, chip: step.drag!.chip, slot: step.drag!.slot }));
+
 const { Content } = await render(lesson);
 
 const siblingHref = (entry: CollectionEntry<'lessons'>) =>
@@ -97,6 +101,8 @@ const siblingHref = (entry: CollectionEntry<'lessons'>) =>
       deck={deck.default}
       flow={deck.flow}
       notes={notes}
+      comments={lesson.data.comments}
+      drags={drags}
     />
 
     <Quiz lang={lang} slug={slug!} items={lesson.data.quiz} />

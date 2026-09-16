@@ -6,73 +6,86 @@ import flowSpec from './discount-floor.flow.ts';
 /**
  * Урок «скидки не должны пробивать закупочную цену».
  *
- * Весь Lean-код скомпилирован Lean 4.34, весь вывод снят с настоящего
- * компилятора — включая обе ошибки и оба доказательства. В уроке про язык,
- * где код либо собирается, либо нет, выдуманный вывод недопустим.
+ * Шаги складываются в один файл Pricing.lean, который собирается целиком:
+ * Lean 4.34, ноль ошибок, все восемь #eval дают показанные числа. В `output`
+ * лежит только настоящий вывод компилятора — никаких пояснений от автора,
+ * иначе обещание «весь вывод настоящий» перестаёт быть правдой.
  *
- * ПРАВИЛО (как везде): код, вывод и подписи схемы общие для всех локалей,
- * значит только английские. Проза — в `narration` локализованного урока.
+ * Комментарии в коде — placeholder'ы {{ключ}}: код общий для всех локалей,
+ * а комментарий это проза, и проза переводится.
  */
 export const poster = posterSpec;
 export const flow = flowSpec;
 
 const deck: CodeDeck = [
   {
-    id: 'one',
+    id: 'item',
     lang: 'lean',
     caption: 'Pricing.lean',
-    code: `structure Item where
-  price : Nat   -- retail, cents
-  cost  : Nat   -- what we paid, cents
+    code: `-- {{twoPrices}}
+structure Item where
+  price : Nat
+  cost  : Nat
 
+def sneakers : Item := { price := 5000, cost := 3200 }`,
+  },
+  {
+    id: 'promo',
+    lang: 'lean',
+    caption: 'Pricing.lean',
+    code: `-- {{mechanics}}
 inductive Promo where
   | percent (p : Nat)
-  | fixed   (cents : Nat)
-
+  | fixed   (cents : Nat)`,
+  },
+  {
+    id: 'engine',
+    lang: 'lean',
+    caption: 'Pricing.lean',
+    code: `-- {{oneCut}}
 def cut (price : Nat) : Promo → Nat
   | .percent p => price * p / 100
   | .fixed c   => c
 
+-- {{sequential}}
 def naive (price : Nat) : List Promo → Nat
   | []      => price
-  | p :: ps => naive (price - cut price p) ps
-
-def sneakers : Item := { price := 5000, cost := 3200 }
-
-#eval naive sneakers.price [.percent 20]`,
-    output: `4000
-
-paid 40.00, cost 32.00 — fine`,
+  | p :: ps => naive (price - cut price p) ps`,
+  },
+  {
+    id: 'one',
+    lang: 'lean',
+    caption: 'Pricing.lean',
+    code: `#eval naive sneakers.price [.percent 20]`,
+    output: `4000`,
     outputTone: 'ok',
   },
   {
     id: 'stack',
     lang: 'lean',
     caption: 'Pricing.lean',
-    code: `-- category sale, set up by one marketer
--- coupon, set up by another, three weeks later
+    code: `def promos : List Promo := [.percent 50, .percent 60]
 
 -- [!code highlight]
-#eval naive sneakers.price [.percent 50, .percent 60]`,
-    output: `1000
-
-paid 10.00, cost 32.00 — 22.00 lost on every pair of sneakers`,
+#eval naive sneakers.price promos`,
+    output: `1000`,
     outputTone: 'bad',
   },
   {
     id: 'clamp',
     lang: 'lean',
     caption: 'Pricing.lean',
-    code: `def clamped (i : Item) (ps : List Promo) : Nat :=
-  -- [!code ++]
+    code: `-- {{clampIt}}
+def clamped (i : Item) (ps : List Promo) : Nat :=
   max i.cost (naive i.price ps)
 
+-- {{reportAsks}}
 def reported (i : Item) (ps : List Promo) : Nat :=
   i.price - naive i.price ps
 
-#eval clamped sneakers promos                    -- customer pays
-#eval reported sneakers promos                   -- discount per the report
-#eval sneakers.price - clamped sneakers promos   -- discount actually given`,
+#eval clamped sneakers promos
+#eval reported sneakers promos
+#eval sneakers.price - clamped sneakers promos`,
     output: `3200
 4000
 1800`,
@@ -82,32 +95,31 @@ def reported (i : Item) (ps : List Promo) : Nat :=
     id: 'rule',
     lang: 'lean',
     caption: 'Pricing.lean',
-    code: `-- The rule, written once, about every item and every set of promos.
+    code: `-- {{rulePromise}}
 theorem naive_breaks_the_rule :
     ¬ ∀ (i : Item) (ps : List Promo), i.cost ≤ naive i.price ps := by
   intro rule
-  -- [!code highlight]
-  have bad := rule sneakers [.percent 50, .percent 60]
+  -- {{counterExample}}
+  have bad := rule sneakers promos
   exact absurd bad (by decide)`,
-    output: `Pricing.lean: no errors
-
-the counterexample is now part of the build`,
+    output: `Pricing.lean: no errors`,
     outputTone: 'ok',
   },
   {
     id: 'budget',
     lang: 'lean',
     caption: 'Pricing.lean',
-    code: `def margin (i : Item) : Nat := i.price - i.cost
+    code: `-- {{pool}}
+def margin (i : Item) : Nat := i.price - i.cost
 
--- Every promo draws from the same pool and cannot overdraw it.
+-- {{noOverdraw}}
 def spend (price : Nat) : Nat → List Promo → Nat
   | budget, []      => budget
   -- [!code highlight]
   | budget, p :: ps => spend price (budget - min (cut price p) budget) ps
 
+-- {{finalPrice}}
 def checkout (i : Item) (ps : List Promo) : Nat :=
-  -- [!code highlight]
   i.cost + spend i.price (margin i) ps
 
 theorem checkout_never_below_cost (i : Item) (ps : List Promo) :
@@ -115,7 +127,7 @@ theorem checkout_never_below_cost (i : Item) (ps : List Promo) :
   Nat.le_add_right _ _
 
 #eval checkout sneakers [.percent 20]
-#eval checkout sneakers [.percent 50, .percent 60]
+#eval checkout sneakers promos
 #eval checkout sneakers [.percent 50, .fixed 9000, .percent 90]`,
     output: `4000
 3200
@@ -129,6 +141,7 @@ theorem checkout_never_below_cost (i : Item) (ps : List Promo) :
     code: `inductive Promo where
   | percent  (p : Nat)
   | fixed    (cents : Nat)
+  -- {{newMechanic}}
   -- [!code ++]
   | cashback (p : Nat)
 

@@ -813,6 +813,81 @@ main:focus {
   color: var(--muted);
 }
 
+/* Карточка акции в тексте: её нужно донести до схемы. Выглядит как объект,
+   который можно взять, а не как кнопка, на которую можно нажать. */
+.promo-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 1rem;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid var(--accent);
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: grab;
+  box-shadow: 0 1px 3px var(--shadow);
+}
+
+.promo-chip:active {
+  cursor: grabbing;
+}
+
+.promo-chip.is-dragging {
+  opacity: 0.4;
+}
+
+.promo-chip__grip {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+/* Пустое место в цепочке: пока карточку не принесли, цена дальше не считается. */
+.fslot {
+  display: grid;
+  place-items: center;
+  min-height: 3.4rem;
+  padding: 0.5rem 0.7rem;
+  border: 1.5px dashed var(--accent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent-soft) 60%, transparent);
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.fslot--over {
+  background: var(--accent-soft);
+  transform: scale(1.04);
+}
+
+.fslot__label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-align: center;
+}
+
+/* Планка — уровень, поперёк которого идёт всё остальное: пол цены, порог,
+   лимит. Не карточка: у уровня нет типа и роли, у него есть только высота. */
+.fnode--bar {
+  width: auto;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.3rem 0.7rem;
+  border-style: dashed;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
+  box-shadow: none;
+}
+
+.fnode--bar .fnode__title {
+  font-size: 0.78rem;
+}
+
 /* Якоря нужны движку для расчёта рёбер, но читателю показывать их незачем. */
 .fnode__handle {
   opacity: 0;

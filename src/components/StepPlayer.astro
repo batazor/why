@@ -24,9 +24,21 @@ interface Props {
   flow?: FlowSpec;
   /** Локализованные тексты пометок поверх схемы. */
   notes?: { step: string; level: number; text: string }[];
+  /** Локализованные тексты комментариев к коду. */
+  comments?: Record<string, string>;
+  /** Локализованные подписи для перетаскивания карточки в схему. */
+  drags?: { step: string; chip: string; slot: string }[];
 }
 
-const { lang, steps, deck, flow, notes = [] } = Astro.props;
+const { lang, steps, deck, flow, notes = [], comments = {}, drags = [] } = Astro.props;
+
+/**
+ * Код в колоде общий для всех локалей, поэтому комментарии в нём — ключи.
+ * Подставляем до подсветки: иначе `{{…}}` попадёт в токены и подсветится.
+ */
+function localizeComments(code: string): string {
+  return code.replace(/\{\{(\w+)\}\}/g, (_, key: string) => comments[key] ?? `{{${key}}}`);
+}
 const t = useTranslations(lang);
 
 const byId = new Map(deck.map((step) => [step.id, step]));
@@ -53,7 +65,13 @@ const shikiOptions = {
     {
       flow && (
         <figure class="player__stage" style={`--flow-height: ${flow.height}px`}>
-          <FlowDiagram client:visible spec={flow} firstStep={merged[0].id} notes={notes} />
+          <FlowDiagram
+            client:visible
+            spec={flow}
+            firstStep={merged[0].id}
+            notes={notes}
+            drags={drags}
+          />
         </figure>
       )
     }
@@ -71,12 +89,27 @@ const shikiOptions = {
               <p class="step__index">{t('lesson.stepOf', { n: i + 1, total: merged.length })}</p>
               <h3 class="step__title">{step.title}</h3>
               <p class="step__narration">{step.narration}</p>
+
+              {
+                drags.find((drag) => drag.step === step.id) && (
+                  /* Карточка живёт в тексте, а слот — в схеме: чтобы донести
+                     одну до другого, читателю приходится смотреть на обе. */
+                  <button class="promo-chip" type="button" draggable="true" data-drag-chip>
+                    <span class="promo-chip__grip" aria-hidden="true">⠿</span>
+                    {drags.find((drag) => drag.step === step.id)!.chip}
+                  </button>
+                )
+              }
             </div>
 
             {step.panel?.code && (
               <div class="panel">
                 {step.panel.caption && <div class="panel__caption">{step.panel.caption}</div>}
-                <Code code={step.panel.code} lang={(step.panel.lang ?? 'text') as any} {...shikiOptions} />
+                <Code
+                  code={localizeComments(step.panel.code)}
+                  lang={(step.panel.lang ?? 'text') as any}
+                  {...shikiOptions}
+                />
                 {step.panel.output && (
                   <div class:list={['output', step.panel.outputTone === 'bad' && 'output--bad']}>
                     <p class="output__label">{t('lesson.output')}</p>
@@ -178,7 +211,17 @@ const shikiOptions = {
       );
       steps.forEach((step) => spotlight.observe(step));
 
-      prev?.addEventListener('click', () => goTo(index - 1));
+      // Карточка акции переезжает из текста в схему обычным HTML5-перетаскиванием:
+    // React-остров слушает drop у себя, общий словарь между ними — тип данных.
+    player.querySelectorAll<HTMLElement>('[data-drag-chip]').forEach((chip) => {
+      chip.addEventListener('dragstart', (event) => {
+        (event as DragEvent).dataTransfer?.setData('application/x-why-promo', '1');
+        chip.classList.add('is-dragging');
+      });
+      chip.addEventListener('dragend', () => chip.classList.remove('is-dragging'));
+    });
+
+    prev?.addEventListener('click', () => goTo(index - 1));
       next?.addEventListener('click', () => goTo(index + 1));
       dots.forEach((dot, i) => dot.addEventListener('click', () => goTo(i)));
       player.addEventListener('keydown', (event) => {

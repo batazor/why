@@ -1,92 +1,108 @@
 import type { FlowSpec } from './flow';
 
-const NAIVE = ['one', 'stack', 'clamp', 'rule'];
+/**
+ * Схема разбора: цена по вертикали.
+ *
+ * Высота узла — это его цена: 50.00 наверху, 0 внизу. Пол закупочной нарисован
+ * планкой поперёк. Поэтому «пара акций пробила закупочную» не требует чтения
+ * подписей — цепочка просто уходит ниже планки.
+ *
+ * y = (5000 − цена) / 5000 * 300
+ */
+const NAIVE = ['stack', 'clamp', 'rule'];
 const BUDGETED = ['budget', 'evolve'];
 
-/**
- * Схема разбора: куда механики скидок бьют.
- *
- * Ключевой кадр — второй: акции подключены прямо к чекауту, и ничто не мешает
- * им вместе пробить пол. На пятом между ними и чекаутом появляется бюджет
- * маржи, и пробить пол становится нечем.
- */
 const flow: FlowSpec = {
-  height: 470,
+  height: 430,
   nodes: [
-    { id: 'price', kind: 'input', title: 'list price', sub: '50.00', position: { x: 0, y: 0 } },
     {
-      id: 'promoA',
-      kind: 'promo',
-      title: '−50% category',
-      sub: 'marketing, May',
-      position: { x: 0, y: 140 },
+      id: 'floor',
+      kind: 'rule',
+      title: 'cost floor · 32.00',
+      position: { x: -20, y: 108 },
+      width: 820,
+      variant: 'bar',
+      focus: ['rule'],
+      bad: ['stack', 'clamp'],
+    },
+
+    { id: 'list', kind: 'price', title: '50.00', sub: 'list price', position: { x: 0, y: 0 } },
+
+    {
+      id: 'v40',
+      kind: 'price',
+      title: '40.00',
+      sub: 'after −20%',
+      position: { x: 300, y: 60 },
+      only: ['item', 'promo', 'engine', 'one'],
+      focus: ['one'],
+    },
+
+    {
+      id: 'v25',
+      kind: 'price',
+      title: '25.00',
+      sub: 'after −50% category',
+      position: { x: 280, y: 150 },
+      only: NAIVE,
     },
     {
-      id: 'promoB',
-      kind: 'promo',
-      title: '−60% coupon',
-      sub: 'marketing, June',
-      position: { x: 0, y: 270 },
-      only: ['stack', 'clamp', 'rule', 'budget', 'evolve'],
+      id: 'v10',
+      kind: 'price',
+      title: '10.00',
+      sub: 'after −60% coupon',
+      position: { x: 560, y: 240 },
+      only: NAIVE,
+      bad: NAIVE,
+      focus: ['stack'],
     },
+
     {
-      id: 'promoC',
-      kind: 'promo',
-      title: 'cashback 5%',
-      sub: 'marketing, July',
-      position: { x: 0, y: 400 },
-      only: ['evolve'],
-      focus: ['evolve'],
-    },
-    {
-      id: 'budget',
-      kind: 'guard',
-      title: 'margin budget',
-      sub: '18.00, shared',
-      position: { x: 280, y: 200 },
+      id: 'b32a',
+      kind: 'price',
+      title: '32.00',
+      sub: 'budget spent, −18.00',
+      position: { x: 280, y: 108 },
       only: BUDGETED,
       focus: ['budget'],
     },
     {
-      id: 'checkout',
-      kind: 'result',
-      title: 'customer pays',
-      sub: 'after all promos',
-      position: { x: 560, y: 60 },
-      bad: ['stack', 'clamp', 'rule'],
-    },
-    {
-      id: 'floor',
-      kind: 'rule',
-      title: 'cost floor',
-      sub: '32.00, never below',
-      position: { x: 560, y: 250 },
-      focus: ['rule'],
-      bad: ['stack', 'clamp'],
+      id: 'b32b',
+      kind: 'price',
+      title: '32.00',
+      sub: 'nothing left to spend',
+      position: { x: 560, y: 108 },
+      only: BUDGETED,
     },
   ],
   edges: [
-    { id: 'p', source: 'price', target: 'checkout', sourceHandle: 'r', targetHandle: 'l', label: '50.00' },
+    { id: 'e20', source: 'list', target: 'v40', sourceHandle: 'r', targetHandle: 'l', label: '−10.00', only: ['item', 'promo', 'engine', 'one'] },
 
-    { id: 'a-direct', source: 'promoA', target: 'checkout', sourceHandle: 'r', targetHandle: 'l', label: '−25.00', only: NAIVE },
-    { id: 'b-direct', source: 'promoB', target: 'checkout', sourceHandle: 'r', targetHandle: 'l', label: '−15.00', tone: 'bad', only: ['stack', 'clamp', 'rule'] },
+    { id: 'e50', source: 'list', target: 'v25', sourceHandle: 'r', targetHandle: 'l', label: '−25.00', only: NAIVE },
+    { id: 'e60', source: 'v25', target: 'v10', sourceHandle: 'r', targetHandle: 'l', label: '−15.00', tone: 'bad', only: NAIVE },
 
-    { id: 'a-budget', source: 'promoA', target: 'budget', sourceHandle: 'r', targetHandle: 'l', only: BUDGETED },
-    { id: 'b-budget', source: 'promoB', target: 'budget', sourceHandle: 'r', targetHandle: 'l', only: BUDGETED },
-    { id: 'c-budget', source: 'promoC', target: 'budget', sourceHandle: 'r', targetHandle: 'b', only: ['evolve'] },
-    { id: 'budget-out', source: 'budget', target: 'checkout', sourceHandle: 'r', targetHandle: 'b', label: 'at most 18.00', only: BUDGETED },
-
-    { id: 'breach', source: 'checkout', target: 'floor', sourceHandle: 'b', targetHandle: 't', label: '10.00 < 32.00', tone: 'bad', dashed: true, only: ['stack', 'clamp', 'rule'] },
-    { id: 'held', source: 'checkout', target: 'floor', sourceHandle: 'b', targetHandle: 't', label: '32.00 ≥ 32.00', tone: 'ok', only: BUDGETED },
+    { id: 'eb1', source: 'list', target: 'b32a', sourceHandle: 'r', targetHandle: 'l', label: '−18.00, all there was', only: BUDGETED },
+    { id: 'eb2', source: 'b32a', target: 'b32b', sourceHandle: 'r', targetHandle: 'l', label: '−0.00', tone: 'ok', only: BUDGETED },
   ],
+  // Вторую акцию читатель приносит сам: пока карточка не в слоте, цепочка
+  // обрывается, и куда она уводит цену — ещё не видно.
+  drop: {
+    step: 'stack',
+    reveals: ['v10', 'e60'],
+    slot: { x: 560, y: 240 },
+    width: 190,
+  },
   // Только геометрия: текст пометки переводится и лежит в steps[].note урока.
   annotations: [
-    { step: 'one', position: { x: 556, y: 356 }, arrow: 'up', width: 190 },
-    { step: 'stack', position: { x: 556, y: 356 }, arrow: 'up', width: 200 },
-    { step: 'clamp', position: { x: 556, y: 356 }, arrow: 'up', width: 210 },
-    { step: 'rule', position: { x: 556, y: 356 }, arrow: 'up', width: 215 },
-    { step: 'budget', position: { x: 250, y: 320 }, arrow: 'up', width: 215 },
-    { step: 'evolve', position: { x: 250, y: 320 }, arrow: 'up', width: 215 },
+    { step: 'item', position: { x: 0, y: 300 }, arrow: 'up', width: 210 },
+    { step: 'promo', position: { x: 0, y: 300 }, arrow: 'up', width: 210 },
+    { step: 'engine', position: { x: 0, y: 300 }, arrow: 'up', width: 215 },
+    { step: 'one', position: { x: 300, y: 300 }, arrow: 'up', width: 200 },
+    { step: 'stack', position: { x: 560, y: 330 }, arrow: 'up', width: 210 },
+    { step: 'clamp', position: { x: 560, y: 330 }, arrow: 'up', width: 215 },
+    { step: 'rule', position: { x: 0, y: 300 }, arrow: 'up', width: 220 },
+    { step: 'budget', position: { x: 280, y: 300 }, arrow: 'up', width: 215 },
+    { step: 'evolve', position: { x: 280, y: 300 }, arrow: 'up', width: 215 },
   ],
 };
 

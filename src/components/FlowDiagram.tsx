@@ -20,6 +20,7 @@ type CardData = {
   sub?: string;
   state: 'idle' | 'active' | 'focus';
   bad: boolean;
+  variant: 'card' | 'bar';
 };
 
 /**
@@ -34,6 +35,7 @@ function CardNode({ data }: NodeProps) {
       className={[
         'fnode',
         `fnode--${card.state}`,
+        card.variant === 'bar' ? 'fnode--bar' : '',
         card.bad ? 'fnode--bad' : '',
       ]
         .filter(Boolean)
@@ -58,7 +60,7 @@ function CardNode({ data }: NodeProps) {
         />
       ))}
 
-      <span className="fnode__kind">{card.kind}</span>
+      {card.variant !== 'bar' && <span className="fnode__kind">{card.kind}</span>}
       <span className="fnode__title">{card.title}</span>
       {card.sub && <span className="fnode__sub">{card.sub}</span>}
     </div>
@@ -110,7 +112,33 @@ function AnnotationNode({ data }: NodeProps) {
   );
 }
 
-const nodeTypes = { card: CardNode, annotation: AnnotationNode };
+/** Пустой слот: сюда читатель приносит карточку акции из текста. */
+function SlotNode({ data }: NodeProps) {
+  const slot = data as unknown as { label: string; onDrop: () => void };
+  const [over, setOver] = useState(false);
+  return (
+    <div
+      className={['fslot', over ? 'fslot--over' : ''].filter(Boolean).join(' ')}
+      onDragOver={(event) => {
+        // Без preventDefault браузер не считает элемент целью и не даст drop.
+        event.preventDefault();
+        setOver(true);
+      }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(event) => {
+        event.preventDefault();
+        setOver(false);
+        slot.onDrop();
+      }}
+    >
+      <Handle id="l" type="target" position={Position.Left} className="fnode__handle" />
+      <Handle id="r" type="source" position={Position.Right} className="fnode__handle" />
+      <span className="fslot__label">{slot.label}</span>
+    </div>
+  );
+}
+
+const nodeTypes = { card: CardNode, annotation: AnnotationNode, slot: SlotNode };
 
 /**
  * Цвета стрелок и сетки заданы конкретными значениями, а не токенами темы:
@@ -130,15 +158,21 @@ export default function FlowDiagram({
   spec,
   firstStep,
   notes = [],
+  drags = [],
 }: {
   spec: FlowSpec;
   firstStep?: string;
   /** Локализованные тексты пометок; геометрию задаёт spec.annotations. */
   notes?: Note[];
+  /** Локализованные подписи карточки и слота по шагам. */
+  drags?: { step: string; chip: string; slot: string }[];
 }) {
   // Постер — схема из одного состояния: плеера у неё нет и слушать нечего.
   const pinned = spec.fixedStep;
   const [step, setStep] = useState(pinned ?? firstStep ?? '');
+  // Донесли ли карточку. Сбрасывается при уходе с шага: вернувшись, читатель
+  // должен увидеть ту же незаконченную цепочку, а не чужой результат.
+  const [dropped, setDropped] = useState(false);
 
   // Шагами по-прежнему управляет плеер — он живёт вне React.
   useEffect(() => {
@@ -150,13 +184,21 @@ export default function FlowDiagram({
     // моменту читатель мог уже пролистать разбор, и стартовать с первого нельзя.
     if (host.dataset.stepId) setStep(host.dataset.stepId);
 
-    const handle = (event: Event) => setStep((event as CustomEvent<{ id: string }>).detail.id);
+    const handle = (event: Event) => {
+      setStep((event as CustomEvent<{ id: string }>).detail.id);
+      setDropped(false);
+    };
     host.addEventListener('why:step', handle);
     return () => host.removeEventListener('why:step', handle);
   }, [pinned]);
 
+  // Пока карточку не донесли, того, что она приносит, на схеме нет.
+  const awaitingDrop = spec.drop?.step === step && !dropped;
+  const hidden = awaitingDrop ? new Set(spec.drop!.reveals) : new Set<string>();
+
   const nodes = useMemo<Node[]>(() => {
     const cards = spec.nodes
+      .filter((node) => !hidden.has(node.id))
       .filter((node) => on(node.only, step))
       .map(
         (node) => ({
@@ -165,8 +207,10 @@ export default function FlowDiagram({
           position: node.position,
           draggable: false,
           selectable: false,
+          style: node.width ? { width: node.width } : undefined,
           data: {
             kind: node.kind,
+            variant: node.variant ?? 'card',
             title: node.title,
             sub: node.sub,
             bad: (node.bad ?? []).includes(step),
@@ -198,12 +242,31 @@ export default function FlowDiagram({
         ];
       });
 
-    return [...cards, ...stickies];
-  }, [spec, step, notes]);
+    const slots: Node[] =
+      awaitingDrop && spec.drop
+        ? [
+            {
+              id: 'drop-slot',
+              type: 'slot',
+              position: spec.drop.slot,
+              draggable: false,
+              selectable: false,
+              style: { width: spec.drop.width ?? 190 },
+              data: {
+                label: drags.find((d) => d.step === step)?.slot ?? '',
+                onDrop: () => setDropped(true),
+              },
+            },
+          ]
+        : [];
+
+    return [...cards, ...slots, ...stickies];
+  }, [spec, step, notes, awaitingDrop, drags]);
 
   const edges = useMemo<Edge[]>(
     () =>
       spec.edges
+        .filter((edge) => !hidden.has(edge.id))
         .filter((edge) => on(edge.only, step))
         .map((edge) => ({
           id: edge.id,
@@ -219,7 +282,7 @@ export default function FlowDiagram({
             .filter(Boolean)
             .join(' '),
         })),
-    [spec, step],
+    [spec, step, awaitingDrop],
   );
 
   return (
