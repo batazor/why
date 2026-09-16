@@ -94,10 +94,16 @@ const shikiOptions = {
                 drags.find((drag) => drag.step === step.id) && (
                   /* Карточка живёт в тексте, а слот — в схеме: чтобы донести
                      одну до другого, читателю приходится смотреть на обе. */
-                  <button class="promo-chip" type="button" draggable="true" data-drag-chip>
+                  <span
+                    class="promo-chip"
+                    role="button"
+                    tabindex="0"
+                    draggable="true"
+                    data-drag-chip
+                  >
                     <span class="promo-chip__grip" aria-hidden="true">⠿</span>
                     {drags.find((drag) => drag.step === step.id)!.chip}
-                  </button>
+                  </span>
                 )
               }
             </div>
@@ -215,10 +221,24 @@ const shikiOptions = {
     // React-остров слушает drop у себя, общий словарь между ними — тип данных.
     player.querySelectorAll<HTMLElement>('[data-drag-chip]').forEach((chip) => {
       chip.addEventListener('dragstart', (event) => {
-        (event as DragEvent).dataTransfer?.setData('application/x-why-promo', '1');
+        const transfer = (event as DragEvent).dataTransfer;
+        transfer?.setData('application/x-why-promo', '1');
+        if (transfer) transfer.effectAllowed = 'copy';
         chip.classList.add('is-dragging');
       });
       chip.addEventListener('dragend', () => chip.classList.remove('is-dragging'));
+
+      // Клик и клавиатура делают то же самое: перетаскивание — улучшение,
+      // а не единственный путь. С клавиатуры мышью не потащишь вовсе.
+      const place = () => player.dispatchEvent(new CustomEvent('why:promo-placed'));
+      chip.addEventListener('click', place);
+      chip.addEventListener('keydown', (event) => {
+        const key = (event as KeyboardEvent).key;
+        if (key === 'Enter' || key === ' ') {
+          event.preventDefault();
+          place();
+        }
+      });
     });
 
     prev?.addEventListener('click', () => goTo(index - 1));

@@ -119,9 +119,16 @@ function SlotNode({ data }: NodeProps) {
   return (
     <div
       className={['fslot', over ? 'fslot--over' : ''].filter(Boolean).join(' ')}
+      role="button"
+      tabIndex={0}
+      onClick={() => slot.onDrop()}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') slot.onDrop();
+      }}
       onDragOver={(event) => {
         // Без preventDefault браузер не считает элемент целью и не даст drop.
         event.preventDefault();
+        event.dataTransfer.dropEffect = 'copy';
         setOver(true);
       }}
       onDragLeave={() => setOver(false)}
@@ -188,8 +195,16 @@ export default function FlowDiagram({
       setStep((event as CustomEvent<{ id: string }>).detail.id);
       setDropped(false);
     };
+    // Клик по карточке делает то же, что перетаскивание: тащить мышью умеют не
+    // все и не везде, а с клавиатуры — вообще никто.
+    const place = () => setDropped(true);
+
     host.addEventListener('why:step', handle);
-    return () => host.removeEventListener('why:step', handle);
+    host.addEventListener('why:promo-placed', place);
+    return () => {
+      host.removeEventListener('why:step', handle);
+      host.removeEventListener('why:promo-placed', place);
+    };
   }, [pinned]);
 
   // Пока карточку не донесли, того, что она приносит, на схеме нет.
