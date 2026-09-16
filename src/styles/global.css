@@ -873,7 +873,8 @@ main:focus {
   cursor: pointer;
   display: grid;
   place-items: center;
-  min-height: 3.4rem;
+  /* Ровно высота карточки: на её место встанет карточка, и ничего не сдвинется. */
+  min-height: 5.1rem;
   padding: 0.5rem 0.7rem;
   border: 1.5px dashed var(--accent);
   border-radius: 10px;

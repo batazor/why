@@ -155,6 +155,49 @@ const nodeTypes = { card: CardNode, annotation: AnnotationNode, slot: SlotNode }
 const ARROW = { none: '#8a93a3', ok: '#2fa36b', bad: '#e5484d' } as const;
 const GRID = 'rgba(128, 134, 148, 0.35)';
 
+/** Измеренные высоты: по ним считаются границы схемы. */
+const H = { card: 82, bar: 32, note: 90 };
+const DEFAULT_WIDTH = 184;
+
+/**
+ * Границы всей схемы, а не текущего шага.
+ *
+ * fitView подгоняет масштаб по тому, что видно в момент инициализации. На
+ * первом шаге видно три узла, и полотно зумится под них; на пятом цепочка
+ * уходит вниз и вылезает за край — то есть ровно то, ради чего урок написан,
+ * оказывается за кадром. Поэтому масштаб считается один раз по объединению
+ * всех шагов и дальше не меняется: высота узла означает цену одинаково на
+ * всём разборе.
+ */
+function fullBounds(spec: FlowSpec) {
+  const boxes = [
+    ...spec.nodes.map((n) => ({
+      x: n.position.x,
+      y: n.position.y,
+      w: n.width ?? DEFAULT_WIDTH,
+      h: n.variant === 'bar' ? H.bar : H.card,
+    })),
+    ...(spec.annotations ?? []).map((a) => ({
+      x: a.position.x,
+      y: a.position.y,
+      w: a.width ?? 190,
+      h: H.note,
+    })),
+  ];
+  if (spec.drop) {
+    boxes.push({ x: spec.drop.slot.x, y: spec.drop.slot.y, w: spec.drop.width ?? DEFAULT_WIDTH, h: H.card });
+  }
+
+  const x = Math.min(...boxes.map((b) => b.x));
+  const y = Math.min(...boxes.map((b) => b.y));
+  return {
+    x,
+    y,
+    width: Math.max(...boxes.map((b) => b.x + b.w)) - x,
+    height: Math.max(...boxes.map((b) => b.y + b.h)) - y,
+  };
+}
+
 function on(list: string[] | undefined, step: string) {
   return list === undefined || list.includes(step);
 }
@@ -300,6 +343,18 @@ export default function FlowDiagram({
     [spec, step, awaitingDrop],
   );
 
+  const bounds = useMemo(() => fullBounds(spec), [spec]);
+
+  // Пересчёт при смене ширины колонки: масштаб зависит от размера полотна.
+  const [instance, setInstance] = useState<{ fitBounds: (b: typeof bounds, o?: object) => void } | null>(null);
+  useEffect(() => {
+    if (!instance) return;
+    const fit = () => instance.fitBounds(bounds, { padding: 0.06 });
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [instance, bounds]);
+
   return (
     <div
       className={['flow', pinned ? 'flow--static' : '', spec.compact ? 'flow--compact' : '']
@@ -311,8 +366,7 @@ export default function FlowDiagram({
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
-        fitView
-        fitViewOptions={{ padding: 0.12 }}
+        onInit={(rf) => setInstance(rf as unknown as typeof instance)}
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable={false}
