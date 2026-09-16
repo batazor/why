@@ -1,0 +1,134 @@
+---
+import '../styles/global.css';
+import {
+  locales,
+  localeNames,
+  defaultLocale,
+  useTranslations,
+  localePath,
+  type Locale,
+} from '../i18n/ui';
+
+interface Props {
+  lang: Locale;
+  title: string;
+  description: string;
+  /** Путь БЕЗ префикса локали, например 'lessons/idempotency'. */
+  path?: string;
+}
+
+const { lang, title, description, path = '' } = Astro.props;
+const t = useTranslations(lang);
+
+// Один и тот же `path` порождает и canonical, и все hreflang — поэтому версии
+// физически не могут разъехаться.
+const canonical = new URL(localePath(lang, path), Astro.site);
+---
+
+<!doctype html>
+<html lang={lang}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title} — {t('site.title')}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+
+    {/* Предзагружаем только то подмножество, которым написана эта локаль:
+        грузить кириллицу на английской странице незачем. */}
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      crossorigin
+      href={lang === 'ru' ? '/fonts/caveat-cyrillic.woff2' : '/fonts/caveat-latin.woff2'}
+    />
+    {
+      locales.map((loc) => (
+        <link
+          rel="alternate"
+          hreflang={loc}
+          href={new URL(localePath(loc, path), Astro.site)}
+        />
+      ))
+    }
+    <link
+      rel="alternate"
+      hreflang="x-default"
+      href={new URL(localePath(defaultLocale, path), Astro.site)}
+    />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="article" />
+    <meta property="og:locale" content={lang} />
+
+    <script is:inline>
+      // Тема ставится до первой отрисовки, иначе при выбранной тёмной успевает
+      // мигнуть светлая. Поэтому скрипт инлайновый и стоит в <head>.
+      (() => {
+        try {
+          const saved = localStorage.getItem('why:theme');
+          if (saved === 'dark' || saved === 'light') {
+            document.documentElement.dataset.theme = saved;
+          }
+        } catch {
+          /* приватный режим — просто идём за системной темой */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#content">{t('nav.skip')}</a>
+
+    <header class="site-header">
+      <div class="wrap site-header__inner">
+        <a class="site-header__brand" href={localePath(lang)}>{t('site.title')}</a>
+        <span class="site-header__spacer"></span>
+        <button class="theme-toggle" type="button" data-theme-toggle title={t('nav.theme')}>
+          <span class="theme-toggle__icon" aria-hidden="true"></span>
+          <span class="visually-hidden">{t('nav.theme')}</span>
+        </button>
+
+        <nav class="lang-switch" aria-label={t('nav.language')}>
+          {
+            locales.map((loc) => (
+              <a
+                href={localePath(loc, path)}
+                hreflang={loc}
+                aria-current={loc === lang ? 'true' : undefined}
+              >
+                {localeNames[loc]}
+              </a>
+            ))
+          }
+        </nav>
+      </div>
+    </header>
+
+    <main class="wrap" id="content" tabindex="-1">
+      <slot />
+    </main>
+
+    <script>
+      // Кнопка переключает между светлой и тёмной, отталкиваясь от того, что
+      // читатель видит сейчас, — включая тему, пришедшую от системы.
+      document.querySelector('[data-theme-toggle]')?.addEventListener('click', () => {
+        const root = document.documentElement;
+        const current =
+          root.dataset.theme ??
+          (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        const next = current === 'dark' ? 'light' : 'dark';
+        root.dataset.theme = next;
+        try {
+          localStorage.setItem('why:theme', next);
+        } catch {
+          /* не критично: тема не переживёт перезагрузку */
+        }
+      });
+    </script>
+
+    <footer class="site-footer">
+      <div class="wrap">{t('site.tagline')}</div>
+    </footer>
+  </body>
+</html>

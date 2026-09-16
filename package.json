@@ -1,0 +1,26 @@
+{
+  "name": "why",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "build": "node scripts/check-steps.mjs && astro build",
+    "preview": "astro preview",
+    "check:steps": "node scripts/check-steps.mjs",
+    "check:types": "astro check"
+  },
+  "dependencies": {
+    "@astrojs/mdx": "^8.0.1",
+    "@astrojs/react": "^6.0.5",
+    "@astrojs/sitemap": "^3.7.4",
+    "@shikijs/transformers": "^4.4.3",
+    "@xyflow/react": "^12.11.6",
+    "astro": "^7.3.2",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "js-yaml": "^5.4.2"
+  }
+}

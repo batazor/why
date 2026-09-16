@@ -1,0 +1,21 @@
+---
+// Корень редиректит на дефолтную локаль. Файл обязателен: без него Astro
+// не может построить редирект для i18n-роутинга.
+import { defaultLocale, localePath } from '../i18n/ui';
+
+const target = localePath(defaultLocale);
+---
+
+<!doctype html>
+<html lang={defaultLocale}>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="refresh" content={`0; url=${target}`} />
+    <link rel="canonical" href={target} />
+    <meta name="robots" content="noindex" />
+    <title>Why</title>
+  </head>
+  <body>
+    <a href={target}>Continue →</a>
+  </body>
+</html>

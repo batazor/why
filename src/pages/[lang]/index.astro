@@ -1,0 +1,132 @@
+---
+import { getCollection } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import FlowDiagram from '../../components/FlowDiagram';
+import { getDeck } from '../../code/registry';
+import { locales, useTranslations, localePath, type Locale } from '../../i18n/ui';
+
+export function getStaticPaths() {
+  return locales.map((lang) => ({ params: { lang } }));
+}
+
+const lang = Astro.params.lang as Locale;
+const t = useTranslations(lang);
+
+const lessons = (
+  await getCollection('lessons', ({ id, data }) => id.startsWith(`${lang}/`) && !data.draft)
+)
+  .sort((a, b) => a.data.order - b.data.order)
+  .map((lesson) => {
+    const slug = lesson.id.slice(lang.length + 1);
+    return {
+      slug,
+      data: lesson.data,
+      poster: getDeck(lesson.data.deck ?? slug).poster,
+    };
+  });
+
+const tags = [...new Set(lessons.flatMap((lesson) => lesson.data.tags))].sort();
+---
+
+<Base lang={lang} title={t('catalog.heading')} description={t('site.tagline')}>
+  <h1>{t('site.title')}</h1>
+  <p class="prose">{t('site.tagline')}</p>
+
+  {lessons.length === 0 && <p>{t('catalog.empty')}</p>}
+
+  {
+    tags.length > 1 && (
+      /* Без JS фильтр не показывается, а все уроки остаются видны — то же
+         прогрессивное улучшение, что и у плеера шагов. */
+      <div class="tag-filter" data-tag-filter hidden>
+        <span class="tag-filter__label">{t('catalog.filter')}</span>
+        <button class="tag tag--button is-on" type="button" data-tag="">
+          {t('catalog.allTags')}
+        </button>
+        {tags.map((tag) => (
+          <button class="tag tag--button" type="button" data-tag={tag}>
+            {tag}
+          </button>
+        ))}
+      </div>
+    )
+  }
+
+  <p class="catalog__empty" data-no-match hidden>{t('catalog.noMatch')}</p>
+
+  <ul class="catalog">
+    {
+      lessons.map((lesson) => (
+        <li class="card" data-tags={lesson.data.tags.join(' ')}>
+          {lesson.poster && (
+            /* Постер пересказывает тот же текст, что и «Проблема» ниже,
+               поэтому для скринридера он декоративный. */
+            <div class="card__poster" aria-hidden="true">
+              <FlowDiagram client:visible spec={lesson.poster} />
+            </div>
+          )}
+          <h2 class="card__title">
+            <a href={localePath(lang, `lessons/${lesson.slug}`)}>{lesson.data.title}</a>
+          </h2>
+          <p class="card__problem">{lesson.data.problem}</p>
+          <div class="card__tags">
+            {lesson.data.tags.map((tag) => (
+              <span class="tag">{tag}</span>
+            ))}
+          </div>
+        </li>
+      ))
+    }
+  </ul>
+  <script>
+    const filter = document.querySelector<HTMLElement>('[data-tag-filter]');
+    if (filter) {
+      const buttons = [...filter.querySelectorAll<HTMLButtonElement>('[data-tag]')];
+      const cards = [...document.querySelectorAll<HTMLElement>('.card[data-tags]')];
+      const noMatch = document.querySelector<HTMLElement>('[data-no-match]');
+      const selected = new Set<string>();
+
+      filter.hidden = false;
+
+      function render() {
+        // Несколько тегов складываются по ИЛИ: читатель ищет, а не сужает.
+        let shown = 0;
+        for (const card of cards) {
+          const cardTags = (card.dataset.tags ?? '').split(' ');
+          const visible = selected.size === 0 || cardTags.some((tag) => selected.has(tag));
+          card.hidden = !visible;
+          if (visible) shown += 1;
+        }
+        for (const button of buttons) {
+          const tag = button.dataset.tag ?? '';
+          const on = tag === '' ? selected.size === 0 : selected.has(tag);
+          button.classList.toggle('is-on', on);
+          button.setAttribute('aria-pressed', String(on));
+        }
+        if (noMatch) noMatch.hidden = shown > 0;
+
+        // Выбор живёт в адресе, чтобы подборку можно было дать ссылкой.
+        const url = new URL(location.href);
+        if (selected.size) url.searchParams.set('tag', [...selected].join(','));
+        else url.searchParams.delete('tag');
+        history.replaceState(null, '', url);
+      }
+
+      filter.addEventListener('click', (event) => {
+        const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-tag]');
+        if (!button) return;
+        const tag = button.dataset.tag ?? '';
+        if (tag === '') selected.clear();
+        else if (selected.has(tag)) selected.delete(tag);
+        else selected.add(tag);
+        render();
+      });
+
+      const known = new Set(buttons.map((button) => button.dataset.tag).filter(Boolean));
+      for (const tag of new URL(location.href).searchParams.get('tag')?.split(',') ?? []) {
+        if (known.has(tag)) selected.add(tag);
+      }
+      render();
+    }
+  </script>
+</Base>

@@ -1,0 +1,95 @@
+---
+title: Why idempotency
+description: What a retry costs you when the server was never designed to be retried.
+problem: >-
+  A timeout is not a failure. The client retries, the payment goes through twice,
+  and the bug only shows up in production under load.
+tags: [distributed-systems, api-design, reliability]
+order: 1
+deck: idempotency
+steps:
+  - id: naive
+    title: The handler that looks fine
+    narration: >-
+      Charge the card, write the row, return the id. In a code review nobody stops
+      on this. It is correct — for exactly one execution.
+    note: >-
+      One call, one charge. Correct for exactly one execution.
+  - id: timeout
+    title: The network disagrees
+    narration: >-
+      The client times out after three seconds. But a timeout tells you nothing about
+      what happened on the server: the request may have never arrived, or it may have
+      completed and the response was lost on the way back. The client cannot tell
+      those apart, so it retries — and the second charge goes through.
+    note: >-
+      The response is gone, but the money moved.
+  - id: key
+    title: Name the intent, not the request
+    narration: >-
+      The fix starts on the client. It generates a key once and reuses it across every
+      retry of the same intent. Note what the key identifies: "one charge", not
+      "one HTTP request". A server-generated key would be useless — it would be new
+      on every attempt, which is exactly the thing going wrong.
+    note: >-
+      The key is born here — it has to outlive the request.
+  - id: store
+    title: Put the constraint in the database
+    narration: >-
+      The key needs a home where every replica of your service sees it at the same
+      instant. A primary key does that; an in-memory map does not. This is the whole
+      trick — you are borrowing the database's uniqueness guarantee.
+    note: >-
+      The uniqueness is the database’s, not yours.
+  - id: handler
+    title: Claim first, charge second
+    narration: >-
+      The order matters. Claim the key before calling the bank, so a duplicate request
+      loses the race at the insert and never reaches the payment provider. Two details
+      are easy to miss - comparing the request hash catches a client reusing one key
+      for different payloads, and a claimed-but-unfinished key must return 409 rather
+      than an empty success.
+    note: >-
+      The retry reached the service, not the provider.
+quiz:
+  - question: Where should the idempotency key be generated?
+    options:
+      - On the server, when the request arrives
+      - On the client, once per intended operation
+      - By a shared key service both sides call
+    answer: 1
+    explanation: >-
+      The server sees a retry as a brand-new request, so a server-side key would differ
+      every time and deduplicate nothing. The key has to outlive the individual request,
+      which means the client owns it.
+  - question: Why claim the key before calling the bank rather than after?
+    options:
+      - It is faster — one less round trip on the happy path
+      - Claiming after leaves a window where two concurrent requests both charge
+      - The bank requires the key to exist beforehand
+    answer: 1
+    explanation: >-
+      If you charge first and record the key afterwards, two concurrent duplicates can
+      both pass the check and both reach the provider. Claiming first makes the database
+      pick a winner before any money moves.
+---
+
+A retried request is not an edge case. Mobile networks drop responses, load balancers
+time out, queue consumers redeliver, and users double-tap buttons. Any endpoint that
+changes state will eventually be called twice with the same intent.
+
+Idempotency is the property that lets you stop caring: the second call produces the same
+result as the first, and no additional side effects.
+
+## Where this shows up
+
+Payments are the obvious case because the damage is measured in money, but the same shape
+appears in signup emails, webhook delivery, order placement, and anything consuming from a
+queue with at-least-once semantics.
+
+## What this is not
+
+Idempotency is not the same as retry-safety through locking. A lock prevents concurrent
+execution; it does nothing about a retry that arrives ten minutes later. And it is not
+deduplication by request body — two genuinely separate payments of the same amount to the
+same merchant are a legitimate thing a user can do.

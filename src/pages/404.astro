@@ -1,0 +1,35 @@
+---
+import { getCollection } from 'astro:content';
+import Base from '../layouts/Base.astro';
+import { defaultLocale, useTranslations, localePath, isLocale, type Locale } from '../i18n/ui';
+
+// Статический хостинг отдаёт один 404 на все языки, а языка в URL несуществующей
+// страницы может и не быть. Берём префикс, если он валиден, иначе дефолтную локаль.
+const segment = Astro.url.pathname.split('/').filter(Boolean)[0];
+const lang: Locale = isLocale(segment) ? segment : defaultLocale;
+const t = useTranslations(lang);
+
+const lessons = (
+  await getCollection('lessons', ({ id, data }) => id.startsWith(`${lang}/`) && !data.draft)
+).sort((a, b) => a.data.order - b.data.order);
+---
+
+<Base lang={lang} title={t('notFound.title')} description={t('notFound.body')}>
+  <h1>{t('notFound.title')}</h1>
+  <p class="prose">{t('notFound.body')}</p>
+
+  <ul class="catalog catalog--plain">
+    {
+      lessons.map((lesson) => (
+        <li class="card">
+          <h2 class="card__title">
+            <a href={localePath(lang, `lessons/${lesson.id.slice(lang.length + 1)}`)}>
+              {lesson.data.title}
+            </a>
+          </h2>
+          <p class="card__problem">{lesson.data.problem}</p>
+        </li>
+      ))
+    }
+  </ul>
+</Base>

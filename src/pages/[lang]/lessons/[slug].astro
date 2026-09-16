@@ -1,0 +1,128 @@
+---
+import { getCollection, render, type CollectionEntry } from 'astro:content';
+import Base from '../../../layouts/Base.astro';
+import StepPlayer from '../../../components/StepPlayer.astro';
+import Quiz from '../../../components/Quiz.astro';
+import FlowDiagram from '../../../components/FlowDiagram';
+import { getDeck } from '../../../code/registry';
+import { useTranslations, isLocale, localePath, type Locale } from '../../../i18n/ui';
+
+export async function getStaticPaths() {
+  const lessons = await getCollection('lessons');
+  // Соседи считаются здесь, а не на странице: порядок каталога должен быть
+  // один и тот же в обоих местах, а значит и считаться должен один раз.
+  const byLocale = new Map<string, typeof lessons>();
+  for (const lesson of lessons) {
+    const lang = lesson.id.split('/')[0];
+    byLocale.set(lang, [...(byLocale.get(lang) ?? []), lesson]);
+  }
+  for (const list of byLocale.values()) {
+    list.sort((a, b) => a.data.order - b.data.order);
+  }
+
+  return lessons.map((lesson) => {
+    const [lang, ...rest] = lesson.id.split('/');
+    const siblings = byLocale.get(lang)!.filter((item) => !item.data.draft);
+    const index = siblings.findIndex((item) => item.id === lesson.id);
+    return {
+      params: { lang, slug: rest.join('/') },
+      props: {
+        lesson,
+        prev: index > 0 ? siblings[index - 1] : undefined,
+        next: index >= 0 && index < siblings.length - 1 ? siblings[index + 1] : undefined,
+      },
+    };
+  });
+}
+
+interface Props {
+  lesson: CollectionEntry<'lessons'>;
+  prev?: CollectionEntry<'lessons'>;
+  next?: CollectionEntry<'lessons'>;
+}
+
+const { lesson, prev, next } = Astro.props;
+const { lang: langParam, slug } = Astro.params;
+if (!isLocale(langParam)) throw new Error(`Unknown locale: ${langParam}`);
+const lang: Locale = langParam;
+const t = useTranslations(lang);
+
+const deck = getDeck(lesson.data.deck ?? slug!);
+const poster = deck.poster;
+
+// Тексты пометок — проза, поэтому берутся из локализованного урока, а не из
+// спеки схемы. Номер совпадает с номером шага в плеере.
+const notes = lesson.data.steps
+  .map((step, i) => ({ step: step.id, level: i + 1, text: step.note ?? '' }))
+  .filter((note) => note.text);
+
+const { Content } = await render(lesson);
+
+const siblingHref = (entry: CollectionEntry<'lessons'>) =>
+  localePath(lang, `lessons/${entry.id.slice(lang.length + 1)}`);
+---
+
+<Base
+  lang={lang}
+  title={lesson.data.title}
+  description={lesson.data.description}
+  path={`lessons/${slug}`}
+>
+  <article>
+    <h1>{lesson.data.title}</h1>
+
+    <div class:list={['callout', poster && 'callout--illustrated']}>
+      <div class="callout__body">
+        <span class="callout__label">{t('catalog.problem')}</span>
+        {lesson.data.problem}
+      </div>
+      {
+        poster && (
+          /* Постер дублирует текст рядом, поэтому для скринридера он декоративный. */
+          <figure class="callout__figure" aria-hidden="true">
+            <FlowDiagram client:visible spec={poster} />
+          </figure>
+        )
+      }
+    </div>
+
+    <div class="prose">
+      <Content />
+    </div>
+
+    <h2>{t('lesson.walkthrough')}</h2>
+    <StepPlayer
+      lang={lang}
+      steps={lesson.data.steps}
+      deck={deck.default}
+      flow={deck.flow}
+      notes={notes}
+    />
+
+    <Quiz lang={lang} slug={slug!} items={lesson.data.quiz} />
+
+    <nav class="lesson-nav" aria-label={t('nav.allLessons')}>
+      {
+        prev ? (
+          <a class="lesson-nav__link lesson-nav__link--prev" href={siblingHref(prev)}>
+            <span class="lesson-nav__label">← {t('nav.prevLesson')}</span>
+            <span class="lesson-nav__title">{prev.data.title}</span>
+          </a>
+        ) : (
+          <span />
+        )
+      }
+      <a class="lesson-nav__home" href={localePath(lang)}>{t('nav.allLessons')}</a>
+      {
+        next ? (
+          <a class="lesson-nav__link lesson-nav__link--next" href={siblingHref(next)}>
+            <span class="lesson-nav__label">{t('nav.nextLesson')} →</span>
+            <span class="lesson-nav__title">{next.data.title}</span>
+          </a>
+        ) : (
+          <span />
+        )
+      }
+    </nav>
+  </article>
+</Base>

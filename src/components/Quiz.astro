@@ -1,0 +1,141 @@
+---
+import { useTranslations, type Locale } from '../i18n/ui';
+
+interface QuizItem {
+  question: string;
+  options: string[];
+  answer: number;
+  explanation: string;
+}
+
+interface Props {
+  lang: Locale;
+  slug: string;
+  items: QuizItem[];
+}
+
+const { lang, slug, items } = Astro.props;
+const t = useTranslations(lang);
+---
+
+{
+  items.length > 0 && (
+    <section class="quiz" data-quiz={slug} aria-labelledby={`quiz-${slug}`}>
+      <h2 id={`quiz-${slug}`}>{t('quiz.heading')}</h2>
+
+      {items.map((item, qi) => (
+        <div class="quiz__item" data-question={qi} data-answer={item.answer}>
+          <p class="quiz__question">{item.question}</p>
+          <div class="quiz__options">
+            {item.options.map((option, oi) => (
+              <button class="quiz__option" type="button" data-option={oi}>
+                {option}
+              </button>
+            ))}
+          </div>
+          <p class="quiz__explanation" hidden>
+            <strong data-verdict />
+            {' '}
+            {item.explanation}
+          </p>
+        </div>
+      ))}
+
+      <p class="quiz__score">
+        <span data-score>{t('quiz.score', { n: 0, total: items.length })}</span>
+        <button class="btn" type="button" data-reset>
+          {t('quiz.reset')}
+        </button>
+      </p>
+
+      <template
+        data-labels
+        data-correct={t('quiz.correct')}
+        data-wrong={t('quiz.wrong')}
+        data-score-template={t('quiz.score', { n: '{n}', total: '{total}' })}
+      />
+    </section>
+  )
+}
+
+<script>
+  // Прогресс держим в localStorage — как в solidbook. Сервера нет, так что это
+  // единственное место, где ответы переживают перезагрузку.
+  document.querySelectorAll<HTMLElement>('[data-quiz]').forEach((quiz) => {
+    const slug = quiz.dataset.quiz!;
+    const storageKey = `why:quiz:${slug}`;
+    const labels = quiz.querySelector<HTMLElement>('[data-labels]')!;
+    const questions = [...quiz.querySelectorAll<HTMLElement>('[data-question]')];
+    const scoreEl = quiz.querySelector<HTMLElement>('[data-score]')!;
+
+    type Answers = Record<string, number>;
+
+    function load(): Answers {
+      try {
+        return JSON.parse(localStorage.getItem(storageKey) ?? '{}') as Answers;
+      } catch {
+        // Приватный режим или заблокированные site data — просто работаем без памяти.
+        return {};
+      }
+    }
+
+    function save(answers: Answers) {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(answers));
+      } catch {
+        /* не критично: потеряется только сохранение прогресса */
+      }
+    }
+
+    let answers = load();
+
+    function paint() {
+      questions.forEach((question) => {
+        const qi = question.dataset.question!;
+        const correct = Number(question.dataset.answer);
+        const chosen = answers[qi];
+        const explanation = question.querySelector<HTMLElement>('.quiz__explanation')!;
+        const verdict = explanation.querySelector<HTMLElement>('[data-verdict]')!;
+
+        question.querySelectorAll<HTMLButtonElement>('[data-option]').forEach((option) => {
+          const oi = Number(option.dataset.option);
+          option.classList.remove('is-correct', 'is-wrong');
+          option.disabled = chosen !== undefined;
+          if (chosen === undefined) return;
+          if (oi === correct) option.classList.add('is-correct');
+          else if (oi === chosen) option.classList.add('is-wrong');
+        });
+
+        explanation.hidden = chosen === undefined;
+        if (chosen !== undefined) {
+          verdict.textContent =
+            chosen === correct ? labels.dataset.correct! : labels.dataset.wrong!;
+        }
+      });
+
+      scoreEl.textContent = (labels.dataset.scoreTemplate ?? '{n}/{total}')
+        .replace('{n}', String(Object.keys(answers).length))
+        .replace('{total}', String(questions.length));
+    }
+
+    quiz.addEventListener('click', (event) => {
+      const target = event.target as HTMLElement;
+      const option = target.closest<HTMLButtonElement>('[data-option]');
+      if (option) {
+        const qi = option.closest<HTMLElement>('[data-question]')!.dataset.question!;
+        if (answers[qi] !== undefined) return;
+        answers[qi] = Number(option.dataset.option);
+        save(answers);
+        paint();
+        return;
+      }
+      if (target.closest('[data-reset]')) {
+        answers = {};
+        save(answers);
+        paint();
+      }
+    });
+
+    paint();
+  });
+</script>

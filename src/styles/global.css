@@ -1,0 +1,1135 @@
+/* Caveat, SIL Open Font License 1.1 — лицензия лежит рядом со шрифтом
+   (public/fonts/Caveat-OFL.txt). Файлы self-hosted: внешний запрос к CDN ради
+   двух подписей не окупается, да и офлайн сайт должен выглядеть так же.
+
+   Подключены только latin и cyrillic — подписи живут в этих двух диапазонах.
+   Один файл на подмножество: Caveat вариативный, начертания берутся из оси. */
+@font-face {
+  font-family: 'Caveat';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/caveat-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Caveat';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/caveat-cyrillic.woff2') format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+
+:root {
+  --bg: #fbfbf9;
+  --panel: #ffffff;
+  --fg: #16181d;
+  --muted: #5f6672;
+  --border: #e3e3dd;
+  --accent: #2f5fd0;
+  --accent-soft: #eaf0fd;
+  --ok: #1f7a4d;
+  --bad: #b42318;
+  --bad-soft: #fdeceb;
+  --radius: 10px;
+  --measure: 34rem;
+  --shadow: rgba(16, 18, 22, 0.12);
+  --font-note: 'Caveat', 'Segoe Script', 'Bradley Hand', cursive;
+  color-scheme: light;
+}
+
+/* Тёмная палитра объявлена дважды намеренно: первый блок работает до того, как
+   отработает скрипт темы (и если JS отключён), второй — когда читатель выбрал
+   тему руками. Значения должны совпадать. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #101216;
+    --panel: #171a20;
+    --fg: #e7e9ee;
+    --muted: #9aa3b2;
+    --border: #272b33;
+    --accent: #7ea2f5;
+    --accent-soft: #1b2436;
+    --ok: #4ec98a;
+    --bad: #ff8a80;
+    --bad-soft: #2a1a1a;
+    --shadow: rgba(0, 0, 0, 0.5);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg: #101216;
+  --panel: #171a20;
+  --fg: #e7e9ee;
+  --muted: #9aa3b2;
+  --border: #272b33;
+  --accent: #7ea2f5;
+  --accent-soft: #1b2436;
+  --ok: #4ec98a;
+  --bad: #ff8a80;
+  --bad-soft: #2a1a1a;
+  --shadow: rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.65 ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--accent);
+}
+
+h1,
+h2,
+h3 {
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+}
+
+code,
+pre {
+  font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85em;
+}
+
+.wrap {
+  max-width: 68rem;
+  margin: 0 auto;
+  padding: 0 1.25rem;
+}
+
+.prose {
+  max-width: var(--measure);
+}
+
+.prose :is(h2, h3) {
+  margin-top: 2.25rem;
+}
+
+/* Видимый фокус одинаковый по всему сайту: браузерный outline на кнопках и
+   ссылках выглядит по-разному и местами теряется на цветном фоне. */
+:where(a, button, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Полотно схемы фокусируется как единый элемент — рамку рисуем на нём,
+   а не на его внутренностях. */
+.player:focus-visible {
+  outline-offset: 6px;
+}
+
+.skip-link {
+  position: absolute;
+  left: 0.75rem;
+  top: -4rem;
+  z-index: 20;
+  padding: 0.5rem 0.9rem;
+  border-radius: 0 0 8px 8px;
+  background: var(--accent);
+  color: var(--panel);
+  text-decoration: none;
+  transition: top 0.15s ease;
+}
+
+.skip-link:focus {
+  top: 0;
+}
+
+/* main получает tabindex=-1 ради skip-link, но своей рамки ему не надо. */
+main:focus {
+  outline: none;
+}
+
+/* ---------- header / footer ---------- */
+
+.site-header {
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.site-header__inner {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  min-height: 3.5rem;
+}
+
+.site-header__brand {
+  font-weight: 650;
+  text-decoration: none;
+  color: var(--fg);
+  letter-spacing: -0.02em;
+}
+
+.site-header__spacer {
+  flex: 1;
+}
+
+.theme-toggle {
+  display: grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+  cursor: pointer;
+}
+
+.theme-toggle:hover {
+  border-color: var(--accent);
+}
+
+/* Солнце в светлой теме, месяц в тёмной: иконка показывает текущее состояние,
+   а не то, во что переключит. Тот же охранный паттерн, что у токенов темы —
+   системную тёмную нельзя ловить одним `:not([data-theme='light'])`, иначе
+   месяц вылезет и на светлой системной. */
+.theme-toggle__icon {
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 50%;
+  background: var(--muted);
+  box-shadow:
+    0 0 0 2px var(--panel),
+    0 0 0 3.5px var(--muted);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .theme-toggle__icon {
+    background: transparent;
+    box-shadow: inset -4px -1px 0 0 var(--muted);
+  }
+}
+
+:root[data-theme='dark'] .theme-toggle__icon {
+  background: transparent;
+  box-shadow: inset -4px -1px 0 0 var(--muted);
+}
+
+:root[data-theme='light'] .theme-toggle__icon {
+  background: var(--muted);
+  box-shadow:
+    0 0 0 2px var(--panel),
+    0 0 0 3.5px var(--muted);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.lang-switch {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.lang-switch a {
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  text-decoration: none;
+  color: var(--muted);
+}
+
+.lang-switch a[aria-current='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.site-footer {
+  margin-top: 5rem;
+  border-top: 1px solid var(--border);
+  padding: 1.75rem 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+/* ---------- catalog ---------- */
+
+.tag-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 2rem;
+}
+
+.tag-filter__label {
+  margin-right: 0.25rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.tag--button {
+  font: inherit;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  cursor: pointer;
+  background: transparent;
+  color: var(--muted);
+}
+
+.tag--button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.tag--button.is-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.catalog__empty {
+  margin-top: 2rem;
+  color: var(--muted);
+}
+
+.catalog {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr));
+  padding: 0;
+  margin: 2rem 0 0;
+  list-style: none;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0 1.25rem 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.card__title {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.card__title a {
+  text-decoration: none;
+  color: var(--fg);
+}
+
+.card__title a::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.card {
+  position: relative;
+}
+
+.card__problem {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.925rem;
+}
+
+.card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: auto;
+  padding-top: 0.4rem;
+}
+
+.tag {
+  font-size: 0.72rem;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+}
+
+/* Постер: суть проблемы одной картинкой. Задаёт карточке узнаваемое лицо —
+   без него каталог из десятка уроков превращается в список одинаковых абзацев. */
+/* 404 показывает тот же список без постеров: там он ориентир, а не витрина. */
+.catalog--plain .card {
+  padding-top: 1.25rem;
+}
+
+.card__poster {
+  margin: 0 -1.25rem;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bad-soft) 55%, var(--panel));
+}
+
+/* ---------- problem callout ---------- */
+
+.callout {
+  border-left: 3px solid var(--bad);
+  background: var(--bad-soft);
+  padding: 0.9rem 1.1rem;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  margin: 1.5rem 0;
+  max-width: var(--measure);
+}
+
+.callout--illustrated {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 24rem);
+  align-items: center;
+  max-width: 62rem;
+}
+
+@media (max-width: 46rem) {
+  .callout--illustrated {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.callout__figure {
+  margin: 0;
+}
+
+.callout__label {
+  display: block;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--bad);
+  margin-bottom: 0.2rem;
+}
+
+/* ---------- навигация между уроками ---------- */
+
+.lesson-nav {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 1rem;
+  align-items: center;
+  margin-top: 3.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.lesson-nav__link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  text-decoration: none;
+  color: var(--fg);
+}
+
+.lesson-nav__link--next {
+  text-align: right;
+}
+
+.lesson-nav__label {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.lesson-nav__title {
+  font-weight: 600;
+}
+
+.lesson-nav__link:hover .lesson-nav__title {
+  color: var(--accent);
+}
+
+.lesson-nav__home {
+  font-size: 0.875rem;
+  color: var(--muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.lesson-nav__home:hover {
+  color: var(--accent);
+}
+
+/* ---------- step player ---------- */
+
+.player {
+  margin: 2.5rem 0;
+}
+
+.player__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.step {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  align-items: start;
+  padding: 1.75rem 0;
+  border-top: 1px solid var(--border);
+}
+
+/* Шаг без кода не оставляет пустую половину: нарратив занимает ширину,
+   ограниченную комфортной длиной строки, а не колонкой под панель. */
+.step--text {
+  grid-template-columns: minmax(0, var(--measure));
+}
+
+@media (max-width: 52rem) {
+  .step {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.step__index {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.step__title {
+  margin: 0.35rem 0 0.6rem;
+  font-size: 1.15rem;
+}
+
+.step__narration {
+  margin: 0;
+  color: var(--fg);
+}
+
+.panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--panel);
+}
+
+.panel__caption {
+  padding: 0.4rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+}
+
+.panel .astro-code {
+  margin: 0;
+  padding: 0.9rem 0;
+  overflow-x: auto;
+}
+
+.panel .astro-code .line {
+  padding: 0 0.95rem;
+}
+
+.output {
+  border-top: 1px solid var(--border);
+}
+
+.output__label {
+  padding: 0.4rem 0.85rem 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.output pre {
+  margin: 0;
+  padding: 0.5rem 0.95rem 0.9rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  color: var(--muted);
+}
+
+.output--bad pre {
+  color: var(--bad);
+}
+
+/* Progressive enhancement: без JS все шаги видны и читаются как статья. */
+.player__controls {
+  display: none;
+}
+
+.player.is-enhanced:not(.player--scroll) .step {
+  display: none;
+}
+
+.player.is-enhanced:not(.player--scroll) .step.is-active {
+  display: grid;
+  animation: step-in 0.28s ease;
+}
+
+/* `to` задан явно: без него после анимации остаётся хвост от translateY,
+   и контейнер с overflow:hidden срезает 8px снизу. */
+@keyframes step-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---------- диаграммный режим ---------- */
+
+/* Схема прилипает полосой сверху, нарратив и код едут под ней.
+   Раскладка «схема сбоку» не сработала: код в колонке 23rem обрезался на
+   середине строки, а отдать ему ширину можно было только отняв её у схемы.
+   Полосой сверху обоим достаётся вся ширина разбора. */
+.player--scroll .player__body {
+  display: block;
+}
+
+.player--scroll .player__stage {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  margin: 0 0 0.5rem;
+  padding: 0.6rem 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  /* Непрозрачный фон обязателен: под полосой проезжает текст. */
+  background: var(--bg);
+}
+
+.player--scroll .flow {
+  height: min(var(--flow-height, 400px), 44vh);
+}
+
+/* ---------- React Flow ---------- *//* ---------- React Flow ---------- */
+
+.flow {
+  width: 100%;
+  height: var(--flow-height, 400px);
+}
+
+/* Пометка поверх схемы: приём из overview-примера React Flow. Это записка на
+   полях, а не узел графа, — поэтому без рамки. Мягкая подложка нужна только
+   чтобы текст не спорил с точечной сеткой под ним. */
+.fnote {
+  position: relative;
+  animation: fnote-in 0.4s 0.12s ease both;
+}
+
+@keyframes fnote-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.fnote__body {
+  display: flex;
+  gap: 0.45rem;
+  align-items: flex-start;
+  padding: 0.4rem 0.55rem;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter: blur(3px);
+}
+
+/* Номер — единственное цветное пятно в записке: он связывает её с шагом плеера. */
+.fnote__level {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-top: 0.05rem;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--panel);
+  font-size: 0.62rem;
+  font-weight: 700;
+}
+
+/* Рукописное начертание отделяет ремарку от схемы сильнее любой рамки: видно,
+   что это приписка на полях, а не подпись узла. Технические подписи рёбер
+   остаются системным шрифтом — там важна разборчивость, а не интонация.
+   Caveat мельче системного при том же кегле, поэтому размер поднят. */
+.fnote__text {
+  font-family: var(--font-note);
+  font-size: 1.05rem;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  color: var(--fg);
+  text-wrap: pretty;
+}
+
+.fnote__arrow {
+  position: absolute;
+  width: 2.1rem;
+  height: 2.1rem;
+  color: var(--muted);
+}
+
+.fnote__arrow-svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Хвост стрелки всегда у записки, остриё — у того, на что она указывает. */
+.fnote__arrow--up {
+  top: -1.9rem;
+  left: 0.2rem;
+}
+
+.fnote__arrow--down {
+  bottom: -1.9rem;
+  left: 0.2rem;
+  transform: scaleY(-1);
+}
+
+.fnote__arrow--left {
+  top: -0.2rem;
+  left: -2rem;
+  transform: rotate(-90deg);
+}
+
+.fnote__arrow--right {
+  top: -0.2rem;
+  right: -2rem;
+  transform: rotate(90deg) scaleY(-1);
+}
+
+/* Постер — картинка, а не полотно: ни сетки, ни кнопок, ни перетаскивания.
+   Одна спека и один рендерер на схему разбора и на иллюстрацию проблемы. */
+.flow--static .react-flow__pane {
+  cursor: default;
+}
+
+.flow--compact .fnode {
+  width: 9.5rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 9px;
+}
+
+.flow--compact .fnode__title {
+  font-size: 0.8rem;
+}
+
+.flow--compact .fnode__sub {
+  font-size: 0.65rem;
+}
+
+.flow--compact .react-flow__edge-text {
+  font-size: 11px;
+}
+
+/* Узел — HTML-карточка, а не текст в SVG: переносы считает браузер,
+   y-смещения подписей подбирать не нужно. Ради этого и взят React Flow. */
+.fnode {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  width: 11.5rem;
+  padding: 0.65rem 0.8rem;
+  border: 1.25px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: 0 1px 3px var(--shadow);
+  transition: opacity 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.fnode--idle {
+  opacity: 0.22;
+}
+
+.fnode--focus {
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 3px var(--accent-soft),
+    0 1px 3px var(--shadow);
+}
+
+.fnode--bad {
+  border-color: var(--bad);
+}
+
+.fnode__kind {
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.fnode__title {
+  font-size: 0.875rem;
+  font-weight: 650;
+  color: var(--fg);
+}
+
+.fnode--bad .fnode__title {
+  color: var(--bad);
+}
+
+.fnode__sub {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+/* Якоря нужны движку для расчёта рёбер, но читателю показывать их незачем. */
+.fnode__handle {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* fitView ужимает граф целиком, поэтому рёбра рисуются заметно толще, чем
+   выглядит естественным в редакторе: на общем плане тонкая линия пропадает. */
+.flow .react-flow__edge-path {
+  stroke: var(--muted);
+  stroke-width: 2.25;
+}
+
+.flow .fedge--ok .react-flow__edge-path {
+  stroke: var(--ok);
+}
+
+.flow .fedge--bad .react-flow__edge-path {
+  stroke: var(--bad);
+}
+
+.flow .fedge--dashed .react-flow__edge-path {
+  stroke-dasharray: 6 4;
+}
+
+.flow .react-flow__edge-text {
+  fill: var(--fg);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.flow .react-flow__edge-textbg {
+  fill: var(--panel);
+  stroke: var(--border);
+  stroke-width: 1;
+  rx: 7;
+}
+
+.flow .fedge--ok .react-flow__edge-text {
+  fill: var(--ok);
+}
+
+.flow .fedge--bad .react-flow__edge-text {
+  fill: var(--bad);
+}
+
+.flow .react-flow__controls-button {
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  fill: var(--fg);
+}
+
+.flow .react-flow__controls-button:hover {
+  background: var(--accent-soft);
+}
+
+/* Атрибуцию убирать нельзя: hideAttribution — платная опция React Flow.
+   Поэтому делаем её ненавязчивой, но оставляем на месте. */
+.flow .react-flow__attribution {
+  background: transparent;
+  font-size: 8px;
+  opacity: 0.45;
+}
+
+.flow .react-flow__attribution a {
+  color: var(--muted);
+}
+
+/* ---------- скроллителлинг ---------- */
+
+/* Все шаги видны и прокручиваются, схема прилипает рядом. Колесо мыши работает
+   как обычно — перехвата скролла нет, меняется только липкая панель. */
+.player--scroll.is-enhanced .player__steps {
+  height: auto !important;
+  overflow: visible;
+  transition: none;
+}
+
+.player--scroll.is-enhanced .step {
+  display: grid;
+  align-content: center;
+  min-height: 62vh;
+  border-top: 0;
+  /* Неактивные шаги приглушены, но читаемы: глаз должен видеть, что впереди. */
+  opacity: 0.38;
+  transition: opacity 0.35s ease;
+}
+
+.player--scroll.is-enhanced .step.is-active {
+  opacity: 1;
+}
+
+/* Первый и последний шаг должны доезжать до середины экрана, иначе первый
+   никогда не станет активным, а последний не досматривается. */
+.player--scroll.is-enhanced .player__steps::before,
+.player--scroll.is-enhanced .player__steps::after {
+  content: '';
+  display: block;
+  height: 18vh;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player--scroll.is-enhanced .step {
+    opacity: 1;
+  }
+}
+
+/* Высота контейнера едет вслед за активным шагом. Без этого каждое
+   переключение меняет высоту страницы, и всё, что ниже, дёргается. */
+.player.is-enhanced .player__steps {
+  overflow: hidden;
+  transition: height 0.28s ease;
+}
+
+/* На узком экране панель переносилась в две строки и занимала 84px. */
+@media (max-width: 30rem) {
+  .player.is-enhanced .player__controls {
+    gap: 0.5rem;
+  }
+
+  .player__controls .btn {
+    font-size: 0.8rem;
+    padding: 0.3rem 0.6rem;
+  }
+
+  .player__dot {
+    width: 1.1rem;
+  }
+}
+
+/* Подсказка про стрелки бессмысленна там, где нет клавиатуры. */
+@media (hover: none) and (pointer: coarse) {
+  .hint {
+    display: none;
+  }
+}
+
+/* Панель приклеена к нижней границе окна, пока разбор на экране:
+   кнопка «дальше» всегда на одном месте и всегда в досягаемости,
+   даже если шаг выше вьюпорта. */
+.player.is-enhanced .player__controls {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+
+.player__dots {
+  display: flex;
+  gap: 0.4rem;
+  flex: 1;
+}
+
+.player__dot {
+  width: 1.75rem;
+  height: 4px;
+  border: 0;
+  padding: 0;
+  border-radius: 999px;
+  background: var(--border);
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.player__dot[aria-current='true'] {
+  background: var(--accent);
+}
+
+.btn {
+  font: inherit;
+  font-size: 0.875rem;
+  padding: 0.35rem 0.85rem;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin: 0.6rem 0 0;
+}
+
+/* ---------- quiz ---------- */
+
+.quiz {
+  margin: 3rem 0 0;
+  max-width: var(--measure);
+}
+
+.quiz__item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: 1.15rem;
+  margin-bottom: 1rem;
+}
+
+.quiz__question {
+  margin: 0 0 0.75rem;
+  font-weight: 600;
+}
+
+.quiz__options {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.quiz__option {
+  text-align: left;
+  font: inherit;
+  font-size: 0.925rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.quiz__option:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.quiz__option.is-correct {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.quiz__option.is-wrong {
+  border-color: var(--bad);
+  color: var(--bad);
+}
+
+.quiz__explanation {
+  margin: 0.75rem 0 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.quiz__score {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* ---------- shiki dual theme ---------- */
+
+@media (prefers-color-scheme: dark) {
+  .astro-code,
+  .astro-code span {
+    color: var(--shiki-dark) !important;
+    background-color: var(--shiki-dark-bg) !important;
+  }
+}
+
+.astro-code .highlighted {
+  display: inline-block;
+  width: 100%;
+  background: var(--accent-soft);
+}
+
+.astro-code .diff.add {
+  display: inline-block;
+  width: 100%;
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+}
+
+.astro-code .diff.remove {
+  display: inline-block;
+  width: 100%;
+  background: color-mix(in srgb, var(--bad) 14%, transparent);
+  opacity: 0.7;
+}
+
+.astro-code.has-focused .line:not(.focused) {
+  opacity: 0.4;
+  filter: blur(0.4px);
+  transition: opacity 0.2s, filter 0.2s;
+}
+
+.astro-code.has-focused:hover .line:not(.focused) {
+  opacity: 1;
+  filter: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

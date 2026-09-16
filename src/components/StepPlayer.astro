@@ -1,0 +1,233 @@
+---
+import { Code } from 'astro:components';
+import {
+  transformerNotationHighlight,
+  transformerNotationDiff,
+  transformerNotationFocus,
+} from '@shikijs/transformers';
+import FlowDiagram from './FlowDiagram';
+import { useTranslations, type Locale } from '../i18n/ui';
+import type { CodeDeck } from '../code/types';
+import type { FlowSpec } from '../code/flow';
+
+interface NarrationStep {
+  id: string;
+  title: string;
+  narration: string;
+}
+
+interface Props {
+  lang: Locale;
+  steps: NarrationStep[];
+  deck: CodeDeck;
+  /** Схема разбора, если урок ведёт она, а не код. */
+  flow?: FlowSpec;
+  /** Локализованные тексты пометок поверх схемы. */
+  notes?: { step: string; level: number; text: string }[];
+}
+
+const { lang, steps, deck, flow, notes = [] } = Astro.props;
+const t = useTranslations(lang);
+
+const byId = new Map(deck.map((step) => [step.id, step]));
+// Нарратив ведущий: он определяет и порядок, и состав шагов.
+// Шаг без кода — легальный случай (диаграммный или чисто концептуальный).
+const merged = steps.map((step) => ({ ...step, panel: byId.get(step.id) }));
+
+const shikiOptions = {
+  themes: { light: 'github-light', dark: 'github-dark' },
+  transformers: [
+    transformerNotationHighlight(),
+    transformerNotationDiff(),
+    transformerNotationFocus(),
+  ],
+} as const;
+---
+
+<section
+  class:list={['player', flow && 'player--diagram', flow && 'player--scroll']}
+  data-player
+  aria-label={t('lesson.walkthrough')}
+>
+  <div class="player__body">
+    {
+      flow && (
+        <figure class="player__stage" style={`--flow-height: ${flow.height}px`}>
+          <FlowDiagram client:visible spec={flow} firstStep={merged[0].id} notes={notes} />
+        </figure>
+      )
+    }
+
+    <ol class="player__steps">
+      {
+        merged.map((step, i) => (
+          <li
+            class:list={['step', !step.panel?.code && 'step--text', i === 0 && 'is-active']}
+            data-step={i}
+            data-step-id={step.id}
+            aria-current={i === 0 ? 'step' : undefined}
+          >
+            <div>
+              <p class="step__index">{t('lesson.stepOf', { n: i + 1, total: merged.length })}</p>
+              <h3 class="step__title">{step.title}</h3>
+              <p class="step__narration">{step.narration}</p>
+            </div>
+
+            {step.panel?.code && (
+              <div class="panel">
+                {step.panel.caption && <div class="panel__caption">{step.panel.caption}</div>}
+                <Code code={step.panel.code} lang={(step.panel.lang ?? 'text') as any} {...shikiOptions} />
+                {step.panel.output && (
+                  <div class:list={['output', step.panel.outputTone === 'bad' && 'output--bad']}>
+                    <p class="output__label">{t('lesson.output')}</p>
+                    <pre>{step.panel.output}</pre>
+                  </div>
+                )}
+              </div>
+            )}
+          </li>
+        ))
+      }
+    </ol>
+
+  </div>
+
+  <div class="player__controls">
+    <button class="btn" type="button" data-prev disabled>← {t('lesson.prev')}</button>
+    <div class="player__dots" role="tablist" aria-label={t('lesson.walkthrough')}>
+      {
+        merged.map((step, i) => (
+          <button
+            class="player__dot"
+            type="button"
+            data-goto={i}
+            role="tab"
+            aria-current={i === 0 ? 'true' : 'false'}
+            aria-label={t('lesson.stepOf', { n: i + 1, total: merged.length })}
+          />
+        ))
+      }
+    </div>
+    <button class="btn" type="button" data-next>{t('lesson.next')} →</button>
+  </div>
+</section>
+
+<p class="hint">{t('lesson.keyboardHint')}</p>
+
+<script>
+  /**
+   * Два режима на одних и тех же данных.
+   *
+   * Со схемой — скроллителлинг: все шаги видны, колонка нарратива прокручивается,
+   * схема прилипает и следует за текстом. Страница скроллится обычным образом,
+   * перехвата колеса нет.
+   *
+   * Без схемы — пошаговый плеер: виден один шаг, листается кнопками.
+   *
+   * Без JS оба режима вырождаются в статью со всеми шагами подряд.
+   */
+  document.querySelectorAll<HTMLElement>('[data-player]').forEach((player) => {
+    const steps = [...player.querySelectorAll<HTMLElement>('.step')];
+    const dots = [...player.querySelectorAll<HTMLButtonElement>('[data-goto]')];
+    const prev = player.querySelector<HTMLButtonElement>('[data-prev]');
+    const next = player.querySelector<HTMLButtonElement>('[data-next]');
+    const list = player.querySelector<HTMLElement>('.player__steps')!;
+    if (steps.length < 2) return;
+
+    const scrolly = player.classList.contains('player--scroll');
+    const smooth = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+
+    let index = 0;
+    player.classList.add('is-enhanced');
+
+    function mark(to: number) {
+      index = Math.max(0, Math.min(steps.length - 1, to));
+      steps.forEach((step, i) => {
+        step.classList.toggle('is-active', i === index);
+        if (i === index) step.setAttribute('aria-current', 'step');
+        else step.removeAttribute('aria-current');
+      });
+      dots.forEach((dot, i) => dot.setAttribute('aria-current', String(i === index)));
+
+      // Схема живёт в React-острове. Публикуем и состояние, и событие: остров
+      // монтируется лениво и к своему появлению может опоздать на пять шагов.
+      const stepId = steps[index].dataset.stepId ?? '';
+      player.dataset.stepId = stepId;
+      player.dispatchEvent(new CustomEvent('why:step', { detail: { id: stepId, index } }));
+
+      if (prev) prev.disabled = index === 0;
+      if (next) next.disabled = index === steps.length - 1;
+    }
+
+    if (scrolly) {
+      const goTo = (to: number) => {
+        const target = steps[Math.max(0, Math.min(steps.length - 1, to))];
+        target.scrollIntoView({ block: 'center', behavior: smooth as ScrollBehavior });
+      };
+
+      // Активен тот шаг, который пересёк среднюю полосу экрана. Полоса узкая,
+      // поэтому в каждый момент в неё попадает ровно один шаг.
+      const spotlight = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) continue;
+            mark(steps.indexOf(entry.target as HTMLElement));
+          }
+        },
+        { rootMargin: '-48% 0px -48% 0px' },
+      );
+      steps.forEach((step) => spotlight.observe(step));
+
+      prev?.addEventListener('click', () => goTo(index - 1));
+      next?.addEventListener('click', () => goTo(index + 1));
+      dots.forEach((dot, i) => dot.addEventListener('click', () => goTo(i)));
+      player.addEventListener('keydown', (event) => {
+        if (event.key === 'ArrowLeft') goTo(index - 1);
+        if (event.key === 'ArrowRight') goTo(index + 1);
+      });
+      player.tabIndex = 0;
+
+      mark(0);
+      return;
+    }
+
+    let appliedHeight = -1;
+
+    // Высота контейнера фиксируется по активному шагу и едет к ней плавно.
+    // Иначе при переключении меняется высота страницы и всё ниже прыгает.
+    function syncHeight(animate = true) {
+      const height = steps[index].offsetHeight;
+      if (height === appliedHeight) return;
+      appliedHeight = height;
+      if (!animate) list.style.transition = 'none';
+      list.style.height = `${height}px`;
+      if (!animate) requestAnimationFrame(() => (list.style.transition = ''));
+    }
+
+    function render(to: number) {
+      mark(to);
+      syncHeight();
+    }
+
+    // Пересчёт при смене ширины окна и при доезде шрифтов: высота шага
+    // зависит от переносов, а те — от того и другого.
+    const observer = new ResizeObserver((entries) => {
+      if (entries.some((entry) => entry.target === steps[index])) syncHeight(false);
+    });
+    steps.forEach((step) => observer.observe(step));
+
+    prev?.addEventListener('click', () => render(index - 1));
+    next?.addEventListener('click', () => render(index + 1));
+    dots.forEach((dot, i) => dot.addEventListener('click', () => render(i)));
+
+    player.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowLeft') render(index - 1);
+      if (event.key === 'ArrowRight') render(index + 1);
+    });
+    player.tabIndex = 0;
+
+    list.style.transition = 'none';
+    render(0);
+    requestAnimationFrame(() => (list.style.transition = ''));
+  });
+</script>
