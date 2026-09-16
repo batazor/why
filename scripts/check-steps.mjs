@@ -175,6 +175,58 @@ for (const [slug, perLocale] of bySlug) {
     }
   }
 
+  /**
+   * Не легла ли пометка на узел.
+   *
+   * Расставляя пометки, легко забыть, что набор видимых узлов меняется от шага
+   * к шагу: место, пустое на одном шаге, на другом занято карточкой, и записка
+   * накрывает её собой. Глазами это ловится только если пролистать все шаги —
+   * поэтому считает машина.
+   */
+  if (deckModule.flow?.annotations) {
+    const flow = deckModule.flow;
+    const { NODE_SIZE } = await import(path.join(codeDir, 'flow.ts'));
+    const visible = (only, step) => only === undefined || only.includes(step);
+    const overlap = (a, b) =>
+      a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+
+    for (const annotation of flow.annotations) {
+      const note = {
+        x: annotation.position.x,
+        y: annotation.position.y,
+        w: annotation.width ?? 190,
+        h: NODE_SIZE.note,
+      };
+
+      const occupied = flow.nodes
+        .filter((node) => visible(node.only, annotation.step))
+        .map((node) => ({
+          id: node.id,
+          x: node.position.x,
+          y: node.position.y,
+          w: node.width ?? NODE_SIZE.width,
+          h: node.variant === 'bar' ? NODE_SIZE.bar : NODE_SIZE.card,
+        }));
+
+      if (flow.drop?.step === annotation.step) {
+        occupied.push({
+          id: 'drop-slot',
+          x: flow.drop.slot.x,
+          y: flow.drop.slot.y,
+          w: flow.drop.width ?? NODE_SIZE.width,
+          h: NODE_SIZE.card,
+        });
+      }
+
+      const hit = occupied.filter((box) => overlap(note, box)).map((box) => box.id);
+      if (hit.length) {
+        errors.push(
+          `схема колоды "${deckName}": пометка шага "${annotation.step}" налезает на ${hit.join(', ')}`,
+        );
+      }
+    }
+  }
+
   // Перетаскивание: шаг, на котором оно работает, обязан иметь подписи в
   // каждой локали — иначе читателю предложат тащить безымянную карточку.
   const dragStep = deckModule.flow?.drop?.step;

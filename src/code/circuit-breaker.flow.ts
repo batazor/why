@@ -108,11 +108,11 @@ const flow: FlowSpec = {
   ],
   // Только геометрия: текст пометки переводится и лежит в steps[].note урока.
   annotations: [
-    { step: 'cascade', position: { x: 482, y: 114 }, arrow: 'up' },
-    { step: 'closed', position: { x: 0, y: 84 }, arrow: 'down', width: 210 },
+    { step: 'cascade', position: { x: 680, y: 0 }, arrow: 'left', width: 190 },
+    { step: 'closed', position: { x: 0, y: 252 }, arrow: 'up', width: 210 },
     { step: 'open', position: { x: 460, y: 302 }, arrow: 'left', width: 175 },
     { step: 'halfopen', position: { x: 482, y: 254 }, arrow: 'up', width: 190 },
-    { step: 'recover', position: { x: 0, y: 84 }, arrow: 'down', width: 210 },
+    { step: 'recover', position: { x: 0, y: 252 }, arrow: 'up', width: 210 },
   ],
 };
 

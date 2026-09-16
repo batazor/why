@@ -12,7 +12,7 @@ import {
   type NodeProps,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import type { FlowSpec } from '../code/flow';
+import { NODE_SIZE, type FlowSpec } from '../code/flow';
 
 type CardData = {
   kind: string;
@@ -155,10 +155,6 @@ const nodeTypes = { card: CardNode, annotation: AnnotationNode, slot: SlotNode }
 const ARROW = { none: '#8a93a3', ok: '#2fa36b', bad: '#e5484d' } as const;
 const GRID = 'rgba(128, 134, 148, 0.35)';
 
-/** Измеренные высоты: по ним считаются границы схемы. */
-const H = { card: 82, bar: 32, note: 90 };
-const DEFAULT_WIDTH = 184;
-
 /**
  * Границы всей схемы, а не текущего шага.
  *
@@ -174,18 +170,18 @@ function fullBounds(spec: FlowSpec) {
     ...spec.nodes.map((n) => ({
       x: n.position.x,
       y: n.position.y,
-      w: n.width ?? DEFAULT_WIDTH,
-      h: n.variant === 'bar' ? H.bar : H.card,
+      w: n.width ?? NODE_SIZE.width,
+      h: n.variant === 'bar' ? NODE_SIZE.bar : NODE_SIZE.card,
     })),
     ...(spec.annotations ?? []).map((a) => ({
       x: a.position.x,
       y: a.position.y,
       w: a.width ?? 190,
-      h: H.note,
+      h: NODE_SIZE.note,
     })),
   ];
   if (spec.drop) {
-    boxes.push({ x: spec.drop.slot.x, y: spec.drop.slot.y, w: spec.drop.width ?? DEFAULT_WIDTH, h: H.card });
+    boxes.push({ x: spec.drop.slot.x, y: spec.drop.slot.y, w: spec.drop.width ?? NODE_SIZE.width, h: NODE_SIZE.card });
   }
 
   const x = Math.min(...boxes.map((b) => b.x));

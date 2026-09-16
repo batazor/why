@@ -109,15 +109,15 @@ const flow: FlowSpec = {
    * чем её отсутствие.
    */
   annotations: [
-    { step: 'item', position: { x: 230, y: at(5000) + 8 }, arrow: 'left', width: 200 },
-    { step: 'promo', position: { x: 230, y: at(5000) + 8 }, arrow: 'left', width: 200 },
-    { step: 'engine', position: { x: 300, y: at(3200, BAR) + 66 }, arrow: 'up', width: 215 },
-    { step: 'one', position: { x: 520, y: at(4000) + 8 }, arrow: 'left', width: 200 },
-    { step: 'stack', position: { x: 300, y: at(1000) + 110 }, arrow: 'right', width: 210 },
-    { step: 'clamp', position: { x: 300, y: at(1000) + 110 }, arrow: 'right', width: 215 },
-    { step: 'rule', position: { x: 300, y: at(3200, BAR) + 66 }, arrow: 'up', width: 220 },
-    { step: 'budget', position: { x: 280, y: at(3200) + 110 }, arrow: 'up', width: 215 },
-    { step: 'evolve', position: { x: 280, y: at(3200) + 110 }, arrow: 'up', width: 215 },
+    { step: 'item', position: { x: 210, y: -55 }, arrow: 'left', width: 200 },
+    { step: 'promo', position: { x: 210, y: -55 }, arrow: 'left', width: 200 },
+    { step: 'engine', position: { x: 0, y: 185 }, arrow: 'up', width: 215 },
+    { step: 'one', position: { x: 510, y: 30 }, arrow: 'left', width: 200 },
+    { step: 'stack', position: { x: 560, y: 395 }, arrow: 'up', width: 210 },
+    { step: 'clamp', position: { x: 560, y: 395 }, arrow: 'up', width: 215 },
+    { step: 'rule', position: { x: 0, y: 185 }, arrow: 'up', width: 220 },
+    { step: 'budget', position: { x: 280, y: 215 }, arrow: 'up', width: 215 },
+    { step: 'evolve', position: { x: 280, y: 215 }, arrow: 'up', width: 215 },
   ],
 };
 
