@@ -1,6 +1,7 @@
 import type { CodeDeck } from './types';
 import type { FlowSpec } from './flow';
 import type { LikeC4Spec } from './likec4';
+import type { FileTreeSpec } from './tree';
 
 export type DeckModule = {
   default: CodeDeck;
@@ -8,6 +9,8 @@ export type DeckModule = {
   flow?: FlowSpec;
   /** Разбор ведёт модель LikeC4: шаг выбирает view, раскладку считает генератор. */
   likec4?: LikeC4Spec;
+  /** Разбор ведёт редактор с деревом файлов: колода объявляет, что и когда в нём появляется. */
+  tree?: FileTreeSpec;
   /** Постер: суть проблемы одной схемой (FlowSpec с fixedStep). */
   poster?: FlowSpec;
 };

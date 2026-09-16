@@ -1,0 +1,186 @@
+---
+import { Code } from 'astro:components';
+import { codeTransformers } from '../code/shiki';
+import { useTranslations, type Locale } from '../i18n/ui';
+import type { FileTreeSpec } from '../code/tree';
+
+interface Props {
+  lang: Locale;
+  tree: FileTreeSpec;
+  /** Порядок шагов разбора: по нему считается, что в дереве уже появилось. */
+  order: string[];
+}
+
+const { lang, tree, order } = Astro.props;
+const t = useTranslations(lang);
+
+const shikiOptions = {
+  themes: { light: 'github-light', dark: 'github-dark' },
+  transformers: codeTransformers(),
+} as const;
+
+/**
+ * Номер шага, на котором файл появляется. Скрипту нужен номер, а не id: он
+ * сравнивает «появился ли уже» с номером текущего шага, а id для этого
+ * пришлось бы каждый раз искать в списке.
+ */
+const appearsAt = (step: string) => {
+  const index = order.indexOf(step);
+  if (index === -1) throw new Error(`FileEditor: шаг "${step}" не существует в разборе`);
+  return index;
+};
+
+/**
+ * Дерево каталогов из плоских путей.
+ *
+ * Каталог появляется вместе с первым своим файлом, поэтому его номер шага —
+ * минимум по содержимому. Считать это в компоненте, а не объявлять в спеке,
+ * обязательно: иначе каталог и файл в нём разъезжаются по шагам, и в дереве
+ * висит пустая папка.
+ */
+type Node =
+  | { kind: 'file'; name: string; path: string; step: number }
+  | { kind: 'dir'; name: string; path: string; step: number; children: Node[] };
+
+function build(files: FileTreeSpec['files']): Node[] {
+  const roots: Node[] = [];
+
+  for (const file of files) {
+    const parts = file.path.split('/');
+    const step = appearsAt(file.from);
+    let level = roots;
+    let prefix = '';
+
+    for (const [depth, name] of parts.entries()) {
+      prefix = prefix ? `${prefix}/${name}` : name;
+
+      if (depth === parts.length - 1) {
+        level.push({ kind: 'file', name, path: file.path, step });
+        continue;
+      }
+
+      let dir = level.find((node) => node.kind === 'dir' && node.name === name);
+      if (!dir) {
+        dir = { kind: 'dir', name, path: prefix, step, children: [] };
+        level.push(dir);
+      }
+      dir.step = Math.min(dir.step, step);
+      level = (dir as Extract<Node, { kind: 'dir' }>).children;
+    }
+  }
+
+  const sort = (nodes: Node[]): Node[] =>
+    nodes
+      .map((node) => (node.kind === 'dir' ? { ...node, children: sort(node.children) } : node))
+      // Каталоги выше файлов, дальше по алфавиту: так же, как их показывает
+      // любой файловый менеджер, и читателю не надо привыкать заново.
+      .sort((a, b) =>
+        a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === 'dir' ? -1 : 1,
+      );
+
+  return sort(roots);
+}
+
+const nodes = build(tree.files);
+---
+
+<div class="editor" data-editor>
+  <nav class="editor__tree" aria-label={t('lesson.files')}>
+    <p class="editor__root">{tree.root}/</p>
+    {
+      /* Рекурсия в Astro-шаблоне делается через компонент, а компонент ради
+         одного списка — лишний файл. Поэтому дерево разворачивается заранее в
+         плоский список со своей глубиной: разметка получается та же. */
+      (function flatten(list: Node[], depth = 0): { node: Node; depth: number }[] {
+        return list.flatMap((node) => [
+          { node, depth },
+          ...(node.kind === 'dir' ? flatten(node.children, depth + 1) : []),
+        ]);
+      })(nodes).map(({ node, depth }) =>
+        node.kind === 'dir' ? (
+          <p
+            class="editor__dir"
+            style={`--depth: ${depth}`}
+            data-appears={node.step}
+            hidden={node.step > 0}
+          >
+            {node.name}/
+          </p>
+        ) : (
+          <button
+            class="editor__file"
+            type="button"
+            style={`--depth: ${depth}`}
+            data-file={node.path}
+            data-appears={node.step}
+            hidden={node.step > 0}
+          >
+            {node.name}
+          </button>
+        ),
+      )
+    }
+  </nav>
+
+  <div class="editor__panes">
+    {
+      tree.files.map((file) => (
+        <div class="editor__pane" data-pane={file.path} hidden>
+          <div class="editor__path">{tree.root}/{file.path}</div>
+          <Code code={file.code} lang={(file.lang ?? 'text') as any} {...shikiOptions} />
+        </div>
+      ))
+    }
+  </div>
+</div>
+
+<script>
+  /**
+   * Дерево растёт вместе с разбором, а выбор файла остаётся за читателем.
+   *
+   * Шаг открывает свой файл — тот, о котором он говорит. Но если читатель
+   * открыл другой, следующий шаг его выбор не отменяет: у шага без своего файла
+   * в карте `open` открытым остаётся то, что было.
+   */
+  const editor = document.querySelector<HTMLElement>('[data-editor]');
+  const player = document.querySelector<HTMLElement>('[data-player]');
+
+  if (editor && player) {
+    const open = JSON.parse(player.dataset.editorOpen || '{}') as Record<string, string>;
+    const order = JSON.parse(player.dataset.editorOrder || '[]') as string[];
+    const panes = [...editor.querySelectorAll<HTMLElement>('[data-pane]')];
+    const files = [...editor.querySelectorAll<HTMLElement>('[data-file]')];
+    const rows = [...editor.querySelectorAll<HTMLElement>('[data-appears]')];
+
+    const show = (path: string) => {
+      for (const pane of panes) pane.hidden = pane.dataset.pane !== path;
+      for (const file of files) {
+        file.classList.toggle('is-open', file.dataset.file === path);
+        file.setAttribute('aria-current', String(file.dataset.file === path));
+      }
+    };
+
+    const grow = (index: number) => {
+      for (const row of rows) row.hidden = Number(row.dataset.appears) > index;
+    };
+
+    for (const file of files) {
+      file.addEventListener('click', () => show(file.dataset.file!));
+    }
+
+    const goTo = (id: string) => {
+      const index = order.indexOf(id);
+      if (index === -1) return;
+      grow(index);
+      // Файл шага открывается только если он уже появился: иначе шаг показал бы
+      // содержимое файла, которого в дереве ещё нет.
+      const path = open[id];
+      if (path) show(path);
+    };
+
+    goTo(player.dataset.stepId || order[0]);
+    player.addEventListener('why:step', (event) => {
+      goTo((event as CustomEvent<{ id: string }>).detail.id);
+    });
+  }
+</script>

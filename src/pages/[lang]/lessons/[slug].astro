@@ -101,6 +101,7 @@ const siblingHref = (entry: CollectionEntry<'lessons'>) =>
       deck={deck.default}
       flow={deck.flow}
       likec4={deck.likec4}
+      tree={deck.tree}
       notes={notes}
       comments={lesson.data.comments}
       drags={drags}
@@ -144,8 +145,14 @@ const siblingHref = (entry: CollectionEntry<'lessons'>) =>
    * бы дублировать в каждом упоминании, и они бы разъехались.
    */
   const prose = document.querySelector<HTMLElement>('.prose[data-terms]');
+  /**
+   * Термины помечаются и в тексте урока, и в нарративе шагов: правило про одно
+   * значение слова касается всей страницы, а не только вступления. Глоссарий
+   * при этом один и приезжает на `.prose`.
+   */
+  const scope = document.querySelector<HTMLElement>('article');
 
-  if (prose) {
+  if (prose && scope) {
     const glossary: Record<string, string> = JSON.parse(prose.dataset.terms || '{}');
     let open: HTMLElement | null = null;
 
@@ -154,7 +161,7 @@ const siblingHref = (entry: CollectionEntry<'lessons'>) =>
       open = null;
     };
 
-    prose.querySelectorAll<HTMLElement>('[data-term]').forEach((el, i) => {
+    scope.querySelectorAll<HTMLElement>('[data-term]').forEach((el, i) => {
       const definition = glossary[el.dataset.term!];
       // Слова без определения остаются обычным текстом: пунктир обещает
       // расшифровку, и пустой тултип это обещание нарушал бы.

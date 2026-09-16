@@ -4,11 +4,13 @@ import { codeTransformers } from '../code/shiki';
 import { inlineMarkdown } from '../inline-markdown';
 import FlowDiagram from './FlowDiagram';
 import LikeC4Stage from './LikeC4Stage';
+import FileEditor from './FileEditor.astro';
 import CodePanel from './CodePanel.astro';
 import { useTranslations, type Locale } from '../i18n/ui';
 import type { CodeDeck } from '../code/types';
 import type { FlowSpec } from '../code/flow';
 import type { LikeC4Spec } from '../code/likec4';
+import type { FileTreeSpec } from '../code/tree';
 
 interface NarrationStep {
   id: string;
@@ -27,6 +29,12 @@ interface Props {
    * взаимно исключающие: полотно на сцене одно, и двум схемам на нём тесно.
    */
   likec4?: LikeC4Spec;
+  /**
+   * Правая половина разбора — редактор с деревом файлов, а не панель кода на
+   * каждом шаге. Дерево заполняется по шагам, и файл остаётся на месте, когда
+   * шаг сменился: урок про раскладку сервиса читается только так.
+   */
+  tree?: FileTreeSpec;
   /** Локализованные тексты пометок поверх схемы. */
   notes?: { step: string; level: number; text: string }[];
   /** Локализованные тексты комментариев к коду. */
@@ -37,7 +45,7 @@ interface Props {
   labels?: Record<string, string>;
 }
 
-const { lang, steps, deck, flow, likec4, notes = [], comments = {}, drags = [], labels = {} } = Astro.props;
+const { lang, steps, deck, flow, likec4, tree, notes = [], comments = {}, drags = [], labels = {} } = Astro.props;
 
 if (flow && likec4) {
   throw new Error('StepPlayer: flow и likec4 вместе — на сцене одно полотно');
@@ -115,8 +123,15 @@ const shikiOptions = {
 ---
 
 <section
-  class:list={['player', stage && 'player--diagram', stage && 'player--scroll']}
+  class:list={[
+    'player',
+    stage && 'player--diagram',
+    stage && 'player--scroll',
+    tree && 'player--editor',
+  ]}
   data-player
+  data-editor-open={tree && JSON.stringify(tree.open)}
+  data-editor-order={tree && JSON.stringify(merged.map((step) => step.id))}
   aria-label={t('lesson.walkthrough')}
 >
   <div class="player__body">
@@ -136,6 +151,14 @@ const shikiOptions = {
             <LikeC4Stage client:visible views={likec4!.views} firstStep={merged[0].id} />
           )}
         </figure>
+      )
+    }
+
+    {
+      tree && (
+        <aside class="player__editor">
+          <FileEditor lang={lang} tree={tree} order={merged.map((step) => step.id)} />
+        </aside>
       )
     }
 
@@ -181,6 +204,7 @@ const shikiOptions = {
           );
 
           const panel = (i: number) =>
+            !tree &&
             merged[i].panel?.code && (
               <CodePanel
                 lang={lang}

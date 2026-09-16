@@ -1780,3 +1780,130 @@ main:focus {
      события мыши проходят сквозь неё, иначе над ней мёртвая зона прокрутки. */
   pointer-events: none;
 }
+
+/* ---------- Редактор с деревом файлов ---------- */
+
+/* Разбор про раскладку сервиса: слева текст, справа редактор, который стоит на
+   месте и заполняется по шагам. Пропорции те же, что у шага с панелью кода, —
+   иначе два разбора на одном сайте читались бы по-разному. */
+.player--editor .player__body {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  align-items: start;
+}
+
+/* Редактор объявлен в разметке раньше шагов: без JS читатель видит сначала
+   дерево целиком, а потом текст, и это верный порядок. С сеткой он встаёт
+   во вторую колонку. */
+.player--editor .player__editor {
+  position: sticky;
+  top: 1rem;
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.player--editor .player__steps {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+/* Панели кода в этом режиме нет, поэтому шаг — одна колонка на всю ширину
+   своей половины, а не 0.85 от неё. */
+.player--editor .step {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (max-width: 52rem) {
+  .player--editor .player__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .player--editor .player__editor {
+    position: static;
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .player--editor .player__steps {
+    grid-column: 1;
+    grid-row: 2;
+  }
+}
+
+.editor {
+  display: grid;
+  /* Высота фиксированная снизу: в начале разбора в дереве один файл, и коробка
+     в три строки читалась бы как обрезанная панель, а не как редактор. */
+  min-height: 16rem;
+  grid-template-columns: minmax(0, 12rem) minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--code-bg, var(--bg));
+}
+
+.editor__tree {
+  padding: 0.6rem 0.4rem;
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  max-height: 70vh;
+}
+
+.editor__root,
+.editor__dir,
+.editor__file {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0.18rem 0.4rem 0.18rem calc(0.4rem + var(--depth, 0) * 0.85rem);
+  border: 0;
+  background: none;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  text-align: left;
+  color: var(--muted);
+}
+
+.editor__root {
+  padding-left: 0.4rem;
+  color: var(--fg);
+}
+
+.editor__file {
+  cursor: pointer;
+  border-radius: 5px;
+  color: var(--fg);
+}
+
+.editor__file:hover {
+  background: color-mix(in srgb, var(--muted) 14%, transparent);
+}
+
+/* Открытый файл: тем же способом, каким редактор показывает активную вкладку —
+   заливкой, а не только цветом текста. */
+.editor__file.is-open {
+  background: color-mix(in srgb, var(--accent, var(--muted)) 16%, transparent);
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.editor__panes {
+  overflow: auto;
+  max-height: 70vh;
+}
+
+.editor__path {
+  padding: 0.45rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.editor__panes pre {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}

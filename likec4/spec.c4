@@ -26,7 +26,7 @@ specification {
   element service {
     style {
       shape rectangle
-      size sm
+      size xs
     }
   }
 
@@ -57,7 +57,7 @@ specification {
     style {
       shape person
       color muted
-      size sm
+      size xs
     }
   }
 
@@ -65,7 +65,7 @@ specification {
     style {
       shape storage
       color muted
-      size sm
+      size xs
     }
   }
 
@@ -73,7 +73,7 @@ specification {
     style {
       shape queue
       color muted
-      size sm
+      size xs
     }
   }
 
@@ -82,7 +82,7 @@ specification {
       shape rectangle
       color muted
       border dashed
-      size sm
+      size xs
     }
   }
 

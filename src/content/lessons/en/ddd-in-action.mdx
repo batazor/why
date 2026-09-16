@@ -1,44 +1,61 @@
 ---
 title: DDD in action
-description: One request, followed from the edge of a bounded context down to the transport that answers it.
+description: ''
 problem: >-
-  Every level of a service decides something. When it is not written down which
-  level decides what, the rule ends up in whichever function ran first — and in
-  the next entry point nobody remembers it.
-tags: [ddd, architecture, boundaries]
+  Every service is arranged its own way: its own directory layout, its own words
+  for the same things, its own answer to a problem already solved twice next
+  door. What you know about one service does not carry to the next — not for the
+  author, not at review, not for whoever arrives a year later.
+tags: [ddd]
 order: 4
 deck: ddd-in-action
 draft: true
 terms:
+  DDD: >-
+    Domain-Driven Design. A way to describe a service in the words of its
+    domain, and to agree on what each of its levels decides.
+  ubiquitous language: >-
+    One set of words for the whole context: a word has one meaning, and the
+    code, the events, the API and the people all spell it the same way.
   bounded context: >-
     The stretch of a system inside which one word has one meaning. Outside it
     the same word may mean something else, and the translation happens at the
     border.
-  opaque id: >-
-    An identifier a consumer may store and compare but never read anything out
-    of. It says which user, and nothing about them.
+  aggregate: >-
+    A piece of state that changes as a whole and by its own rules. The
+    transaction boundary: nothing outside can reach past it.
+  use case: >-
+    One reason the service does something: read, check, change, announce. The
+    order of the steps and nothing beyond it.
+  adapter: >-
+    The translation between the service and what is outside it: a database, a
+    queue, somebody else's API. No rules live here, only translation.
+  transport: >-
+    The edge of the service: how a request arrives and which code answers it.
+    No decision about the domain is made here.
 steps:
-  - id: context
-    title: A context is a decision about ownership
+  - id: language
+    title: The ubiquitous language
     narration: >-
-      `auth` owns two things: who somebody is, and whether they are still logged
-      in. It is the only service in the estate that stores a credential, and the
-      only one allowed to mint or revoke a session. Now read the second half of
-      the file — it is the longer half. No profiles, no addresses, no roles: each
-      of those is a real requirement somewhere, and a decision was made that it
-      is not here. A boundary is that list, not the directory the code sits in.
-      Look at what crosses it on the diagram. Three questions go in — a login,
-      `validateSession`, and the risk service `auth` asks before it issues
-      anything — and facts come out onto the bus. `cart` never asks about a
-      password: it holds an opaque user id and one question, "is this token
-      still good?". Everything else about a customer, the shop keeps itself.
+      The first thing a service pins down is its words. A word inside the
+      context has one meaning, and everything spells it the same way: the code,
+      the events, the API and the person on the call. The glossary is a file
+      next to the code rather than a page in a wiki: a page is edited apart from
+      the code, and six months later it lies. The rule is simple — a word that
+      is not in the glossary is not in the code either. Name it first, write it
+      after.
 ---
 
-The walkthrough follows one service, [examples/auth](https://github.com/shortlink-org/portolan/tree/main/examples/auth),
-from the edge of its <span data-term="bounded context">bounded context</span>
-down to the code it answers with. At every level it asks the same question:
-what is this level allowed to decide?
-
-Nothing outside that boundary ever sees a credential. Other contexts keep their
-own view of a customer and point at this one with an
-<span data-term="opaque id">opaque id</span>.
+**<span data-term="DDD">DDD</span>** answers that with a single agreement: a
+service has levels, and each level decides exactly one thing. The
+<span data-term="bounded context">bounded context</span> — what the service
+owns and which words it uses for it. The
+<span data-term="aggregate">aggregate</span> — which states are possible and
+which transition between them is legal. The
+<span data-term="use case">use case</span> — in what order that happens and who
+it calls to do it. The <span data-term="adapter">adapter</span> — how the same
+thing sits in a database and travels over the network. The
+<span data-term="transport">transport</span> — which code to answer with. The
+agreement is the same for every service, so the next service reads like the
+last one, and a known problem gets its known answer: it is immediately clear
+which level it lives on and where to put it.
