@@ -2,8 +2,8 @@
 title: Why discounts need a floor
 description: Each promo is sane on its own. Nobody checks the pairs, and there are hundreds.
 problem: >-
-  Two promos landed on the same item and sold it below what we paid for it. Both
-  were approved, both work correctly. Nobody ever added that pair up.
+  Two promos landed on the same item and sold it below what we paid. Both were
+  approved. Both work correctly. Nobody ever added that pair up.
 tags: [lean, pricing, invariants]
 order: 3
 deck: discount-floor
@@ -24,15 +24,15 @@ steps:
   - id: item
     title: An item has two prices
     narration: >-
-      One is what we sell it for, the other is what we paid. The second usually
-      lives in a different system — procurement, the ERP, a supplier feed. The
-      pricing engine does not see it. Everything else grows from there.
+      One is what we sell it for. The other is what we paid, and it lives
+      somewhere else: in procurement, in the ERP, in a supplier feed. The pricing
+      engine never sees the second one.
     note: An item has two prices. The engine sees one.
   - id: promo
     title: Marketing sets up the mechanics
     narration: >-
-      A percentage and a flat amount. Both are configured in an admin panel. No
-      deploy, no review, no developer involved.
+      A percentage and a flat amount. Marketing configures both in an admin
+      panel. No deploy, no code review.
     note: Promos ship without a deploy or a review.
   - id: engine
     title: How they are applied
@@ -44,7 +44,7 @@ steps:
     title: One promo
     narration: >-
       Twenty percent off. Forty against a cost of thirty-two. Nothing to check
-      here - you can see it.
+      here. You can see it.
     note: One promo. The rule is checked by eye.
   - id: stack
     title: The second one
@@ -59,7 +59,7 @@ steps:
   - id: clamp
     title: Clamp it at cost
     narration: >-
-      This is the first fix anyone reaches for. The customer pays 32.00, the
+      This is the first fix anyone reaches for. The customer pays 32.00 and the
       incident is closed. Three numbers under the code: 3200 paid, 1800 actually
       discounted, 4000 in the report. The report asks the promo engine, not the
       receipt. The money stopped leaking and the books started lying.
@@ -67,10 +67,10 @@ steps:
   - id: rule
     title: Write the whole rule down
     narration: >-
-      Any item, any set of promos. Lean does not answer "could not prove it" - it
-      answers "false", and demands the pair that shows it. The pair goes into the
-      build and stays there. This is no longer a suspicion.
-    note: Not unproven — disproven, with the pair attached.
+      Any item, any set of promos. Lean does not answer "could not prove it". It
+      answers "false", and it demands the pair that shows it. The pair goes into
+      the build and stays there. This is no longer a suspicion.
+    note: Not unproven. Disproven, with the pair attached.
   - id: budget
     title: One shared pool
     narration: >-
@@ -110,12 +110,12 @@ quiz:
 ---
 
 Discount engines do not fail because a mechanic is wrong. They fail because
-mechanics multiply and nobody owns their combinations.
+mechanics pile up and nobody owns their combinations.
 
-Marketing sets up promos through an admin panel. No developer hears about it. The
-number of pairs grows quadratically; the number of tests does not.
+Marketing sets up promos through an admin panel. No developer hears about it.
+The number of pairs grows quadratically. The number of tests does not.
 
-The damage is quiet - not an exception, a sale. It surfaces either at month end,
+The damage is quiet. You get a sale, not an exception. It surfaces at month end
 in margin per SKU, or when a deal site finds the combination first.
 
 ## Where this shows up
@@ -125,10 +125,10 @@ Anywhere rules compose and nobody owns the sum.
 
 ## What this is not
 
-This is not a claim that pricing cannot ship without a proof assistant. It is a
-claim about what kind of sentence you need. "This pair is fine" is a test, and
-there will never be enough of them. "No set of promos takes the price below cost"
-is a different sentence, and it is the one the business meant.
+You can ship pricing without a proof assistant. The question is what kind of
+sentence you need. "This pair is fine" is a test, and there will never be enough
+of them. "No set of promos takes the price below cost" is a different sentence,
+and it is the one the business meant.
 
 The `Pricing.lean` file from this lesson compiles as a whole: Lean 4.34, no
 errors. The numbers in the output are what the compiler printed.
