@@ -1,6 +1,6 @@
 ---
 title: Why circuit breakers
-description: What retries do to a dependency that is already down, and how to stop paying for it.
+description: What retries do to a dependency that is already down, and how to stop paying.
 problem: >-
   A dependency starts failing, every caller retries, and the retries become the
   outage. The service cannot recover because you never stop hitting it.
@@ -11,50 +11,49 @@ steps:
   - id: cascade
     title: Retries are load
     narration: >-
-      Five attempts per call sounds harmless until the dependency is failing all of
-      them. Then every caller multiplies its traffic by five, aimed at a service that
-      is already on the floor. The retry loop from the previous lesson is correct for
-      a lost response and catastrophic for an outage — the difference is that nobody
-      is coming back, so nothing ever drains the queue.
+      Five attempts per call sounds harmless until the dependency fails all five. Then
+      every caller multiplies its own traffic by five and aims it at a service that is
+      already down. The retry loop from the previous lesson is right for a lost
+      response. During an outage no attempt ever succeeds, so nothing drains.
     note: >-
       The retries are the outage now.
   - id: closed
     title: A switch in front of the call
     narration: >-
-      A circuit breaker is a small state machine wrapped around the call. In Closed
-      it does nothing except count failures. Three numbers define its whole behaviour,
-      and only one of them is really about failure — the other two decide how fast you
-      are willing to find out that the dependency came back.
+      A circuit breaker is a small state machine wrapped around the call. In Closed it
+      only counts failures. Three numbers define the rest of its behaviour. Only one is
+      about failure. The other two decide how fast you want to learn that the
+      dependency came back.
     note: >-
       Closed only counts. Three numbers do the rest.
   - id: open
     title: Open — stop asking
     narration: >-
-      Past the threshold the breaker flips to Open and every call fails instantly,
-      without touching the network. This is the part people find uncomfortable: you are
-      deliberately failing requests that might have succeeded. That is the trade. The
-      dependency gets the one thing it needs to recover, which is silence, and your own
-      threads stop piling up on a call that was going to time out anyway.
+      Past the threshold the breaker flips to Open. Every call fails at once, without
+      touching the network. This is the uncomfortable part: you are dropping requests
+      that might have worked. That is the trade. The dependency gets silence, which is
+      what it needs to come back. Your threads stop piling up on a call that was going
+      to time out anyway.
     note: >-
       You are failing calls on purpose. That is the trade.
   - id: halfopen
     title: Half-open — ask once
     narration: >-
-      After the cooldown the breaker does not simply reopen the floodgates. It moves to
-      Half-open and lets exactly one request through. Skipping this state is the classic
-      mistake: the moment the cooldown expires, the full traffic hits a service that has
-      barely stood up, it falls over again, and you have built an oscillator.
+      After the cooldown the breaker does not open the floodgates. It moves to Half-open
+      and lets exactly one request through. Skipping this state is the classic mistake.
+      The cooldown expires, the full traffic hits a service that has barely stood up, it
+      falls over again, and now you have an oscillator.
     note: >-
       One request asks the question, not the full traffic.
   - id: recover
     title: The probe decides
     narration: >-
-      One probe, two outcomes. If it succeeds the breaker closes and the counter resets.
-      If it fails the breaker goes straight back to Open and the cooldown starts over —
-      note that a single failure is enough here, unlike in Closed where it takes five.
-      Half-open is a question, not a trial period.
+      One probe, two outcomes. It succeeds and the breaker closes, counter reset. It
+      fails and the breaker goes straight back to Open, cooldown from the start. One
+      failure is enough here, while Closed takes five. Half-open is a question, not a
+      trial period.
     note: >-
-      One failure is enough here — unlike in Closed.
+      One failure is enough here, unlike in Closed.
 quiz:
   - question: What does a breaker in the Open state do to an incoming call?
     options:
@@ -63,8 +62,8 @@ quiz:
       - Sends it with a shorter timeout
     answer: 1
     explanation: >-
-      Open means fail fast. Queuing would keep the caller's threads occupied, which is
-      exactly the resource exhaustion the breaker exists to prevent.
+      Open means fail fast. A queue would keep the caller's threads busy, which is the
+      resource exhaustion the breaker exists to prevent.
   - question: Why go through Half-open instead of straight back to Closed?
     options:
       - To give the metrics time to settle
@@ -72,27 +71,27 @@ quiz:
       - Because Closed requires a manual reset
     answer: 1
     explanation: >-
-      Returning the whole load at once to a service that just came up knocks it over
-      again, and the breaker starts oscillating. One probe asks the question cheaply.
+      Send the whole load back to a service that just came up and it falls over again,
+      and the breaker starts oscillating. One probe asks the same question cheaply.
 ---
 
-Retrying a failed call is usually right. Retrying a call to a service that is down is
-how a partial failure becomes a total one — every caller politely multiplies its own
-traffic at the exact moment the target has the least capacity to absorb it.
+Retrying a failed call is usually right. Retrying a call to a service that is down is how
+a partial failure becomes a total one. Every caller politely multiplies its own traffic at
+the moment the target can absorb it least.
 
-A circuit breaker is the thing that notices and stops. It is not error handling; it is
-load shedding, applied by the caller, on behalf of the callee.
+A circuit breaker is the thing that notices and stops. It is load shedding, applied by the
+caller on behalf of the callee.
 
 ## The cost you are accepting
 
-A breaker will reject calls that would have worked. Right after the threshold trips,
-some fraction of the dependency is still healthy, and you are failing those requests too.
-You accept that because the alternative — holding threads open on a call that will time
-out — takes your own service down alongside the one you were calling.
+A breaker rejects calls that would have worked. Right after the threshold trips, part of
+the dependency is still healthy, and you are failing those requests too. You accept that
+because the alternative takes your own service down with the one you were calling: threads
+held open on a call that will time out anyway.
 
 ## Where it does not belong
 
-Do not put a breaker in front of a call whose failure you cannot do anything about. If
-the only response to `CircuitOpenError` is to propagate it, you have added a state
-machine and changed nothing. Breakers pay off where there is a fallback: a cache, a
-queue, a degraded response, or a second provider.
+Do not put a breaker in front of a call whose failure you cannot act on. If the only
+response to `CircuitOpenError` is to pass it up the stack, you have added a state machine
+and changed nothing. Breakers pay off where there is a fallback: a cache, a queue, a
+degraded response, a second provider.
