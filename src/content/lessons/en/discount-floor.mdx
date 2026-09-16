@@ -1,0 +1,109 @@
+---
+title: Why discounts need a floor
+description: Every promo is sane on its own. Nobody tests the pairs, and there are hundreds of them.
+problem: >-
+  Two promotions, each approved and each reasonable, land on the same item and
+  sell it below what you paid for it. No line of code was wrong — that pair was
+  simply never added up.
+tags: [lean, pricing, invariants]
+order: 3
+deck: discount-floor
+steps:
+  - id: one
+    title: One promo, and you can see the rule
+    narration: >-
+      A single mechanic is easy to reason about: list price, one percentage off,
+      and a human can check that the result stays above what the item cost us.
+      The rule is never written down anywhere, because with one promo it does not
+      need to be.
+    note: One promo. The rule is checked by eye.
+  - id: stack
+    title: The second one arrives three weeks later
+    narration: >-
+      Both promos are approved, both are tested, and each is correct. What nobody
+      tested is the pair — and with thirty active promotions there are 435 pairs
+      and four thousand triples, changing every week without a single deploy. This
+      one sells a 32.00 item for 10.00.
+    note: Each promo is fine. The pair is not.
+  - id: clamp
+    title: The fix everyone reaches for first
+    narration: >-
+      Clamp the result at cost. The customer now pays 32.00 and the incident is
+      closed. Look at the three numbers though: the customer paid 32.00, the
+      discount actually given was 18.00, and the report still says 40.00, because
+      it asks the promo engine rather than the receipt. The money stopped leaking
+      and the books started lying.
+    note: The number is fixed. The report is not.
+  - id: rule
+    title: Write the rule down as a claim
+    narration: >-
+      Not a test on a known pair - a claim about every item and every set of
+      promos. And the first thing that claim buys you is bad news: Lean does not
+      merely fail to prove it, it proves the opposite, and the counterexample
+      becomes part of the build. You now know the model is wrong rather than
+      suspecting it.
+    note: Not unproven — disproven, with the pair attached.
+  - id: budget
+    title: Make the promos share a budget
+    narration: >-
+      The margin is 18.00, and that is the whole pool the promos have. Each one
+      takes what it asks for or what is left, whichever is smaller. Normal cases
+      are untouched — a lone 20% still gives 40.00 — and the catastrophic set now
+      lands exactly on the floor. The proof is one line, because the rule is no
+      longer something we check: it is something the model cannot break.
+    note: Discounts spend margin. There is no more to spend.
+  - id: evolve
+    title: The next mechanic cannot sneak in
+    narration: >-
+      Marketing asks for cashback. The new mechanic does not silently default to
+      something - it simply does not compile until someone says what it takes out
+      of the pool. That is the difference the whole lesson is about: the question
+      is asked at the moment the mechanic is added, not during the incident.
+    note: A new mechanic must declare its share.
+quiz:
+  - question: Why does clamping the total at cost not actually fix the problem?
+    options:
+      - It is too slow on large carts
+      - The paid amount and the reported discount stop agreeing
+      - Clamping only works for percentage promos
+    answer: 1
+    explanation: >-
+      The customer pays 32.00 and the real discount is 18.00, but the promo engine
+      still reports 40.00. The leak moves from the payment into the accounting,
+      where it is much harder to notice.
+  - question: What makes the budget version impossible to break?
+    options:
+      - It checks the total after applying every promo
+      - The promos can only spend a pool that equals the margin
+      - It rejects promos larger than 50%
+    answer: 1
+    explanation: >-
+      The final price is cost plus whatever is left of the pool, so it is at least
+      cost no matter what the promos do. That is why the proof is a single line -
+      there is nothing left to verify.
+---
+
+Discount engines fail in a particular way. Not because a mechanic is wrong, but
+because mechanics multiply and nobody owns their combinations. Marketing adds
+promos through an admin panel, without a deploy and without a review, and the
+number of pairs grows quadratically while the number of tests stays flat.
+
+The damage is quiet: you do not get an exception, you get a sale. It is noticed
+when someone looks at margin by SKU at the end of the month, or when a deal site
+finds the combination first and posts it.
+
+## Where this shows up
+
+Anywhere rules compose without an owner: promotions, shipping-cost rules, tariff
+plans, loyalty tiers, commission schedules for marketplaces.
+
+## What this is not
+
+This is not an argument that you cannot ship pricing without a proof assistant.
+It is an argument about what kind of statement you need. "This pair is fine" is a
+test, and there will never be enough of them. "No set of promos can take the price
+below cost" is a different kind of sentence, and it is the one the business
+actually meant.
+
+All the code here is compiled by Lean 4.34, and every number in the output is real
+compiler output.

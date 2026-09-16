@@ -11,6 +11,8 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { load as parseYaml } from 'js-yaml';
+import { createHighlighter } from 'shiki';
+import { transformerNotationHighlight, transformerNotationDiff, transformerNotationFocus } from '@shikijs/transformers';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const lessonsDir = path.join(root, 'src/content/lessons');
@@ -23,6 +25,9 @@ const NOTE_LIMIT = 80;
 
 const errors = [];
 const warnings = [];
+
+/** Все сниппеты колод — их прогоняет подсветка в самом конце. */
+const snippets = [];
 
 function frontmatter(source, where) {
   const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(source);
@@ -143,6 +148,12 @@ for (const [slug, perLocale] of bySlug) {
   // проза, значит переводится и обязан быть в каждой локали.
   const annotatedSteps = (deckModule.flow?.annotations ?? []).map((a) => a.step);
 
+  for (const step of deck) {
+    if (step.code && step.lang) {
+      snippets.push({ deck: deckName, step: step.id, lang: step.lang, code: step.code });
+    }
+  }
+
   // Схема разбора: шаги те же, что в колоде.
   if (deckModule.flow) {
     const unknownNotes = annotatedSteps.filter((id) => !deckIds.includes(id));
@@ -232,6 +243,39 @@ for (const [slug, perLocale] of bySlug) {
       );
     }
   }
+}
+
+/**
+ * Маркеры вроде [!code highlight] обрабатывает подсветка, и обрабатывает не
+ * всегда: TextMate-грамматика Lean не выделяет хвостовой --комментарий в
+ * отдельный токен, если в строке есть скобка, и маркер молча утекает в текст
+ * страницы. Единственный надёжный способ это поймать — прогнать подсветку
+ * по-настоящему и посмотреть, что осталось.
+ */
+if (snippets.length) {
+  const langs = [...new Set(snippets.map((s) => s.lang))];
+  const highlighter = await createHighlighter({ themes: ['github-light'], langs });
+  const transformers = [
+    transformerNotationHighlight(),
+    transformerNotationDiff(),
+    transformerNotationFocus(),
+  ];
+
+  for (const snippet of snippets) {
+    if (!snippet.code.includes('[!code')) continue;
+    const html = highlighter.codeToHtml(snippet.code, {
+      lang: snippet.lang,
+      theme: 'github-light',
+      transformers,
+    });
+    if (html.includes('[!code')) {
+      errors.push(
+        `колода "${snippet.deck}", шаг "${snippet.step}": маркер [!code …] утёк в текст — ` +
+          `для ${snippet.lang} ставь его отдельной строкой перед целевой`,
+      );
+    }
+  }
+  highlighter.dispose();
 }
 
 for (const warning of warnings) console.warn(`warn  ${warning}`);
