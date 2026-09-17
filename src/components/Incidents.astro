@@ -92,7 +92,12 @@ const t = useTranslations(lang);
 }
 
 <script>
+  import { animate, inView, stagger } from 'motion';
+
   document.querySelectorAll<HTMLElement>('[data-incidents]').forEach((track) => {
+    // Тот же уговор, что и в плеере: при prefers-reduced-motion всё происходит
+    // мгновенно, а не «побыстрее».
+    const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const controls = track
       .closest('.incidents')!
       .querySelector<HTMLElement>('[data-controls]')!;
@@ -135,9 +140,30 @@ const t = useTranslations(lang);
       if (!more) return;
 
       const card = more.closest<HTMLElement>('.incident')!;
+      const text = card.querySelector<HTMLElement>('.incident__text')!;
+
+      // Высота снимается до переключения и после: у обрезанного текста она
+      // одна, у полного другая, и обе браузер считает сам. Замер «до» берётся
+      // с экрана, поэтому быстрый повторный клик подхватывает анимацию с того
+      // места, где её застали, а не прыгает.
+      const from = text.getBoundingClientRect().height;
+      text.style.height = '';
       const expanded = card.toggleAttribute('data-expanded');
+      const to = text.getBoundingClientRect().height;
+
       more.setAttribute('aria-expanded', String(expanded));
       more.textContent = expanded ? more.dataset.collapse! : more.dataset.expand!;
+
+      if (calm) return;
+      animate(
+        text,
+        { height: [`${from}px`, `${to}px`] },
+        { duration: 0.28, ease: [0.22, 1, 0.36, 1] },
+      ).finished.then(() => {
+        // Инлайновую высоту обязательно убрать: иначе карточка запомнит размер
+        // и перестанет перевёрстываться при изменении ширины окна.
+        text.style.height = '';
+      });
     });
 
     for (const arrow of arrows) {
@@ -187,5 +213,33 @@ const t = useTranslations(lang);
 
     paintArrows();
     paintClamps();
+
+    /**
+     * Появление ленты: карточки всплывают по очереди.
+     *
+     * Прячет их скрипт, а не стили: страница без JS обязана показать случаи, а
+     * `opacity: 0` в CSS оставил бы её с пустым местом на этом месте.
+     */
+    if (!calm) {
+      for (const card of cards) card.style.opacity = '0';
+      inView(
+        track,
+        () => {
+          animate(
+            cards,
+            { opacity: [0, 1], y: [12, 0] },
+            { duration: 0.45, delay: stagger(0.08), ease: [0.22, 1, 0.36, 1] },
+          ).finished.then(() => {
+            // Motion оставляет за собой инлайновый transform, а он перебивает
+            // подъём карточки под курсором — убираем, анимация своё отыграла.
+            for (const card of cards) {
+              card.style.opacity = '';
+              card.style.transform = '';
+            }
+          });
+        },
+        { amount: 0.2 },
+      );
+    }
   });
 </script>

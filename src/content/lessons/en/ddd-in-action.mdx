@@ -92,26 +92,41 @@ steps:
 import Levels from '../../../components/Levels.astro';
 
 <Levels
-  inbound="Send a request in at the top"
   levels={[
-    { key: 'transport', name: 'Transport', decides: 'which code to answer with' },
-    { key: 'adapter', name: 'Adapter', decides: 'how it is stored and sent' },
-    { key: 'usecase', name: 'Use case', decides: 'in what order, and who is called' },
-    { key: 'aggregate', name: 'Aggregate', decides: 'which states are possible' },
-    { key: 'context', name: 'Bounded context', decides: 'what we own and what we call it' },
+    {
+      key: 'transport',
+      name: 'Transport',
+      decides: 'which code to answer with',
+      text: 'The edge of the service. A request arrives over HTTP or off a queue and leaves as a response; here it becomes a call to a use case and comes back. Not one decision about the domain is made at this level — transport translates.',
+    },
+    {
+      key: 'adapter',
+      name: 'Adapter',
+      decides: 'how it is stored and sent',
+      text: 'Rows in tables, fields in a message, a call to the service next door. No rules here either, only the translation between what the service thinks and how that is stored and carried.',
+    },
+    {
+      key: 'usecase',
+      name: 'Use case',
+      decides: 'in what order, and who is called',
+      text: 'One reason the service does something: read, check, change, announce. The order of the steps and nothing beyond it — a use case does not decide what is legal, it asks the level below.',
+    },
+    {
+      key: 'aggregate',
+      name: 'Aggregate',
+      decides: 'which states are possible',
+      text: 'A piece of state that changes as a whole and by its own rules. Nothing outside can reach past it, which is also why it cannot be left in a state the domain does not allow.',
+    },
+    {
+      key: 'context',
+      name: 'Bounded context',
+      decides: 'what we own and what we call it',
+      text: 'The boundary inside which a word has one meaning. Everything else lives outside it and is translated at it — and that decision is made before all the others.',
+    },
   ]}
 >
 **<span data-term="DDD">DDD</span>** answers that with a single agreement: a
-service has levels, and each level decides exactly one thing. The
-<span data-term="bounded context" data-level="context">bounded context</span> — what the service
-owns and which words it uses for it. The
-<span data-term="aggregate" data-level="aggregate">aggregate</span> — which states are possible and
-which transition between them is legal. The
-<span data-term="use case" data-level="usecase">use case</span> — in what order that happens and who
-it calls to do it. The <span data-term="adapter" data-level="adapter">adapter</span> — how the same
-thing sits in a database and travels over the network. The
-<span data-term="transport" data-level="transport">transport</span> — which code to answer with. The
-agreement is the same for every service, so the next service reads like the
-last one, and a known problem gets its known answer: it is immediately clear
-which level it lives on and where to put it.
+service has levels, and each level decides exactly one thing. A request comes in
+at the top and goes through them in order; scroll on to see what each one
+decides.
 </Levels>

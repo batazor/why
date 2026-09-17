@@ -1,36 +1,32 @@
 ---
 /**
- * Уровни сервиса слоёным пирогом.
+ * Уровни сервиса: пирог справа, уровни слева, листаются прокруткой.
  *
- * Абзац рядом перечисляет пять уровней и то, что каждый решает. Список из пяти
- * пунктов в прозе читается как перечисление равноправных вещей, а они вложены
- * друг в друга: запрос входит сверху и проходит их по порядку. Пирог говорит
- * это одной картинкой, а рельса с номерами — что порядок именно такой.
+ * Пять уровней в одном абзаце читаются как перечисление равноправных вещей, а
+ * они вложены друг в друга, и запрос проходит их по порядку. Поэтому уровень
+ * здесь — шаг: пирог прилипает, читатель скроллит, слой загорается, и рядом
+ * появляется его текст. Тот же приём, которым устроен разбор ниже, — и по той
+ * же причине: порядок виден движением, а не только положением.
  *
- * Плашка нарисована тем же языком, что и остальная страница: белое поле,
- * волосяная рамка, цветная полоска слева — как у блока «Проблема». Объём даёт
- * скошенная верхняя грань и тень, а не заливка: градиентный пирог рядом с
- * такой типографикой выглядел бы наклейкой.
- *
- * Подписи приходят props'ами: файл общий для локалей, а подписи — проза.
- * Геометрия здесь, текст — в MDX той локали, где он к месту.
+ * Подписи и тексты приходят props'ами: файл общий для локалей, а проза
+ * переводится. Геометрия здесь, слова — в MDX той локали, где они к месту.
  */
 interface Props {
   levels: {
     /**
-     * Ключ уровня, одинаковый во всех локалях: по нему слой связан со словом
-     * в абзаце рядом (`data-level` на слове). Наведение на одно подсвечивает
-     * другое — иначе читателю приходится сверять их глазами по названию.
+     * Ключ уровня, одинаковый во всех локалях: по нему слой на пироге связан
+     * со своим шагом и со словом в абзаце-вступлении (`data-level` на слове).
      */
     key: string;
     name: string;
+    /** Строка на плашке: что уровень решает. */
     decides: string;
+    /** Текст шага: то же самое, но фразой. */
+    text: string;
   }[];
-  /** Подпись под картинкой: она же кнопка, запускающая проезд запроса. */
-  inbound?: string;
 }
 
-const { levels, inbound } = Astro.props;
+const { levels } = Astro.props;
 
 const SLAB = 56;
 const GAP = 12;
@@ -53,11 +49,11 @@ const railTo = midY(levels.length - 1);
 ---
 
 <div class="levels" data-levels>
-  <div class="levels__text">
+  <div class="levels__intro">
     <slot />
   </div>
 
-  <figure class="levels-cake">
+  <figure class="levels-cake" data-levels-cake>
     <svg
       viewBox={`0 0 ${WIDTH} ${height}`}
       role="img"
@@ -81,14 +77,7 @@ const railTo = midY(levels.length - 1);
           const y = TOP + i * (SLAB + GAP);
           const mid = midY(i);
           return (
-            <g
-              class="lvl"
-              style={`--i: ${i}`}
-              data-level={level.key}
-              tabindex="0"
-              role="button"
-              aria-label={`${level.name}: ${level.decides}`}
-            >
+            <g class="lvl" style={`--i: ${i}`} data-level={level.key}>
               {/* Верхняя грань рисуется первой: лицевая ложится поверх её
                   нижнего края, иначе он перечёркивает плашку. */}
               <path
@@ -113,114 +102,107 @@ const railTo = midY(levels.length - 1);
         })
       }
     </svg>
-
-    {
-      inbound && (
-        <figcaption>
-          <button class="levels-cake__run" type="button" data-run>
-            <span class="levels-cake__run-glyph" aria-hidden="true">
-              <svg viewBox="0 0 12 12"><path d="M4 2.5 9 6l-5 3.5z" /></svg>
-            </span>
-            {inbound}
-          </button>
-        </figcaption>
-      )
-    }
   </figure>
+
+  <ol class="levels__steps">
+    {
+      levels.map((level, i) => (
+        <li class="levels__step" data-level-step={level.key}>
+          <p class="levels__index">{i + 1}</p>
+          <h3 class="levels__name">{level.name}</h3>
+          <p class="levels__decides">{level.decides}</p>
+          <p class="levels__text">{level.text}</p>
+        </li>
+      ))
+    }
+  </ol>
 </div>
 
 <script>
+  import { animate } from 'motion';
+
   /**
-   * Три вещи, которых картинке не хватает статикой.
+   * Уровни листаются прокруткой: активен тот, чей текст дошёл до линии чтения.
    *
-   * 1. Слои появляются по одному, когда до них доскроллили: порядок сверху
-   *    вниз виден движением, а не только положением.
-   * 2. Наведение на слой подсвечивает парное слово в абзаце, и наоборот. Связь
-   *    между текстом и картинкой иначе остаётся на совести читателя.
-   * 3. Запрос проходит уровни по порядку: номер уровня загорается, рельса за
-   *    ним дорастает. Это то, что подпись говорит словами.
+   * Линия — верхняя треть экрана, то есть то место, куда смотрят при чтении;
+   * та же величина, что у разбора ниже. Активный слой загорается, рельса за
+   * ним дорастает, остальные приглушаются.
    *
-   * Всё это украшение: без JS картинка остаётся полной и читаемой, поэтому
-   * ничего не рисуется скриптом и ничего им не скрывается.
+   * Без JS видны все пять шагов и весь пирог: скрипт ничего не рисует и ничего
+   * не скрывает, он только отмечает активное.
    */
   const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   document.querySelectorAll<HTMLElement>('[data-levels]').forEach((root) => {
     const layers = [...root.querySelectorAll<SVGGElement>('.lvl')];
+    const steps = [...root.querySelectorAll<HTMLElement>('[data-level-step]')];
     const progress = root.querySelector<SVGLineElement>('[data-progress]');
-    const run = root.querySelector<HTMLButtonElement>('[data-run]');
-    /** Слова в абзаце рядом, помеченные тем же ключом уровня. */
     const words = new Map<string, HTMLElement[]>();
+    if (steps.length < 2) return;
 
-    root.querySelectorAll<HTMLElement>('.levels__text [data-level]').forEach((node) => {
+    root.querySelectorAll<HTMLElement>('.levels__intro [data-level]').forEach((node) => {
       const key = node.dataset.level!;
       words.set(key, [...(words.get(key) ?? []), node]);
     });
 
-    // 1. Появление по одному.
-    if (calm) {
-      root.classList.add('is-in');
-    } else {
-      const seen = new IntersectionObserver(
-        (entries) => {
-          for (const entry of entries) {
-            if (!entry.isIntersecting) continue;
-            root.classList.add('is-in');
-            seen.disconnect();
-          }
-        },
-        { threshold: 0.3 },
-      );
-      seen.observe(root);
-    }
+    root.classList.add('is-enhanced');
 
-    // 2. Связь слоя со словом.
-    const link = (key: string, on: boolean) => {
-      for (const layer of layers) {
-        if (layer.dataset.level === key) layer.classList.toggle('is-linked', on);
+    let active = -1;
+
+    const mark = (to: number) => {
+      if (to === active) return;
+      active = to;
+      const key = steps[to].dataset.levelStep!;
+
+      for (const layer of layers) layer.classList.toggle('is-lit', layer.dataset.level === key);
+      for (const [step, i] of steps.map((step, i) => [step, i] as const)) {
+        step.classList.toggle('is-active', i === to);
       }
-      for (const word of words.get(key) ?? []) word.classList.toggle('is-linked', on);
+      for (const [wordKey, nodes] of words) {
+        for (const word of nodes) word.classList.toggle('is-linked', wordKey === key);
+      }
+
+      // Рельса дорастает до активного номера: остаток прячется dashoffset'ом,
+      // потому что длина линии в SVG сама по себе не анимируется.
+      if (progress) {
+        const full = Number(getComputedStyle(progress).getPropertyValue('--rail')) || 0;
+        progress.style.strokeDashoffset = String(full - (full * to) / (steps.length - 1));
+      }
+
+      if (calm) return;
+      // Текст шага проявляется, а не просто меняет прозрачность: движение
+      // снизу вверх повторяет направление прокрутки, и шаг читается как
+      // пришедший, а не как подменённый.
+      const body = steps[to].querySelectorAll<HTMLElement>('.levels__name, .levels__decides, .levels__text');
+      body.forEach((node, i) => {
+        animate(
+          node,
+          { opacity: [0, 1], transform: ['translateY(10px)', 'translateY(0px)'] },
+          { duration: 0.42, delay: i * 0.06, easing: [0.22, 0.9, 0.24, 1] },
+        );
+      });
     };
 
-    for (const layer of layers) {
-      const key = layer.dataset.level!;
-      layer.addEventListener('pointerenter', () => link(key, true));
-      layer.addEventListener('pointerleave', () => link(key, false));
-      layer.addEventListener('focus', () => link(key, true));
-      layer.addEventListener('blur', () => link(key, false));
-    }
+    const readingTop = () => window.innerHeight * 0.34;
 
-    for (const [key, nodes] of words) {
-      for (const word of nodes) {
-        word.addEventListener('pointerenter', () => link(key, true));
-        word.addEventListener('pointerleave', () => link(key, false));
-      }
-    }
-
-    // 3. Проход запроса.
-    let running = false;
-    const travel = async () => {
-      if (running || calm || !progress) return;
-      running = true;
-      root.classList.add('is-running');
-
-      const full = Number(getComputedStyle(progress).getPropertyValue('--rail')) || 0;
-      const last = layers.length - 1;
-
-      for (const [i, layer] of layers.entries()) {
-        // Рельса дорастает до текущего номера: остаток прячется dashoffset'ом,
-        // потому что длина линии в SVG сама по себе не анимируется.
-        progress.style.strokeDashoffset = String(full - (full * i) / last);
-        layer.classList.add('is-lit');
-        await new Promise((done) => setTimeout(done, 320));
-        layer.classList.remove('is-lit');
-      }
-
-      progress.style.strokeDashoffset = String(full);
-      root.classList.remove('is-running');
-      running = false;
+    let frame = 0;
+    const follow = () => {
+      const boundary = readingTop();
+      let next = 0;
+      steps.forEach((step, i) => {
+        if (step.getBoundingClientRect().top <= boundary) next = i;
+      });
+      mark(next);
     };
 
-    run?.addEventListener('click', travel);
+    window.addEventListener(
+      'scroll',
+      () => {
+        cancelAnimationFrame(frame);
+        frame = requestAnimationFrame(follow);
+      },
+      { passive: true },
+    );
+    follow();
   });
 </script>
