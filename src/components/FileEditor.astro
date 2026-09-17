@@ -7,11 +7,14 @@ import type { FileTreeSpec } from '../code/tree';
 interface Props {
   lang: Locale;
   tree: FileTreeSpec;
+  /** Отрендеренные документы локали — для файлов дерева без кода. */
+  docs?: { path: string; Content: any }[];
   /** Порядок шагов разбора: по нему считается, что в дереве уже появилось. */
   order: string[];
 }
 
-const { lang, tree, order } = Astro.props;
+const { lang, tree, docs = [], order } = Astro.props;
+const doc = (path: string) => docs.find((item) => item.path === path)?.Content;
 const t = useTranslations(lang);
 
 const shikiOptions = {
@@ -124,12 +127,23 @@ const nodes = build(tree.files);
 
   <div class="editor__panes">
     {
-      tree.files.map((file) => (
-        <div class="editor__pane" data-pane={file.path} hidden>
-          <div class="editor__path">{tree.root}/{file.path}</div>
-          <Code code={file.code} lang={(file.lang ?? 'text') as any} {...shikiOptions} />
-        </div>
-      ))
+      tree.files.map((file) => {
+        const Document = doc(file.path);
+        return (
+          <div class="editor__pane" data-pane={file.path} hidden>
+            <div class="editor__path">{tree.root}/{file.path}</div>
+            {Document ? (
+              /* Документ показывается отрендеренным, а не исходником: таблица,
+                 ради которой он написан, в виде разметки не читается. */
+              <div class="editor__doc">
+                <Document />
+              </div>
+            ) : (
+              <Code code={file.code!} lang={(file.lang ?? 'text') as any} {...shikiOptions} />
+            )}
+          </div>
+        );
+      })
     }
   </div>
 </div>

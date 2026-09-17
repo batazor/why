@@ -1,6 +1,52 @@
 /**
- * По одному view на экран урока, которому нужна картинка.
- * Имя view совпадает с id шага в колоде: связь проверяет scripts/check-steps.mjs.
+ * По одному view на экран урока. Имя view совпадает с id шага в колоде:
+ * связь проверяет scripts/check-steps.mjs.
  */
 views {
+  /**
+   * Экран `boundary`: что такое ограниченный контекст.
+   *
+   * Полотно пустое намеренно. Разговор идёт о том, чем граница является, и
+   * первая карточка на нём появится только после того, как это сказано.
+   */
+  view boundary {
+    title 'An empty estate'
+  }
+
+  /**
+   * Экран `estate`: что есть в типовом магазине.
+   *
+   * Карточки без связей: кто кого зовёт — вопрос следующих экранов, а этот
+   * про то, что областей несколько и у каждой своя команда и свой словарь.
+   */
+  view estate {
+    title 'Contexts of an online shop'
+
+    include
+      shop,
+      billing,
+      delivery,
+      customers
+
+    autoLayout LeftRight
+  }
+
+  /**
+   * Экран `kinds`: core, supporting, generic.
+   *
+   * Здесь же появляется авторизация — пример контекста, который покупают:
+   * своя реализация не даёт магазину ничего, чего не даст чужая.
+   */
+  view kinds {
+    title 'Core, supporting, generic'
+
+    include
+      shop,
+      billing,
+      delivery,
+      customers,
+      auth
+
+    autoLayout LeftRight
+  }
 }

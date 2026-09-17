@@ -1,8 +1,33 @@
 /**
- * Оценка урока. Пока пустая: сервис, о котором идёт разбор, ещё не описан.
+ * Оценка типового интернет-магазина — та, на которой идёт разбор.
  *
- * Элементы появляются здесь по одному — ровно те, что видно на очередном
- * экране, и ни одного впрок.
+ * Растёт вместе с уроком: на каждом шаге здесь появляется ровно то, что видно
+ * на его схеме, и ни одного элемента впрок. Связей пока нет: первые экраны
+ * говорят о границах, а не о том, кто кого зовёт.
  */
 model {
+  shop = context 'Shop' {
+    #core
+    style { color core }
+  }
+
+  billing = context 'Billing' {
+    #core
+    style { color core }
+  }
+
+  delivery = context 'Delivery' {
+    #supporting
+    style { color supporting }
+  }
+
+  customers = context 'Customers' {
+    #supporting
+    style { color supporting }
+  }
+
+  auth = context 'Auth' {
+    #generic
+    style { color generic }
+  }
 }

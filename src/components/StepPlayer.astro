@@ -35,6 +35,8 @@ interface Props {
    * шаг сменился: урок про раскладку сервиса читается только так.
    */
   tree?: FileTreeSpec;
+  /** Отрендеренные документы локали для файлов дерева без кода. */
+  docs?: { path: string; Content: any }[];
   /** Локализованные тексты пометок поверх схемы. */
   notes?: { step: string; level: number; text: string }[];
   /** Локализованные тексты комментариев к коду. */
@@ -45,15 +47,42 @@ interface Props {
   labels?: Record<string, string>;
 }
 
-const { lang, steps, deck, flow, likec4, tree, notes = [], comments = {}, drags = [], labels = {} } = Astro.props;
+const { lang, steps, deck, flow, likec4, tree, docs = [], notes = [], comments = {}, drags = [], labels = {} } = Astro.props;
 
 if (flow && likec4) {
-  throw new Error('StepPlayer: flow и likec4 вместе — на сцене одно полотно');
+  throw new Error('StepPlayer: flow и likec4 вместе — схему рисует что-то одно');
 }
 
 // Обёртка сцены общая для обоих вариантов: высота, прокрутка, прилипание.
 // Отличается только то, что внутри полотна.
 const stage = flow ?? likec4;
+
+/**
+ * Какая половина разбора показывается на шаге: схема или редактор.
+ *
+ * Урок идёт сверху вниз и на разных уровнях смотрит на разное: границы
+ * контекстов — схемой, код внутри слайса — редактором. Держать для этого два
+ * плеера значило бы разорвать один разбор на два, поэтому панель одна, а шаг
+ * говорит, что в ней.
+ *
+ * Шаг объявляет это тем, что для него описано: свой view — схема, свой файл —
+ * редактор. Шаг без того и другого оставляет панель прежней.
+ */
+type Panel = 'diagram' | 'editor';
+
+const panelOf = (id: string): Panel | undefined =>
+  likec4?.views[id] || flow ? 'diagram' : tree?.steps[id] ? 'editor' : undefined;
+
+const panels = Object.fromEntries(
+  steps.map((step) => [step.id, panelOf(step.id)]).filter(([, kind]) => kind),
+) as Record<string, Panel>;
+
+// Панель на первом шаге ставится разметкой: без JS читатель видит ту же
+// половину, что и с ним, а не обе сразу.
+const firstPanel = panels[steps[0].id] ?? (tree ? 'editor' : 'diagram');
+
+/** Правая колонка нужна там, где есть редактор: коду нужна ширина. */
+const sideBySide = Boolean(tree);
 
 /**
  * Код в колоде общий для всех локалей, поэтому комментарии в нём — ключи.
@@ -129,40 +158,44 @@ const shikiOptions = {
     /* Скроллителлинг включает любая прилипшая половина разбора — схема или
        редактор: шаги листаются прокруткой, а половина следует за текстом. */
     (stage || tree) && 'player--scroll',
-    tree && 'player--editor',
+    sideBySide && 'player--editor',
   ]}
   data-player
+  data-panel={sideBySide ? firstPanel : undefined}
+  data-panels={sideBySide ? JSON.stringify(panels) : undefined}
   data-editor-steps={tree && JSON.stringify(tree.steps)}
   data-editor-order={tree && JSON.stringify(merged.map((step) => step.id))}
   aria-label={t('lesson.walkthrough')}
 >
   <div class="player__body">
-    {
-      stage && (
-        <figure class="player__stage" style={`--flow-height: ${stage.height}px`}>
-          {flow ? (
-            <FlowDiagram
-              client:visible
-              spec={flow}
-              firstStep={merged[0].id}
-              notes={notes}
-              drags={drags}
-              labels={labels}
-            />
-          ) : (
-            <LikeC4Stage client:visible views={likec4!.views} firstStep={merged[0].id} />
-          )}
-        </figure>
-      )
-    }
+    <div class:list={[sideBySide && 'player__panel']}>
+      {
+        stage && (
+          <figure class="player__stage" style={`--flow-height: ${stage.height}px`}>
+            {flow ? (
+              <FlowDiagram
+                client:visible
+                spec={flow}
+                firstStep={merged[0].id}
+                notes={notes}
+                drags={drags}
+                labels={labels}
+              />
+            ) : (
+              <LikeC4Stage client:visible views={likec4!.views} firstStep={merged[0].id} />
+            )}
+          </figure>
+        )
+      }
 
-    {
-      tree && (
-        <aside class="player__editor">
-          <FileEditor lang={lang} tree={tree} order={merged.map((step) => step.id)} />
-        </aside>
-      )
-    }
+      {
+        tree && (
+          <aside class="player__editor">
+            <FileEditor lang={lang} tree={tree} docs={docs} order={merged.map((step) => step.id)} />
+          </aside>
+        )
+      }
+    </div>
 
     <ol class="player__steps">
       {
@@ -353,6 +386,19 @@ const shikiOptions = {
 
     let index = 0;
     player.classList.add('is-enhanced');
+
+    /**
+     * Какая половина показывается на шаге. Шаг без своей панели оставляет
+     * прежнюю: два шага об одном уровне не должны дёргать её туда и обратно.
+     */
+    const panels = JSON.parse(player.dataset.panels || '{}') as Record<string, string>;
+    const showPanel = (id: string | undefined) => {
+      const kind = id ? panels[id] : undefined;
+      if (kind) player.dataset.panel = kind;
+    };
+    player.addEventListener('why:step', (event) => {
+      showPanel((event as CustomEvent<{ id: string }>).detail.id);
+    });
 
     function mark(to: number) {
       index = Math.max(0, Math.min(steps.length - 1, to));

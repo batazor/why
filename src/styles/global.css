@@ -1807,16 +1807,6 @@ main:focus {
   }
 }
 
-/* Редактор объявлен в разметке раньше шагов: без JS читатель видит сначала
-   дерево целиком, а потом текст, и это верный порядок. С сеткой он встаёт
-   во вторую колонку. */
-.player--editor .player__editor {
-  position: sticky;
-  top: 1rem;
-  grid-column: 2;
-  grid-row: 1;
-}
-
 .player--editor .player__steps {
   grid-column: 1;
   grid-row: 1;
@@ -1831,12 +1821,6 @@ main:focus {
 @media (max-width: 52rem) {
   .player--editor .player__body {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .player--editor .player__editor {
-    position: static;
-    grid-column: 1;
-    grid-row: 1;
   }
 
   .player--editor .player__steps {
@@ -1983,4 +1967,90 @@ main:focus {
   margin: 0;
   border: 0;
   border-radius: 0;
+}
+
+/* Документ в редакторе: отрендеренный markdown, а не исходник. Набор правил
+   компактный — панель узкая, и заголовки размером со страничные её ломают. */
+.editor__doc {
+  padding: 0.9rem 1.1rem 1.2rem;
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.editor__doc > :first-child {
+  margin-top: 0;
+}
+
+.editor__doc :is(h1, h2, h3) {
+  margin: 1.4rem 0 0.5rem;
+  font-size: 0.95rem;
+  line-height: 1.3;
+}
+
+.editor__doc h1 {
+  font-size: 1.05rem;
+}
+
+.editor__doc p {
+  margin: 0.6rem 0;
+}
+
+.editor__doc table {
+  width: 100%;
+  margin: 0.8rem 0 1rem;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.editor__doc :is(th, td) {
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.editor__doc th {
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.editor__doc code {
+  padding: 0.1em 0.3em;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--muted) 14%, transparent);
+}
+
+/* Правая половина держит две панели: схему и редактор. Обе стоят в одной
+   ячейке сетки, показывается объявленная шагом. */
+.player--editor .player__panel {
+  position: sticky;
+  top: 1rem;
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.player--editor[data-panel='editor'] .player__stage,
+.player--editor[data-panel='diagram'] .player__editor {
+  display: none;
+}
+
+@media (max-width: 52rem) {
+  .player--editor .player__panel {
+    position: static;
+    grid-column: 1;
+    grid-row: 1;
+  }
+}
+
+/* В боковой раскладке прилипает вся панель, а не схема внутри неё: правила
+   для полосы сверху здесь оставляют лишнюю линию под полотном и второй
+   sticky внутри sticky. */
+.player--editor .player__stage {
+  position: static;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
