@@ -1,4 +1,6 @@
 ---
+import { inlineMarkdown } from '../inline-markdown';
+
 /**
  * Уровни сервиса: пирог справа, уровни слева, листаются прокруткой.
  *
@@ -21,7 +23,10 @@ interface Props {
     name: string;
     /** Строка на плашке: что уровень решает. */
     decides: string;
-    /** Текст шага: то же самое, но фразой. */
+    /**
+     * Текст шага: то же самое, но фразой. Поддерживает инлайн-разметку прозы,
+     * включая термины глоссария — `[[DTO]]`.
+     */
     text: string;
   }[];
 }
@@ -125,7 +130,7 @@ const railTo = midY(levels.length - 1);
               <p class="levels__decides">{level.decides}</p>
             </div>
           </div>
-          <p class="levels__text">{level.text}</p>
+          <p class="levels__text" set:html={inlineMarkdown(level.text)} />
         </li>
       ))
     }

@@ -21,6 +21,9 @@ terms:
     The stretch of a system inside which one word has one meaning. Outside it
     the same word may mean something else, and the translation happens at the
     border.
+  DTO: >-
+    A structure of plain fields in which data crosses a boundary: a request
+    body, a table row, a message on the bus. It has no behaviour.
   aggregate: >-
     A piece of state that changes as a whole and by its own rules. The
     transaction boundary: nothing outside can reach past it.
@@ -94,7 +97,7 @@ import Levels from '../../../components/Levels.astro';
       key: 'transport',
       name: 'Transport',
       decides: 'where we are called, and which code we answer with',
-      text: 'The point at which the service is called: by a person or by another system. Data arrives here, and the answer to the request leaves from here. No decision about the domain is made at this level — transport translates: protobuf, JSON or Avro into the words of the domain and back, through a DTO, one per protocol. The DTO goes no further: what reaches application is a command in the words of the domain rather than whatever came off the wire.',
+      text: 'The point at which the service is called: by a person or by another system. Data arrives here, and the answer to the request leaves from here. No decision about the domain is made at this level — transport translates: protobuf, JSON or Avro into the words of the domain and back, through a [[DTO]], one per protocol. The DTO goes no further: what reaches application is a command in the words of the domain rather than whatever the caller sent.',
     },
     {
       key: 'application',
@@ -112,7 +115,7 @@ import Levels from '../../../components/Levels.astro';
       key: 'repository',
       name: 'Repository',
       decides: 'how the aggregate reaches storage and comes back',
-      text: 'The port is declared by the domain: take an aggregate by id, save it together with the facts it produced. The implementation is written by infrastructure — rows, indexes, one transaction; a table row here is the same kind of DTO, only for the database. Knowledge runs from the outside in: the database knows about the aggregate, the aggregate knows nothing about the database.',
+      text: 'The port is declared by the domain: take an aggregate by id, save it together with the facts it produced. The implementation is written by infrastructure — rows, indexes, one transaction; a table row here is the same kind of [[DTO]], only for the database. Knowledge runs from the outside in: the database knows about the aggregate, the aggregate knows nothing about the database.',
     },
     {
       key: 'context',
