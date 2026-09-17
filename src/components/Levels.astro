@@ -39,6 +39,20 @@ const height = levels.length * (SLAB + GAP) - GAP + TOP * 2;
 
 const plateX = GUTTER;
 const plateW = WIDTH - GUTTER - 4;
+/** Скругление карточки. Слева его нет: там стоит полоска уровня. */
+const R = 8;
+
+/**
+ * Карточка: справа скруглённая, слева прямая.
+ *
+ * Прямоугольник со скруглением по всем углам не годится — полоска уровня либо
+ * налезает на левый угол, либо уходит внутрь и висит там отдельной деталью.
+ * Поэтому левый край прямой, и полоска ложится на него заподлицо, как цветная
+ * граница у блока «Проблема» на этой же странице.
+ */
+const plate = (y: number) =>
+  `M ${plateX} ${y} H ${plateX + plateW - R} A ${R} ${R} 0 0 1 ${plateX + plateW} ${y + R}` +
+  ` V ${y + SLAB - R} A ${R} ${R} 0 0 1 ${plateX + plateW - R} ${y + SLAB} H ${plateX} Z`;
 
 /** Центр слоя по вертикали: по нему стоят номер и подписи. */
 const midY = (i: number) => TOP + i * (SLAB + GAP) + SLAB / 2;
@@ -77,27 +91,19 @@ const railTo = midY(levels.length - 1);
           return (
             <g
               class="lvl"
-              style={`--i: ${i}`}
               data-level={level.key}
               tabindex="0"
               role="button"
               aria-label={`${level.name}: ${level.decides}`}
             >
-              <rect class="lvl__face" x={plateX} y={y} width={plateW} height={SLAB} rx="8" />
-              {/* Полоска внутри карточки, а не по её краю: на краю она налезала
-                  на скругление и торчала из угла. Чем ниже уровень, тем она
-                  насыщеннее. */}
-              <rect
-                class="lvl__bar"
-                x={plateX + 9}
-                y={y + 13}
-                width="3"
-                height={SLAB - 26}
-                rx="1.5"
-              />
+              <path class="lvl__face" d={plate(y)} />
+              {/* Полоска на прямом левом крае: чем ниже уровень, тем она
+                  насыщеннее. Она же закрывает левую границу карточки, поэтому
+                  край читается как цветной, а не как двойной. */}
+              <rect class="lvl__bar" x={plateX} y={y} width="3" height={SLAB} />
 
-              <text class="lvl__name" x={plateX + 22} y={mid - 4}>{level.name}</text>
-              <text class="lvl__decides" x={plateX + 22} y={mid + 14}>{level.decides}</text>
+              <text class="lvl__name" x={plateX + 16} y={mid - 4}>{level.name}</text>
+              <text class="lvl__decides" x={plateX + 16} y={mid + 14}>{level.decides}</text>
 
               <circle class="lvl__mark" cx={GUTTER / 2} cy={mid} r="10" />
               <text class="lvl__num" x={GUTTER / 2} y={mid}>{i + 1}</text>

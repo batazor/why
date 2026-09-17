@@ -28,8 +28,8 @@ terms:
     The level that holds one whole scenario: read, check, change, announce. The
     order of the steps and nothing beyond it.
   transport: >-
-    The edge of the service: how a request arrives and which code answers it.
-    No decision about the domain is made here.
+    The point at which the service is called: by a person or by another
+    system. No decision about the domain is made here.
 steps:
   - id: boundary
     title: What a bounded context is
@@ -93,8 +93,8 @@ import Levels from '../../../components/Levels.astro';
     {
       key: 'transport',
       name: 'Transport',
-      decides: 'which code to answer with',
-      text: 'The edge where somebody called us. A request arrives over HTTP or off a queue and leaves as a response; no decision about the domain is made here. Transport translates: protobuf, JSON or Avro into the words of the domain and back — through a DTO, a structure of plain fields, one per protocol. The DTO goes no further than this level: what reaches application is a command in the words of the domain rather than whatever came off the wire.',
+      decides: 'where we are called, and which code we answer with',
+      text: 'The point at which the service is called: by a person or by another system. Data arrives here, and the answer to the request leaves from here. No decision about the domain is made at this level — transport translates: protobuf, JSON or Avro into the words of the domain and back, through a DTO, one per protocol. The DTO goes no further: what reaches application is a command in the words of the domain rather than whatever came off the wire.',
     },
     {
       key: 'application',
