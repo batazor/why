@@ -2600,3 +2600,18 @@ main:focus {
 .player--editor.is-enhanced .player__steps::before {
   height: 1rem;
 }
+
+/* Список в тексте урока. Своих правил у него не было: до этого места списки в
+   прозе не встречались, а браузерный отступ в 40px выбивается из колонки. */
+.prose :is(ul, ol) {
+  margin: 1rem 0;
+  padding-left: 1.25rem;
+}
+
+.prose li + li {
+  margin-top: 0.4rem;
+}
+
+.prose li::marker {
+  color: var(--muted);
+}
