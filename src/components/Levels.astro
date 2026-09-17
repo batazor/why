@@ -24,8 +24,10 @@ interface Props {
     /** Строка на плашке: что уровень решает. */
     decides: string;
     /**
-     * Текст шага: то же самое, но фразой. Поддерживает инлайн-разметку прозы,
-     * включая термины глоссария — `[[DTO]]`.
+     * Текст шага. Поддерживает инлайн-разметку прозы, включая термины
+     * глоссария — `[[DTO]]`, — и делится на абзацы пустой строкой: сплошным
+     * текстом читается хуже, а у каждого уровня есть что сказать отдельными
+     * мыслями.
      */
     text: string;
   }[];
@@ -130,7 +132,13 @@ const railTo = midY(levels.length - 1);
               <p class="levels__decides">{level.decides}</p>
             </div>
           </div>
-          <p class="levels__text" set:html={inlineMarkdown(level.text)} />
+          {
+            level.text
+              .split(/\n{2,}/)
+              .map((part) => part.trim())
+              .filter(Boolean)
+              .map((part) => <p class="levels__text" set:html={inlineMarkdown(part)} />)
+          }
         </li>
       ))
     }
