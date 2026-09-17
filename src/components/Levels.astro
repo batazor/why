@@ -75,7 +75,14 @@ const railTo = midY(levels.length - 1);
           const y = TOP + i * (SLAB + GAP);
           const mid = midY(i);
           return (
-            <g class="lvl" style={`--i: ${i}`} data-level={level.key}>
+            <g
+              class="lvl"
+              style={`--i: ${i}`}
+              data-level={level.key}
+              tabindex="0"
+              role="button"
+              aria-label={`${level.name}: ${level.decides}`}
+            >
               <rect class="lvl__face" x={plateX} y={y} width={plateW} height={SLAB} rx="8" />
               {/* Полоска слева: чем ниже уровень, тем она насыщеннее. */}
               <rect class="lvl__bar" x={plateX} y={y + 1} width="3" height={SLAB - 2} rx="1.5" />
@@ -111,7 +118,7 @@ const railTo = midY(levels.length - 1);
 </div>
 
 <script>
-  import { animate } from 'motion';
+  import { animate, stagger } from 'motion';
 
   /**
    * Уровни листаются прокруткой: активен тот, чей текст дошёл до линии чтения.
@@ -139,6 +146,31 @@ const railTo = midY(levels.length - 1);
 
     root.classList.add('is-enhanced');
 
+    // Проявление один раз: шаг въезжает в экран, текст поднимается и остаётся.
+    if (!calm) {
+      const reveal = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) continue;
+            const step = entry.target as HTMLElement;
+            reveal.unobserve(step);
+            step.style.removeProperty('opacity');
+            animate(
+              step.querySelectorAll<HTMLElement>('.levels__head, .levels__text'),
+              { opacity: [0, 1], transform: ['translateY(12px)', 'translateY(0px)'] },
+              { duration: 0.46, delay: stagger(0.07), easing: [0.22, 0.9, 0.24, 1] },
+            );
+          }
+        },
+        { threshold: 0.2 },
+      );
+
+      for (const step of steps) {
+        step.style.opacity = '0';
+        reveal.observe(step);
+      }
+    }
+
     let active = -1;
 
     const mark = (to: number) => {
@@ -161,24 +193,53 @@ const railTo = midY(levels.length - 1);
         progress.style.strokeDashoffset = String(full - (full * to) / (steps.length - 1));
       }
 
-      if (calm) return;
-      // Текст шага проявляется, а не просто меняет прозрачность: движение
-      // снизу вверх повторяет направление прокрутки, и шаг читается как
-      // пришедший, а не как подменённый.
-      const body = steps[to].querySelectorAll<HTMLElement>('.levels__head, .levels__text');
-      body.forEach((node, i) => {
-        animate(
-          node,
-          { opacity: [0, 1], transform: ['translateY(10px)', 'translateY(0px)'] },
-          { duration: 0.42, delay: i * 0.06, easing: [0.22, 0.9, 0.24, 1] },
-        );
-      });
     };
 
     const readingTop = () => window.innerHeight * 0.34;
 
+    /**
+     * Прокрутка к шагу уровня: пирог служит ещё и навигацией.
+     *
+     * Цель — линия чтения, та же, по которой определяется активный шаг: иначе
+     * щелчок привёл бы к уровню, который тут же сменился бы соседним.
+     */
+    const goTo = (i: number) => {
+      // Отметка ставится сразу, а не по приезде: плавная прокрутка идёт
+      // полсекунды, и всё это время подсвечен был бы прежний уровень. Пока
+      // едем, прокрутка активный шаг не пересчитывает — иначе промежуточные
+      // кадры перебивали бы цель.
+      navigating = true;
+      mark(i);
+      // Пара пикселей за линию чтения: ровно на ней шаг считается ещё не
+      // дошедшим, и по приезде подсветка сползала бы на предыдущий.
+      const top = window.scrollY + steps[i].getBoundingClientRect().top - readingTop() + 2;
+      window.scrollTo({ top, behavior: calm ? 'auto' : 'smooth' });
+      settle();
+    };
+
+    for (const [i, layer] of layers.entries()) {
+      layer.addEventListener('click', () => goTo(i));
+      layer.addEventListener('keydown', (event) => {
+        const key = (event as KeyboardEvent).key;
+        if (key !== 'Enter' && key !== ' ') return;
+        event.preventDefault();
+        goTo(i);
+      });
+    }
+
     let frame = 0;
+    let navigating = false;
+    let settleTimer: ReturnType<typeof setTimeout>;
+    const settle = () => {
+      clearTimeout(settleTimer);
+      settleTimer = setTimeout(() => {
+        navigating = false;
+        follow();
+      }, 220);
+    };
+
     const follow = () => {
+      if (navigating) return;
       const boundary = readingTop();
       let next = 0;
       steps.forEach((step, i) => {
@@ -192,6 +253,9 @@ const railTo = midY(levels.length - 1);
       () => {
         cancelAnimationFrame(frame);
         frame = requestAnimationFrame(follow);
+        // Пока страница едет к выбранному уровню, таймер сдвигается: приезд
+        // считается закончившимся, когда прокрутка остановилась.
+        if (navigating) settle();
       },
       { passive: true },
     );
