@@ -116,7 +116,9 @@ const siblingHref = (entry: CollectionEntry<'lessons'>) =>
       <Content />
     </div>
 
-    <h2>{t('lesson.walkthrough')}</h2>
+    {/* Заголовка у разбора нет: к этому месту текст урока уже сказал, что
+        дальше разбор, и повторять это строкой «Разбор по шагам» незачем.
+        Ориентир для скринридера остался — он на самой секции плеера. */}
     <StepPlayer
       lang={lang}
       steps={lesson.data.steps}
