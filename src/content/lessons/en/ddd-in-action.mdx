@@ -39,56 +39,69 @@ terms:
 steps:
   - id: boundary
     title: What a bounded context is
-    narration: >-
+    narration: |-
       The three departments from the example are three contexts, and each has
       its own truth about the word "payment". Arguing which one is correct goes
-      nowhere: all three are, in different places. A bounded context is such a
-      place: the stretch of a system inside which a word has one meaning, one
-      model, and one team answering for both. The boundary follows the language
-      rather than the layers of code or the tables: where a word starts to mean
-      something else, the context has ended. What comes next on the diagram are
-      the areas of an ordinary shop, and every one of them is such a place.
+      nowhere: all three are, in different places.
+
+      A bounded context is such a place: the stretch of a system inside which a
+      word has one meaning, one model, and one team answering for both.
+
+      The language sets the boundary. Where a word starts to mean something
+      else, the context has ended; the directory layout and the database schema
+      have nothing to do with that boundary — they are chosen inside it.
   - id: estate
     title: What an online shop is made of
-    narration: >-
-      The catalogue with its basket and checkout. Billing: what the customer
-      owes and what has been paid. Delivery: parcels, carriers and where the
-      order got to. Customers: who they are and how to reach them. Four areas,
-      four teams, four glossaries. There are no arrows yet — who calls whom
-      comes later; what matters here is that there is more than one area and
-      each knows its own things.
+    narration: |-
+      A customer walks into the shop, and inside the shop there are three areas.
+
+      - **Catalogue** — the basket and the checkout.
+      - **Billing** — what the customer owes and what has been paid.
+      - **Delivery** — parcels, carriers and where the order got to.
+
+      Three areas, three teams, three glossaries. There is one arrow so far and
+      it points at the shop as a whole: who talks to whom inside comes later.
   - id: kinds
     title: Core, supporting, generic
-    narration: >-
-      Three kinds of context, by what it is to the business. **Core** is what
-      makes this shop different from the one next door: the catalogue, the
-      prices, working out what the customer owes. That is built in-house and
-      staffed with the best people. **Supporting** is needed but wins nothing:
-      delivery, the customer record. **Generic** is a solved problem, the same
-      everywhere: authentication. Writing your own login gives the shop nothing
-      somebody else's would not, so it is bought. The distinction is practical:
-      it decides where the money and the people go.
+    narration: |-
+      The same three areas, now labelled by what each is to the business.
+
+      - **Core** is what makes this shop different from the one next door: the
+        catalogue and billing. Built in-house and staffed with the best people.
+      - **Supporting** is needed but wins nothing: delivery.
+      - **Generic** is a solved problem, the same everywhere: authentication.
+        The customer logs in there first and only then walks into the shop, and
+        on the diagram it stands outside the boundary: nobody builds it — it is
+        bought. Writing your own login gives the shop nothing somebody else's
+        would not.
+
+      The distinction is practical: it decides where the money and the people go.
   - id: language
     title: One word, three meanings
-    narration: >-
-      From here the lesson looks at one context — billing, the most talkative of
-      the four. With the boundary drawn, a word inside it can have one meaning.
-      Until it was drawn, the "payment" from the example meant three different
-      events, and everybody nodded in the meeting while keeping their own; in
-      code that shows up like this: one service's `payment.completed` is about
-      the checkmark, another's is about money in the account. So the first file
-      in the directory is a glossary.
+    narration: |-
+      The customer pays, and the arrow no longer points at the shop as a whole
+      but at billing: billing is what owns the word "payment".
+
+      Until the boundary was drawn, the "payment" from the example meant three
+      different events, and everybody nodded in the meeting while keeping their
+      own; in code that shows up like this: one service's `payment.completed` is
+      about the checkmark, another's is about money in the account.
+
+      So the first file in billing's directory is a glossary.
   - id: glossary
     title: What is inside the glossary
-    narration: >-
+    narration: |-
       One line per word: the word and a single definition — the short sentence
       the team is willing to defend. Synonyms have no place here: two words with
-      one meaning mean an argument that is still going. The table about the
-      three departments comes first: it picks no winner, it says what each of
-      the three meanings is called here. The glossary is a file beside the code,
-      edited in the same commit; a wiki lives its own life and six months later
-      disagrees with what the service does. The rule is simple: a word that is
-      not here is not in the code either. Name it first, write it after.
+      one meaning mean an argument that is still going.
+
+      The table about the three departments comes first: it picks no winner, it
+      says what each of the three meanings is called here.
+
+      The glossary is a file beside the code, edited in the same commit; a wiki
+      lives its own life and six months later disagrees with what the service
+      does. The rule is simple: a word that is not here is not in the code
+      either. Name it first, write it after.
 ---
 
 import Levels from '../../../components/Levels.astro';
@@ -146,8 +159,10 @@ This decision comes before the others: until it is said what the context owns an
   ]}
 >
 **<span data-term="DDD">DDD</span>** answers that with a single agreement: a
-service has levels, and each level decides exactly one thing. A request comes in
-at the top and goes through them in order.
+service has levels, and each level decides exactly one thing. Knowledge only
+points down: a level knows the one below it and nothing about the one above.
+That is why the domain depends on neither the database nor the protocol it was
+called over.
 </Levels>
 
 What follows is a walkthrough of one example. An online shop: the catalogue,

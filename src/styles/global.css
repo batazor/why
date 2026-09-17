@@ -840,8 +840,12 @@ main:focus {
 }
 
 .step__narration {
-  margin: 0;
+  margin: 0 0 0.75rem;
   color: var(--fg);
+}
+
+.step__narration:last-child {
+  margin-bottom: 0;
 }
 
 /* Имя из кода внутри фразы. Фон мягкий: в абзаце прозы тёмная плашка на каждом
@@ -2051,6 +2055,362 @@ main:focus {
   }
 }
 
+.editor {
+  display: grid;
+  /* Высота фиксированная снизу: в начале разбора в дереве один файл, и коробка
+     в три строки читалась бы как обрезанная панель, а не как редактор. */
+  min-height: 16rem;
+  grid-template-columns: minmax(0, 12rem) minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--code-bg, var(--bg));
+}
+
+.editor__tree {
+  padding: 0.6rem 0.4rem;
+  border-right: 1px solid var(--border);
+  /* Прокрутка появляется, только когда дерево не влезает в экран: панель
+     прилипшая, и всё, что ниже экрана, иначе недостижимо. Фиксированные 70vh
+     давали полосу прокрутки и там, где место ещё было. */
+  overflow-y: auto;
+  max-height: calc(100vh - 4rem);
+}
+
+.editor__root,
+.editor__dir,
+.editor__file {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0.18rem 0.4rem 0.18rem calc(0.4rem + var(--depth, 0) * 0.85rem);
+  border: 0;
+  background: none;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  text-align: left;
+  color: var(--muted);
+}
+
+.editor__root {
+  padding-left: 0.4rem;
+  color: var(--fg);
+}
+
+.editor__file {
+  cursor: pointer;
+  border-radius: 5px;
+  color: var(--fg);
+}
+
+.editor__file:hover {
+  background: color-mix(in srgb, var(--muted) 14%, transparent);
+}
+
+/* Открытый файл: тем же способом, каким редактор показывает активную вкладку —
+   заливкой, а не только цветом текста. */
+.editor__file.is-open {
+  background: color-mix(in srgb, var(--accent, var(--muted)) 16%, transparent);
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.editor__panes {
+  overflow: auto;
+  max-height: calc(100vh - 4rem);
+}
+
+/* Что показывает редактор, решает шаг.
+   `tree` — файл только появился, читать в нём нечего: дерево во всю панель.
+   `file` — про содержимое: дерево растворяется, код получает всю ширину, а
+   какой это файл, по-прежнему написано строкой пути над кодом.
+
+   Половина не выключается display'ем, а сжимается в ноль и гаснет: переход
+   между шагами тогда виден как движение, а не как подмена панели. */
+.editor,
+.editor__tree,
+.editor__panes {
+  transition:
+    grid-template-columns 0.3s ease,
+    opacity 0.2s ease;
+}
+
+.editor[data-view='tree'] {
+  grid-template-columns: minmax(0, 1fr) 0;
+}
+
+.editor[data-view='tree'] .editor__panes {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.editor[data-view='file'] {
+  grid-template-columns: 0 minmax(0, 1fr);
+}
+
+.editor[data-view='file'] .editor__tree {
+  padding: 0;
+  border-right: 0;
+  opacity: 0;
+  visibility: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editor,
+  .editor__tree,
+  .editor__panes {
+    transition: none;
+  }
+}
+
+/* Файл, появившийся на этом шаге. Точка слева, а не цвет всей строки: строка
+   останется в дереве навсегда, а «новое» — состояние одного шага. */
+.editor__file.is-new::before,
+.editor__dir.is-new::before {
+  content: '';
+  position: absolute;
+  left: 0.1rem;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.editor__file,
+.editor__dir {
+  position: relative;
+}
+
+.editor__path {
+  padding: 0.45rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.editor__panes pre {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+/* Документ в редакторе: отрендеренный markdown, а не исходник. Набор правил
+   компактный — панель узкая, и заголовки размером со страничные её ломают. */
+.editor__doc {
+  padding: 0.9rem 1.1rem 1.2rem;
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.editor__doc > :first-child {
+  margin-top: 0;
+}
+
+.editor__doc :is(h1, h2, h3) {
+  margin: 1.4rem 0 0.5rem;
+  font-size: 0.95rem;
+  line-height: 1.3;
+}
+
+.editor__doc h1 {
+  font-size: 1.05rem;
+}
+
+.editor__doc p {
+  margin: 0.6rem 0;
+}
+
+.editor__doc table {
+  width: 100%;
+  margin: 0.8rem 0 1rem;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.editor__doc :is(th, td) {
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.editor__doc th {
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.editor__doc code {
+  padding: 0.1em 0.3em;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--muted) 14%, transparent);
+}
+
+/* ---------- Уровни сервиса слоёным пирогом ---------- */
+
+/* Абзац и картинка рядом: картинка объясняет вложенность, о которой абзац
+   говорит словами, и порознь они читаются хуже. */
+.levels {
+  display: grid;
+  gap: 0 2rem;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 22rem);
+  align-items: start;
+  margin: 1.5rem 0 2.5rem;
+  /* Блок шире колонки прозы: текст с картинкой рядом в 34rem не помещается, а
+     измерять длину строки по нему незачем — шаги здесь короткие. */
+  max-width: none;
+  width: min(62rem, calc(100vw - 2.5rem));
+}
+
+/* Вступление идёт над обеими колонками: оно про все уровни сразу. */
+.levels__intro {
+  grid-column: 1 / -1;
+  max-width: var(--measure);
+}
+
+.levels__intro > :first-child {
+  margin-top: 0;
+}
+
+/* Пустые абзацы MDX делает из пустых строк внутри компонента: они ничего не
+   значат и не должны занимать высоту. */
+.levels__intro > p:empty {
+  display: none;
+}
+
+/* Пирог прилипает: читатель листает уровни, картинка стоит и показывает, на
+   каком он сейчас. */
+.levels-cake {
+  position: sticky;
+  top: 2rem;
+  grid-column: 2;
+  margin: 0;
+}
+
+.levels-cake svg {
+  width: 100%;
+  height: auto;
+}
+
+.levels__steps {
+  grid-column: 1;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.levels__step {
+  max-width: var(--measure);
+}
+
+/* Высота шага — экран с небольшим запасом: пока читатель его читает, активным
+   должен быть он, а не следующий. Без JS шаги идут обычным списком.
+
+   Приглушать неактивные шаги нечем: текст читают, а не подсвечивают, и
+   полупрозрачная проза читается хуже — какой бы шаг ни был активным. Где
+   читатель сейчас, показывает пирог. */
+.levels.is-enhanced .levels__step {
+  min-height: 54vh;
+  padding: 2vh 0;
+}
+
+/* Отбивка снизу: последний уровень тоже обязан доехать до линии чтения. */
+.levels.is-enhanced .levels__steps::after {
+  content: '';
+  display: block;
+  height: 24vh;
+}
+
+/* Шапка шага: номер, название и то, что уровень решает. Номер стоит в одной
+   строке с названием, а не отдельной строчкой над ним: он часть заголовка, а
+   не отдельное сообщение. Кружок тот же, что на пироге, — видно, какая
+   карточка принадлежит этому тексту, без поиска по названию. */
+.levels__head {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 0.6rem;
+  align-items: start;
+  margin: 0 0 0.5rem;
+}
+
+.levels__index {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  /* Кружок выравнивается по первой строке названия, а не по верху блока. */
+  margin-top: 0.15rem;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--panel);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--muted);
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.levels.is-enhanced .levels__step.is-active .levels__index {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--panel);
+}
+
+/* Селектор с шапкой, а не один класс: у заголовков внутри прозы свой отступ
+   сверху в 2.25rem, и он сильнее. Из-за него номер уезжал строкой выше. */
+.levels__head .levels__name {
+  margin: 0;
+  font-size: 1.15rem;
+  line-height: 1.25;
+}
+
+.levels__decides {
+  margin: 0.15rem 0 0;
+  color: var(--accent);
+  font-size: 0.92rem;
+}
+
+.levels__text {
+  margin: 0 0 0.75rem;
+  color: var(--fg);
+}
+
+.levels__text:last-child {
+  margin-bottom: 0;
+}
+
+@media (max-width: 52rem) {
+  .levels {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* На узком экране пирог становится полосой сверху: рядом с текстом ему
+     места нет, а под текстом он перестаёт показывать активный уровень. */
+  .levels-cake {
+    grid-column: 1;
+    top: 0;
+    z-index: 3;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+  }
+
+  .levels-cake svg {
+    max-height: 40vh;
+  }
+
+  .levels__steps {
+    grid-column: 1;
+  }
+}
 /* ---------- Пирог: слой ---------- */
 
 /* Слой — ещё и кнопка: щелчок по нему прокручивает к его шагу. */
@@ -2208,5 +2568,23 @@ main:focus {
 }
 
 .prose li::marker {
+  color: var(--muted);
+}
+
+/* Список в нарративе шага и в тексте уровня. Отступ свой, а не браузерный:
+   маркеры должны стоять в колонке текста, а не выступать из неё. */
+.step__list,
+.levels__list {
+  margin: 0 0 0.75rem;
+  padding-left: 1.15rem;
+}
+
+.step__list li + li,
+.levels__list li + li {
+  margin-top: 0.35rem;
+}
+
+.step__list li::marker,
+.levels__list li::marker {
   color: var(--muted);
 }

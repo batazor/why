@@ -11,11 +11,14 @@ import type { $ViewId } from '../likec4/generated';
  */
 export default function LikeC4Stage({
   views,
+  tagSteps = [],
   firstStep,
   fixedView,
 }: {
   /** Шаг разбора → id view. */
   views: Record<string, string>;
+  /** Шаги, на которых у карточек показаны теги — лейблы вида контекста. */
+  tagSteps?: string[];
   firstStep?: string;
   /** Одна картинка вне плеера: постер. Шаги тогда не слушаются. */
   fixedView?: string;
@@ -23,6 +26,7 @@ export default function LikeC4Stage({
   const [viewId, setViewId] = useState<string | undefined>(
     fixedView ?? (firstStep ? views[firstStep] : undefined),
   );
+  const [step, setStep] = useState<string | undefined>(firstStep);
 
   // Шагами управляет плеер — он живёт вне React и говорит событием.
   useEffect(() => {
@@ -32,6 +36,7 @@ export default function LikeC4Stage({
 
     const show = (id: string | undefined) => {
       if (!id) return;
+      setStep(id);
       // Шаг без своего view оставляет предыдущую картинку: два шага об одном
       // уровне вложенности делят одну схему.
       const next = views[id];
@@ -78,11 +83,11 @@ export default function LikeC4Stage({
           browser={false}
           controls={false}
           /**
-           * Теги на карточках: ими на схеме подписаны core / supporting /
-           * generic. Цвет один раз объяснить придётся всё равно, а подпись
-           * читается без легенды.
+           * Теги на карточках — лейблы вида контекста. Включаются на том шаге,
+           * который про них говорит: подпись, появившаяся раньше объяснения,
+           * читается как шум.
            */
-          enableElementTags={true}
+          enableElementTags={step ? tagSteps.includes(step) : false}
           /**
            * Пропорции полотна не сохраняются: сцена — коробка известной высоты
            * (её задаёт `--flow-height`), и схема обязана вписаться в неё, а не

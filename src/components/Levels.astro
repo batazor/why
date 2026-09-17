@@ -1,5 +1,5 @@
 ---
-import { inlineMarkdown } from '../inline-markdown';
+import { proseBlocks } from '../prose';
 
 /**
  * Уровни сервиса: пирог справа, уровни слева, листаются прокруткой.
@@ -133,11 +133,17 @@ const railTo = midY(levels.length - 1);
             </div>
           </div>
           {
-            level.text
-              .split(/\n{2,}/)
-              .map((part) => part.trim())
-              .filter(Boolean)
-              .map((part) => <p class="levels__text" set:html={inlineMarkdown(part)} />)
+            proseBlocks(level.text).map((block) =>
+              block.kind === 'ul' ? (
+                <ul class="levels__list">
+                  {block.items.map((item) => (
+                    <li set:html={item} />
+                  ))}
+                </ul>
+              ) : (
+                <p class="levels__text" set:html={block.html} />
+              ),
+            )
           }
         </li>
       ))

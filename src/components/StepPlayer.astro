@@ -2,6 +2,7 @@
 import { Code } from 'astro:components';
 import { codeTransformers } from '../code/shiki';
 import { inlineMarkdown } from '../inline-markdown';
+import { proseBlocks } from '../prose';
 import FlowDiagram from './FlowDiagram';
 import LikeC4Stage from './LikeC4Stage';
 import FileEditor from './FileEditor.astro';
@@ -198,7 +199,12 @@ const shikiOptions = {
                 labels={labels}
               />
             ) : (
-              <LikeC4Stage client:visible views={likec4!.views} firstStep={merged[0].id} />
+              <LikeC4Stage
+              client:visible
+              views={likec4!.views}
+              tagSteps={likec4!.tags}
+              firstStep={merged[0].id}
+            />
             )}
           </figure>
         )
@@ -222,7 +228,27 @@ const shikiOptions = {
             <div>
               <p class="step__index">{t('lesson.stepOf', { n: i + 1, total: merged.length })}</p>
               <h3 class="step__title">{merged[i].title}</h3>
-              <p class="step__narration" data-promo-question={flow?.drop?.step === merged[i].id || undefined} set:html={inlineMarkdown(merged[i].narration)} />
+              {/* Нарратив — абзацы и списки, отделённые пустой строкой.
+                  Пометка вопроса стоит на каждом блоке: опыт прячет весь
+                  вопрос, а не его начало. */}
+              {proseBlocks(merged[i].narration).map((block) =>
+                block.kind === 'ul' ? (
+                  <ul
+                    class="step__list"
+                    data-promo-question={flow?.drop?.step === merged[i].id || undefined}
+                  >
+                    {block.items.map((item) => (
+                      <li set:html={item} />
+                    ))}
+                  </ul>
+                ) : (
+                  <p
+                    class="step__narration"
+                    data-promo-question={flow?.drop?.step === merged[i].id || undefined}
+                    set:html={block.html}
+                  />
+                ),
+              )}
 
               {
                 drags.find((drag) => drag.step === merged[i].id) && (

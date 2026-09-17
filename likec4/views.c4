@@ -1,41 +1,83 @@
 /**
- * По одному view на экран урока. Имя view совпадает с id шага в колоде:
- * связь проверяет scripts/check-steps.mjs.
+ * По одному view на экран урока. Какой шаг какой view показывает, объявляет
+ * колода; связь проверяет scripts/check-steps.mjs.
  */
 views {
   /**
-   * Экран `estate`: что есть в типовом магазине.
+   * Экран `boundary`: один блок.
    *
-   * Карточки без связей: кто кого зовёт — вопрос следующих экранов, а этот
-   * про то, что областей несколько и у каждой своя команда и свой словарь.
+   * Разговор о том, чем граница является, и на схеме ровно одна граница —
+   * магазин. Что у него внутри, на этом шаге не обсуждается.
    */
-  view estate {
-    title 'Contexts of an online shop'
+  view boundary {
+    title 'One boundary'
 
-    include
-      shop,
-      billing,
-      delivery,
-      customers
+    include shop
 
     autoLayout LeftRight
   }
 
   /**
-   * Экран `kinds`: core, supporting, generic.
+   * Экран `estate`: клиент приходит в магазин, внутри магазина три области.
    *
-   * Здесь же появляется авторизация — пример контекста, который покупают:
-   * своя реализация не даёт магазину ничего, чего не даст чужая.
+   * Стрелка одна и ведёт в магазин целиком: кто внутри с кем разговаривает —
+   * вопрос следующих экранов.
+   */
+  view estate {
+    title 'Inside the shop'
+
+    include
+      customer,
+      shop,
+      shop.catalogue,
+      shop.billing,
+      shop.delivery
+
+    exclude customer -> shop.billing
+
+    autoLayout LeftRight
+  }
+
+  /**
+   * Экран `kinds`: те же области, плюс авторизация.
+   *
+   * Она снаружи магазина и с лейблом `generic`: решённая задача, которую
+   * покупают. Без неё третий вид контекста пришлось бы объяснять словами, не
+   * показав ни одного примера.
    */
   view kinds {
     title 'Core, supporting, generic'
 
     include
+      customer,
       shop,
-      billing,
-      delivery,
-      customers,
+      shop.catalogue,
+      shop.billing,
+      shop.delivery,
       auth
+
+    exclude customer -> shop.billing
+
+    autoLayout LeftRight
+  }
+
+  /**
+   * Экран `language`: движение платежа от клиента к биллингу.
+   *
+   * Тот же кадр, что и `estate`, но стрелка идёт не в магазин целиком, а в ту
+   * область, которая словом «платёж» и распоряжается.
+   */
+  view language {
+    title 'A payment arrives'
+
+    include
+      customer,
+      shop,
+      shop.catalogue,
+      shop.billing,
+      shop.delivery
+
+    exclude customer -> shop
 
     autoLayout LeftRight
   }

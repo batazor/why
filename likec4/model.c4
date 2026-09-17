@@ -2,32 +2,45 @@
  * Оценка типового интернет-магазина — та, на которой идёт разбор.
  *
  * Растёт вместе с уроком: на каждом шаге здесь появляется ровно то, что видно
- * на его схеме, и ни одного элемента впрок. Связей пока нет: первые экраны
- * говорят о границах, а не о том, кто кого зовёт.
+ * на его схеме, и ни одного элемента впрок.
+ *
+ * Цвета по видам контекста в модели не заданы намеренно: про core, supporting
+ * и generic урок говорит на своём шаге, и до него различие не должно быть
+ * видно на карточках. Показывают его теги, которые включает тот шаг.
  */
 model {
-  shop = context 'Shop' {
-    #core
-    style { color core }
+  customer = actor 'Customer'
+
+  shop = context 'Online shop' {
+    catalogue = service 'Catalogue' {
+      #core
+    }
+
+    billing = service 'Billing' {
+      #core
+    }
+
+    delivery = service 'Delivery' {
+      #supporting
+    }
   }
 
-  billing = context 'Billing' {
-    #core
-    style { color core }
-  }
-
-  delivery = context 'Delivery' {
-    #supporting
-    style { color supporting }
-  }
-
-  customers = context 'Customers' {
-    #supporting
-    style { color supporting }
-  }
-
-  auth = context 'Auth' {
+  /**
+   * Авторизация стоит снаружи магазина: это готовый сервис, который покупают,
+   * и внутрь границы он не входит.
+   */
+  auth = external 'Auth' {
     #generic
-    style { color generic }
   }
+
+  /**
+   * Порядок такой: сперва клиент логинится, потом идёт в магазин. Стрелки от
+   * магазина к авторизации нет намеренно — на этом шаге разговор про виды
+   * контекста, а не про то, кто у кого проверяет токен.
+   */
+  customer -[calls]-> auth 'login'
+  customer -[calls]-> shop 'shops'
+
+  // Платёж: он и есть то слово, из-за которого весь разбор.
+  customer -[calls]-> shop.billing 'payment'
 }
