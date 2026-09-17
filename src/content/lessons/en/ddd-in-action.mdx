@@ -45,6 +45,9 @@ terms:
   transport: >-
     The point at which the service is called: by a person or by another
     system. No decision about the domain is made here.
+  vertical slice: >-
+    A module cut along the scenario rather than the layer: transport, scenario
+    and the work with the aggregate live together because they change together.
 steps:
   - id: boundary
     title: 'C1: what a bounded context is'
@@ -195,6 +198,33 @@ steps:
 
       What remains is one domain, its database, and the bus it tells that an
       invoice was paid. From this frame on, it is code.
+  - id: slices
+    title: Modules inside the domain
+    narration: |-
+      A domain is not one lump of code. The tree on the right shows three
+      levels: `billing` is the context, and the glossary sits at its root
+      because the language is one per context; `invoice` is a domain inside the
+      context; the directories inside the domain are its modules. There are
+      three of them.
+
+      - **issuing** — issue the invoice: turn the "order placed" fact into
+        lines, a total and a due date.
+      - **payment** — apply a payment: put the money against the invoice and
+        tell the outside that it is paid.
+      - **overdue** — chase the late ones: find the invoices whose due date has
+        passed.
+
+      What splits them is the scenario, not the layer. Such a module is a
+      [[vertical slice]]: transport, scenario and the work with the aggregate
+      live inside it together — not "all the handlers here, all the
+      repositories there".
+
+      The entry points already show it: `issuing` is called by the bus,
+      `payment` by a synchronous call from processing, `overdue` by a schedule.
+      Three different ways in, and none of them belongs to the domain.
+
+      The directories are still empty. What lives inside a module is the next
+      conversation.
 
 ---
 

@@ -20,6 +20,8 @@
     "@astrojs/react": "^6.0.5",
     "@astrojs/sitemap": "^3.7.4",
     "@shikijs/transformers": "^4.4.3",
+    "@vscode-elements/elements": "^2.5.1",
+    "@vscode/codicons": "^0.0.46-24",
     "@xyflow/react": "^12.11.6",
     "astro": "^7.3.2",
     "motion": "^13.4.0",

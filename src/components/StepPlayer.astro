@@ -90,15 +90,33 @@ const wideSteps = new Set(likec4?.wide ?? []);
 const inlineSteps = new Set(Object.keys(likec4?.views ?? {}));
 
 /**
- * Шаг, внутри которого стоит редактор.
+ * Шаги, внутри которых стоит редактор.
  *
- * Редактор в разметке один: дерево заполняется по шагам, и второй экземпляр
- * показывал бы своё состояние. Поэтому он встаёт в первый шаг, который просит
- * именно его, — у шага со своим кадром в колонке уже занято.
+ * Их может быть несколько: дерево растёт по шагам, и шаг про раскладку и шаг
+ * про содержимое файла — разные разговоры. Экземпляров редактора тогда тоже
+ * несколько, по одному на шаг, и каждый слушает шаги сам: состояние у них
+ * общее, а видно всегда тот, чей шаг на экране.
+ *
+ * Шаг со своим кадром в этот список не попадает: в колонке уже занято.
  */
-const editorStep = inStep
-  ? steps.find((step) => tree?.steps[step.id] && !inlineSteps.has(step.id))?.id
-  : undefined;
+/**
+ * Шаги, где справа стоит одно дерево.
+ *
+ * Пути в дереве короткие, и в колонке, рассчитанной под кадр, оно смотрится
+ * пустой коробкой. Такому шагу колонки меняют местами по ширине: читать здесь
+ * текст, а дерево только показывает, где это читаемое лежит.
+ */
+const narrowSteps = new Set(
+  Object.entries(tree?.steps ?? {})
+    .filter(([, step]) => step.view === 'tree')
+    .map(([id]) => id),
+);
+
+const editorSteps = new Set(
+  inStep
+    ? steps.filter((step) => tree?.steps[step.id] && !inlineSteps.has(step.id)).map((s) => s.id)
+    : [],
+);
 
 const panelOf = (id: string): Panel | undefined =>
   inStep
@@ -335,7 +353,7 @@ const shikiOptions = {
 
   /** Редактор — в той же колонке, что кадры: на своём шаге он вместо кадра. */
   const inlineEditor = (i: number) =>
-    merged[i].id === editorStep && (
+    editorSteps.has(merged[i].id) && (
       <aside class="player__editor step__aside">
         <FileEditor lang={lang} tree={tree!} docs={docs} order={merged.map((step) => step.id)} />
       </aside>
@@ -364,9 +382,10 @@ const shikiOptions = {
                   'step',
                   !merged[i].panel?.code && 'step--text',
                   wideSteps.has(merged[i].id) && 'step--wide',
-                  (inlineSteps.has(merged[i].id) || merged[i].id === editorStep) &&
+                  (inlineSteps.has(merged[i].id) || editorSteps.has(merged[i].id)) &&
                     !wideSteps.has(merged[i].id) &&
                     'step--aside',
+                  editorSteps.has(merged[i].id) && narrowSteps.has(merged[i].id) && 'step--narrow',
                   i === 0 && 'is-active',
                 ]}
                 data-step={i}

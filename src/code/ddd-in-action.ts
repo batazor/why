@@ -57,6 +57,7 @@ export const tree: FileTreeSpec = {
   steps: {
     language: { open: 'GLOSSARY.md', view: 'tree' },
     glossary: { open: 'GLOSSARY.md', view: 'file' },
+    slices: { view: 'tree' },
   },
   files: [
     {
@@ -64,6 +65,16 @@ export const tree: FileTreeSpec = {
       from: 'language',
       lang: 'markdown',
     },
+  ],
+  /**
+   * Модули домена появляются в дереве раньше своего кода: сперва видно, из
+   * каких частей домен состоит, и только потом — что внутри части. Каталоги
+   * поэтому пока пустые.
+   */
+  dirs: [
+    { path: 'invoice/issuing', from: 'slices' },
+    { path: 'invoice/payment', from: 'slices' },
+    { path: 'invoice/overdue', from: 'slices' },
   ],
 };
 
@@ -79,6 +90,7 @@ const deck: CodeDeck = [
   { id: 'provider' },
   { id: 'overview' },
   { id: 'service' },
+  { id: 'slices' },
 ];
 
 export default deck;

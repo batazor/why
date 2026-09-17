@@ -2145,6 +2145,22 @@ main:focus {
 }
 
 /**
+ * Шаг, у которого справа дерево, а не схема.
+ *
+ * Пути в дереве короткие: в колонке, рассчитанной под кадр, оно смотрится
+ * пустой коробкой на пол-экрана. Ширина уходит тексту — читают здесь его, а
+ * дерево только показывает, где читаемое лежит. К краю окна такой шаг не
+ * выносится: узкой колонке вылет не нужен.
+ */
+.player--editor .step--narrow {
+  grid-template-columns: minmax(0, var(--measure)) minmax(0, 17rem);
+}
+
+.player--editor .step--narrow .step__aside {
+  margin-right: 0;
+}
+
+/**
  * Высота кадра внутри шага — из пропорций схемы: их ставит сам компонент
  * инлайновым `aspect-ratio`, посчитанным по раскладке из модели.
  *
@@ -2231,7 +2247,7 @@ main:focus {
 }
 
 .editor__tree {
-  padding: 0.6rem 0.4rem;
+  padding: 0.7rem 0.55rem;
   border-right: 1px solid var(--border);
   /* Прокрутка появляется, только когда дерево не влезает в экран: панель
      прилипшая, и всё, что ниже экрана, иначе недостижимо. Фиксированные 70vh
@@ -2240,43 +2256,76 @@ main:focus {
   max-height: calc(100vh - 4rem);
 }
 
-.editor__root,
-.editor__dir,
-.editor__file {
-  display: block;
-  width: 100%;
-  margin: 0;
-  padding: 0.18rem 0.4rem 0.18rem calc(0.4rem + var(--depth, 0) * 0.85rem);
-  border: 0;
-  background: none;
-  font-family: var(--mono);
-  font-size: 0.78rem;
-  line-height: 1.5;
-  text-align: left;
+/**
+ * Дерево файлов — компонент VS Code Elements, UI-кит самого редактора.
+ *
+ * Здесь остаётся только тема: компонент читает её из `--vscode-*`, а страница
+ * держит свои токены и переключает светлое с тёмным сама. Поэтому переменные
+ * не копируются из редактора, а отображаются в наши — дерево следует за темой
+ * страницы, а не живёт в своей.
+ */
+.editor__tree vscode-tree {
+  --vscode-font-family: inherit;
+  --vscode-font-size: 0.8rem;
+  --vscode-font-weight: 400;
+  --vscode-foreground: var(--fg);
+  --vscode-icon-foreground: var(--muted);
+  --vscode-list-hoverBackground: color-mix(in srgb, var(--muted) 14%, transparent);
+  --vscode-list-hoverForeground: var(--fg);
+  --vscode-list-activeSelectionBackground: color-mix(in srgb, var(--accent) 16%, transparent);
+  --vscode-list-activeSelectionForeground: var(--fg);
+  --vscode-list-activeSelectionIconForeground: var(--accent);
+  --vscode-list-inactiveSelectionBackground: color-mix(in srgb, var(--muted) 12%, transparent);
+  --vscode-list-focusOutline: var(--accent);
+  --vscode-list-focusAndSelectionOutline: var(--accent);
+  --vscode-tree-indentGuidesStroke: color-mix(in srgb, var(--muted) 45%, transparent);
+  --vscode-tree-inactiveIndentGuidesStroke: color-mix(in srgb, var(--muted) 22%, transparent);
+}
+
+/* Корень — заголовок панели, как в проводнике редактора: это не строка, по
+   которой щёлкают, а подпись, от чего считаются пути. */
+.editor__root {
+  margin: 0 0 0.25rem;
+  padding: 0 0.5rem;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
   color: var(--muted);
 }
 
-.editor__root {
-  padding-left: 0.4rem;
-  color: var(--fg);
+/* Иконки типов файлов и каталогов. Цвет берут оттуда же, откуда берут его
+   иконки самого компонента, — поэтому на новой строке краснеют вместе с ней. */
+.editor__tree .codicon {
+  font-size: 15px;
+  color: var(--vscode-icon-foreground, var(--muted));
 }
 
-.editor__file {
-  cursor: pointer;
-  border-radius: 5px;
-  color: var(--fg);
+/* Строка, которой на этом шаге ещё нет. */
+vscode-tree-item[hidden] {
+  display: none;
 }
 
-.editor__file:hover {
-  background: color-mix(in srgb, var(--muted) 14%, transparent);
+/* Строка, появившаяся на этом шаге: цветом имени — так редактор помечает файл,
+   которого ещё нет в гите, и читателю это знакомо. Цвет идёт переменной, а не
+   свойством: строку красит сам компонент, и `color` снаружи он перекрывает. */
+vscode-tree-item.is-new {
+  --vscode-foreground: var(--accent);
+  --vscode-icon-foreground: var(--accent);
 }
 
-/* Открытый файл: тем же способом, каким редактор показывает активную вкладку —
-   заливкой, а не только цветом текста. */
-.editor__file.is-open {
-  background: color-mix(in srgb, var(--accent, var(--muted)) 16%, transparent);
-  color: var(--fg);
-  font-weight: 600;
+/**
+ * До регистрации компонента и без JS.
+ *
+ * Неизвестный элемент рисуется строчным, и дерево слиплось бы в одну строку.
+ * Здесь оно остаётся списком имён с отступами — читать можно, пока компонент
+ * не подхватил его.
+ */
+.editor__tree vscode-tree:not(:defined) vscode-tree-item {
+  display: block;
+  padding-left: 0.9rem;
+  font-size: 0.8rem;
+  line-height: 1.6;
 }
 
 .editor__panes {
@@ -2301,6 +2350,9 @@ main:focus {
 
 .editor[data-view='tree'] {
   grid-template-columns: minmax(0, 1fr) 0;
+  /* 16rem просит код, а не пять строк путей: в режиме дерева коробка по
+     содержимому, иначе под деревом остаётся пустое поле. */
+  min-height: 0;
 }
 
 .editor[data-view='tree'] .editor__panes {
@@ -2325,26 +2377,6 @@ main:focus {
   .editor__panes {
     transition: none;
   }
-}
-
-/* Файл, появившийся на этом шаге. Точка слева, а не цвет всей строки: строка
-   останется в дереве навсегда, а «новое» — состояние одного шага. */
-.editor__file.is-new::before,
-.editor__dir.is-new::before {
-  content: '';
-  position: absolute;
-  left: 0.1rem;
-  top: 50%;
-  width: 4px;
-  height: 4px;
-  margin-top: -2px;
-  border-radius: 50%;
-  background: var(--accent);
-}
-
-.editor__file,
-.editor__dir {
-  position: relative;
 }
 
 .editor__path {
