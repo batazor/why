@@ -73,12 +73,11 @@ steps:
     narration: >-
       From here the lesson looks at one context — billing, the most talkative of
       the four. With the boundary drawn, a word inside it can have one meaning.
-      Say "payment" outside and everybody hears their own: the product hears the
-      checkmark, processing hears the hold, finance hears the statement two days
-      later. Everybody nods in the meeting and keeps their own meaning, and the
-      disagreement surfaces in the code: one service's `payment.completed` is
-      about the checkmark, another's is about money in the account. So the first
-      file in the directory is a glossary.
+      Until it was drawn, the "payment" from the example meant three different
+      events, and everybody nodded in the meeting while keeping their own; in
+      code that shows up like this: one service's `payment.completed` is about
+      the checkmark, another's is about money in the account. So the first file
+      in the directory is a glossary.
   - id: glossary
     title: What is inside the glossary
     narration: >-
@@ -132,3 +131,11 @@ import Levels from '../../../components/Levels.astro';
 service has levels, and each level decides exactly one thing. A request comes in
 at the top and goes through them in order.
 </Levels>
+
+What follows is a walkthrough of one example. An online shop: the catalogue,
+delivery, customers and billing. Say "payment" inside it and every department
+hears its own thing. Product: the purchase went through, the customer saw the
+checkmark. Processing: the money is held, nothing was captured. Finance: the
+money will show up in a statement two days later, or will not show up at all.
+Three different events under one word — and that is where the walkthrough
+starts.
