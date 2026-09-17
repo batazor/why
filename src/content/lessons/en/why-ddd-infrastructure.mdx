@@ -1,0 +1,249 @@
+---
+title: 'Why DDD: applications && infrastructure'
+description: ''
+problem: >-
+  The scenario, the storage and the incoming call spread across layers, and what
+  each of them knows about the domain gets discovered in production: where the
+  transaction started, who sent the fact, and why a subscriber learned about
+  something that is not in the database.
+tags: [ddd]
+order: 8
+deck: why-ddd-infrastructure
+series: why-ddd
+labels:
+  kindStep: step
+  scenario: Scenario
+  scenarioSub: published the fact
+  subscriber: Subscriber
+  subscriberSub: started packing the parcel
+  published: the invoice is paid
+  notSaved: but storage has no such invoice
+terms:
+  C1: >-
+    The system as a whole, one block, and everything that talks to it: people
+    and neighbouring systems. What is inside it is not shown at this level.
+  C2: >-
+    Which parts the system is made of: services, databases, queues — and the
+    connections between them.
+  C3: >-
+    What is inside one part: its components. This is where aggregates, use
+    cases, ports and adapters appear.
+  DDD: >-
+    Domain-Driven Design. A way to describe a service in the words of its
+    domain, and to agree on what each of its levels decides.
+  ubiquitous language: >-
+    One set of words for the whole context: a word has one meaning, and the
+    code, the events, the API and the people all spell it the same way.
+  bounded context: >-
+    The stretch of a system inside which one word has one meaning. Outside it
+    the same word may mean something else, and the translation happens at the
+    border.
+  DTO: >-
+    A structure of plain fields in which data crosses a boundary: a request
+    body, a table row, a message on the bus. It has no behaviour.
+  aggregate: >-
+    A cluster of objects that changes as one whole, with a root through which
+    everything outside refers to it. The consistency and transaction boundary.
+  invariant: >-
+    A statement about state that must be true before and after every change.
+    Not a check at the door but a property the aggregate keeps at all times.
+  application: >-
+    The level that defines the jobs the software is supposed to do. It hands
+    the work to the domain, holds no domain rules and is kept thin.
+  transport: >-
+    The point at which the service is called: by a person or by another
+    system. No decision about the domain is made here.
+  value object: >-
+    A value with no identity: compared by its contents, never changed after it
+    is created, and keeping its own rules inside itself.
+  vertical slice: >-
+    A module cut along the scenario rather than the layer: transport, scenario
+    and the work with the aggregate live together because they change together.
+comments:
+  aggCopy: 'a copy of the lines: unchangeable from outside'
+  aggEvents: 'hands the recorded facts to the outside'
+  aggIssue: 'builds an invoice and sums up the lines'
+  aggPaid: 'marks the invoice paid; paying it twice is not allowed'
+  aggRecord: 'records the fact; sending it is not for the aggregate to do'
+  aggRoot: 'the invoice: aggregate root'
+  eventIssued: 'the invoice has been issued'
+  eventPaid: 'the invoice has been paid'
+  eventWhat: 'a domain fact; the name goes to the bus as the message type'
+  moneyMinor: 'an amount in cents'
+  portPublisher: 'the port: where facts are sent'
+  portRepo: 'the port: how an invoice reaches storage and comes back'
+  ucDeps: 'dependencies are domain ports and nothing else'
+  ucIssueRun: 'the order of the operation: build, save, tell'
+  ucPayRun: 'load, call the method, save, tell'
+  ucPublish: 'facts leave after the save, not before'
+  aggRestore: 'rebuilds the invoice from what is in storage; no facts recorded'
+  portUoW: 'the port: do the work whole or do not do it at all'
+  repoWhat: the storage port implementation
+  repoLoad: 'loads the invoice: the lines come with a separate query'
+  repoRestore: rebuilds the aggregate instead of creating a new one
+  repoSave: 'saves the invoice and its lines: two queries, one transaction'
+  uowWhat: a transaction hidden behind a port
+  uowDo: 'open, hand over the work, close: one commit per operation'
+  uowRollback: an error inside means a full rollback
+  uowConn: 'adapters take the connection here: the transaction sits in ctx'
+  outboxWhat: the publishing port implementation
+  outboxPublish: 'facts do not leave for the bus; they land next to the invoice'
+  outboxRow: the same transaction as the invoice
+  ucTxDeps: 'one more port next to the others: the unit of work'
+  ucTxRun: 'the same order, a different boundary'
+  ucTxDo: 'the save and the facts happen inside one operation'
+steps:
+  - id: issuing
+    title: 'Use case: issue an invoice'
+    narration: |-
+      The first module finally has code. The scenario takes three steps: build
+      the aggregate, save it, publish the facts.
+
+      Not a single domain rule is here — they stayed in `Issue`. Here there is
+      only order, and that is what [[application]] is: it hands out work and
+      keeps the course of the operation.
+
+      The scenario takes what the domain needs as plain parameters. Whatever
+      arrives over HTTP or from the bus does not reach this far: those are
+      transport [[DTO]] and the transport translates them.
+
+      The dependencies are two ports and no implementations. That is why the
+      scenario has one reason to change — the order of the operation: swap the
+      database or the bus, and it stays as it is.
+
+      Publishing comes after saving, not before: a subscriber should not learn
+      about something that never reached storage. There is still no atomicity
+      between those two steps — that is what a transactional outbox is for, and
+      it is a separate conversation.
+  - id: paying
+    title: 'Use case: take a payment'
+    narration: |-
+      The second module, the same order, a different story: load the aggregate,
+      call the method, save, publish.
+
+      The "already paid" check is not written here — it is in `MarkPaid`. The
+      scenario only passes the error up: were it checking on its own, the rule
+      would live in two places, and one day one of them would fall behind.
+
+      It also shows why the repository hands out the whole aggregate: state is
+      changed by its methods, and for that you need the aggregate itself, not a
+      row from the database.
+  - id: storage
+    title: The ports are there, the implementation is not
+    narration: |-
+      On the right is the storage port from the second chapter. The domain
+      declared what it needs: take an invoice by number and save it whole. Who
+      does that is not its business.
+
+      Time to do it. And the first question of the implementation is not about
+      SQL: how do you return an aggregate whose fields are all closed? `Issue`
+      will not do — it creates a new invoice and records the fact "invoice
+      issued", while we are loading one that already exists.
+  - id: restore
+    title: How the aggregate comes back from storage
+    narration: |-
+      `Load` is the second way to come into being: not "create" but "bring back
+      what was already there". It records no facts and checks no invariants: the
+      data was already in storage, and checking it again means not trusting your
+      own write.
+
+      It lives in the domain, because only the domain can rebuild its own
+      aggregate. Handing that job to the infrastructure means opening the fields
+      to it — and with them the ability to assemble an invoice the domain does
+      not allow.
+  - id: repo
+    title: The port implementation
+    narration: |-
+      Infrastructure: `database/sql`, two tables, queries. The domain knows
+      nothing about this file — knowledge goes from the outside in.
+
+      `Save` writes the invoice and its lines with two queries. That already
+      needs a transaction: anything can fail in between, and storage would keep
+      an invoice with no lines — a state the domain does not allow.
+
+      The connection comes from a `conn(ctx, db)` function rather than a field.
+      Why — that is the next steps.
+  - id: broken
+    title: Saved and published
+    narration: |-
+      Back to the scenario. It makes two calls: save and publish. Separately
+      both are right; together they are not.
+
+      If `Publish` fails, the invoice is in storage and nobody knows about it:
+      delivery does not start packing, accounting sees no charge. If `Save`
+      fails after a successful `Publish`, it is worse: subscribers know about an
+      invoice that does not exist.
+
+      I left a note about this back in the chapter about scenarios. Time to
+      close it: there must be one operation, not two.
+  - id: uow
+    title: Unit of work
+    narration: |-
+      A unit of work is a port that says one thing: do the work whole or do not
+      do it at all. There is no `Begin`, no `Commit` and not even the word
+      "transaction" in the domain — there is a function someone will run under
+      their own responsibility.
+
+      That is why the port stands next to the others: the domain does not know
+      there is a Postgres transaction behind it and would work over the same
+      interface on anything else. The only thing it demands is that "whole"
+      really means whole.
+  - id: transaction
+    title: One operation instead of two
+    narration: |-
+      The scenario changed in one place: the save and the publish moved inside
+      `Do`. The order of the steps is the same; the boundary changed — it is one
+      operation now.
+
+      The implementation puts the transaction into `ctx`, and the adapters take
+      it from there with that same `conn` function. So the scenario passes no
+      transaction around and never sees one: what it needs is a boundary, not a
+      connection.
+
+      It is easy to overdo this. A unit of work is not "a transaction per query"
+      and not a way to change two aggregates at once: the aggregate is still the
+      consistency boundary, while `Do` holds the boundary of the **operation**.
+  - id: outbox
+    title: A bus does not join a transaction
+    narration: |-
+      One lie is left. A bus is not a database: it cannot be rolled back with
+      the transaction. Send a fact inside `Do`, and a failure at commit leaves
+      subscribers with a fact about an invoice that does not exist.
+
+      So the publishing implementation sends nothing. It writes the fact as a
+      row in the same transaction, next to the invoice: either both are there or
+      neither is.
+
+      A separate process sends them — it reads the table, puts the facts on the
+      bus and marks what it sent. It may send twice, so a subscriber has to be
+      idempotent — but it cannot send what never happened.
+  - id: files
+    title: What came out around the domain
+    narration: |-
+      The tree shows the whole layout: the domain in `domains/invoice`, the
+      scenarios in `applications`, one module per slice. Click a file to read
+      it.
+
+      - `applications/issuing/issue.go` — issue an invoice, all inside one unit
+        of work.
+      - `applications/payment/pay.go` — take a payment.
+      - `domains/invoice/load.go` — how the aggregate comes back from storage.
+      - `domains/invoice/uow.go` — the unit of work port.
+      - `infrastructure/postgres/invoices.go` — the storage implementation.
+      - `infrastructure/postgres/uow.go` — the transaction and `conn(ctx, db)`.
+      - `infrastructure/postgres/outbox.go` — facts as a row in the same
+        transaction.
+
+      Over the whole chapter the domain changed by one file — `load.go` — and
+      that one is about rebuilding its own aggregate. Everything else landed
+      outside, behind the ports the domain declared itself.
+
+      What is still missing: the incoming call and the wiring of the
+      application. Those come next.
+---
+
+The domain is described and knows nothing about the outside: it has an
+aggregate, values, facts and two ports.
+
+What follows is everything around it: the scenarios, the port implementations,
+the incoming call and the wiring of the application.

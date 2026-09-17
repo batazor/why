@@ -27,6 +27,16 @@ const ESCAPE: Record<string, string> = {
  */
 const TERM = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
 
+/**
+ * Ссылка: `[текст](адрес)`.
+ *
+ * Адрес пишется относительным — `../why-cqrs/`, — и это не стиль, а
+ * требование: сайт живёт и в корне домена, и на подпути (`/why` у Pages), а
+ * абсолютный путь на подпути уводит в 404. Относительный считается от адреса
+ * страницы, и у уроков он всегда со слешем на конце.
+ */
+const LINK = /\[([^\]\n]+)\]\(([^)\s]+)\)/g;
+
 export function inlineMarkdown(text: string): string {
   return (
     text
@@ -36,6 +46,9 @@ export function inlineMarkdown(text: string): string {
       .replace(TERM, (_, key: string, label?: string) =>
         `<span data-term="${key}">${label ?? key}</span>`,
       )
+      // Ссылки после терминов: в подписи ссылки может стоять термин, а вот
+      // ключ термина ссылкой быть не может.
+      .replace(LINK, (_, text: string, href: string) => `<a href="${href}">${text}</a>`)
       // Код первым: внутри него звёздочки — это звёздочки, а не разметка.
       .replace(/`([^`]+)`/g, '<code>$1</code>')
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')

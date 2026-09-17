@@ -1,0 +1,277 @@
+---
+title: 'Why DDD: domain'
+description: ''
+problem: >-
+  The domain has been named in words, but in code it is still a struct with
+  exported fields and `float64` for money. The domain rules live in the callers:
+  each holds its own half, and one day one of them falls behind.
+tags: [ddd]
+order: 5
+deck: why-ddd-domain
+series: why-ddd
+labels:
+  kindData: data
+  lines: Invoice lines
+  linesSum: 3 × 10.00 = 30.00
+  total: Total in storage
+  totalSaved: '25.00'
+  passedIn: the total came in as a parameter
+  noRule: the rule lives nowhere
+terms:
+  C1: >-
+    The system as a whole, one block, and everything that talks to it: people
+    and neighbouring systems. What is inside it is not shown at this level.
+  C2: >-
+    Which parts the system is made of: services, databases, queues — and the
+    connections between them.
+  C3: >-
+    What is inside one part: its components. This is where aggregates, use
+    cases, ports and adapters appear.
+  DDD: >-
+    Domain-Driven Design. A way to describe a service in the words of its
+    domain, and to agree on what each of its levels decides.
+  ubiquitous language: >-
+    One set of words for the whole context: a word has one meaning, and the
+    code, the events, the API and the people all spell it the same way.
+  bounded context: >-
+    The stretch of a system inside which one word has one meaning. Outside it
+    the same word may mean something else, and the translation happens at the
+    border.
+  DTO: >-
+    A structure of plain fields in which data crosses a boundary: a request
+    body, a table row, a message on the bus. It has no behaviour.
+  anemic model: >-
+    Data in structs with open fields, rules in the procedures around them. The
+    model knows what it is made of but not what may be done to it.
+  aggregate: >-
+    A cluster of objects that changes as one whole, with a root through which
+    everything outside refers to it. The consistency and transaction boundary.
+  invariant: >-
+    A statement about state that must be true before and after every change.
+    Not a check at the door but a property the aggregate keeps at all times.
+  application: >-
+    The level that defines the jobs the software is supposed to do. It hands
+    the work to the domain, holds no domain rules and is kept thin.
+  transport: >-
+    The point at which the service is called: by a person or by another
+    system. No decision about the domain is made here.
+  value object: >-
+    A value with no identity: compared by its contents, never changed after it
+    is created, and keeping its own rules inside itself.
+  vertical slice: >-
+    A module cut along the scenario rather than the layer: transport, scenario
+    and the work with the aggregate live together because they change together.
+comments:
+  aggCopy: 'a copy of the lines: unchangeable from outside'
+  aggEvents: 'hands the recorded facts to the outside'
+  aggIssue: 'builds an invoice and sums up the lines'
+  aggPaid: 'marks the invoice paid; paying it twice is not allowed'
+  aggRecord: 'records the fact; sending it is not for the aggregate to do'
+  aggRoot: 'the invoice: aggregate root'
+  eventIssued: 'the invoice has been issued'
+  eventPaid: 'the invoice has been paid'
+  eventWhat: 'a domain fact; the name goes to the bus as the message type'
+  moneyMinor: 'an amount in cents'
+  naiveIssue: 'builds an invoice with the total given'
+  naiveShape: 'an invoice issued to a customer'
+  portPublisher: 'the port: where facts are sent'
+  portRepo: 'the port: how an invoice reaches storage and comes back'
+steps:
+  - id: domain
+    title: The domain in plain types
+    narration: |-
+      Everything below goes through **issuing**: it creates the invoice, so it
+      has to name everything an invoice is made of.
+
+      On the right is the invoice as an [[anemic model]] — the way a domain most
+      often gets written: a struct of strings, numbers and time. It reads at
+      once, nothing to spare.
+
+      It sits in `domains/invoice/`, next to the rest of the domain code. The
+      modules — `issuing`, `payment`, `overdue` — use it but do not own it: each
+      needs the same invoice, and none of them can have a copy of its own.
+
+      And it is already the domain: the invoice has a number, a customer, lines,
+      a total, a due date and a state — the same words as in the glossary. The
+      main thing here is done right.
+
+      What this code pays for that comes next.
+  - id: problems
+    title: What is wrong with it
+    narration: |-
+      This code holds not a single rule of the domain. The callers hold them,
+      each on their own.
+
+      - **The total comes in as a parameter.** `Issue` does not compute it from
+        the lines, it accepts it. So an invoice whose total is not the sum of
+        its lines exists, and it will reach the database.
+      - **`float64` for money.** `0.1 + 0.2` is not `0.3`, and an invoice has to
+        add up to the cent. And nothing stops you from adding a price to a
+        quantity: to the compiler they are both just numbers.
+      - **State is a string.** `"issued"`, `"issued "`, `"pain"` — the typo
+        compiles and ships.
+      - **The fields are exported.** Any code outside changes a line and the
+        total without asking the invoice.
+
+      The usual answer to this is validation at the entry point. But there is one
+      validator and the fields get changed from anywhere: one place that forgot
+      about it is enough. The rule belongs on the data itself.
+  - id: money
+    title: 'Value object: money'
+    narration: |-
+      Money is a [[value object]]. It has no identity: two amounts of the same
+      value are the same money, and they are compared by value, not by
+      reference.
+
+      It lives in `vo` inside the domain: a value is part of the model, and the
+      domain is what comes up with it. The package itself knows neither the
+      aggregate nor the modules — the dependency goes one way only, towards it.
+
+      Inside it are whole cents. No fractional units get into the type: money is
+      built from an `int64` only, and `0.1 + 0.2` never arrives as a bank
+      statement again.
+
+      Money can only be added through `Add`, so the rule holds everywhere money
+      is added — not only where someone remembered to check. And a price can no
+      longer be added to a quantity: different types, the compiler says no.
+  - id: values
+    title: Back to the invoice
+    narration: |-
+      The same file as three steps ago — and `vo.Money` is in it instead of
+      `float64`. The price and the total are money now, and there is no way to
+      count them as anything else.
+
+      The other values follow the same pattern: `Number`, `CustomerID` and
+      `Status` are types now, not `string`. They are declared in their own files
+      of the package and simply used here — the number can no longer be swapped
+      with the customer in a call, and the typo `"pain"` does not compile.
+
+      A due date, an address, a tax id are done the same way — anything that has
+      its own rules and no identity.
+  - id: aggregate
+    title: 'Aggregate: the invoice'
+    narration: |-
+      The second thing that changed in the file: the fields are closed. The
+      outside world holds the invoice whole — a line cannot be changed around
+      it. An object like that is called an [[агрегат|aggregate]].
+
+      `Issue` is the only way an invoice comes into being, so every
+      [[инвариант|invariant]] it promises is checked there. There cannot be zero
+      lines. The total is not passed in as a parameter — it is computed from the
+      lines: pass it from outside, and the first call with a wrong number stores
+      an invoice the domain does not allow.
+
+      The lines are copied, not referenced. Otherwise the caller keeps the slice
+      and changes it later — and the invoice becomes a different invoice without
+      knowing.
+
+      Status is changed by methods, not by assignment from outside. Which ones
+      comes next: for now `Issue` is all the invoice has.
+  - id: transition
+    title: Changing state
+    narration: |-
+      The invoice can do more than come into being. Payment is a state
+      transition, and a method makes it — not an assignment from outside.
+
+      It sits in a file of its own: one file per method. The directory then
+      shows what the invoice can do without opening the struct.
+
+      The check inside the method is an [[инвариант|invariant]], not input
+      validation: a paid invoice cannot be paid twice, and the outside learns
+      about it only from the error the invoice itself returns.
+
+      What the file does not have: no write to storage, no event sent, no
+      transaction. The method changes state and that is all. Who saves it and
+      who tells the outside is decided by the levels above.
+  - id: port
+    title: 'The port: repository'
+    narration: |-
+      The invoice has to be kept somewhere. The domain declares the interface
+      itself — it decides what it needs: take an invoice by its number and save
+      it whole.
+
+      There is no implementation here, and `context` is the only thing this file
+      knows about the outside world. No SQL, no driver, no table name.
+
+      That is the dependency inversion: the infrastructure knows about the
+      aggregate, the aggregate knows nothing about the infrastructure. Postgres
+      can be swapped for anything without opening a single domain file.
+
+      The invoice is saved whole, not line by line: the aggregate is the
+      transaction boundary, and it has no halves.
+  - id: events
+    title: Domain events
+    narration: |-
+      The invoice has been issued — someone else has to learn about it:
+      delivery, accounting, notifications. Who exactly, the domain neither
+      knows nor cares.
+
+      So it calls no one and names a fact instead: what happened, in the past
+      tense. `Issued` — the invoice has been issued, `Paid` — it has been paid.
+      Inside is only what describes the fact: no reference to the aggregate, no
+      behaviour.
+
+      The one thing a fact must be able to do is name itself. `FactName` does
+      that: subscribers see the message under this name, so the name is part of
+      the contract, not an implementation detail. The `Event` interface is made
+      of exactly that.
+
+      The facts live in a package of their own — `domains/invoice/events`. More
+      than the aggregate reads them: infrastructure publishes them and an
+      adapter translates them outward, and a separate package makes that
+      dependency visible. That is why the fields are plain strings rather than
+      the invoice's own types: the facts package knows nothing about the
+      aggregate, so the two never reference each other in a circle.
+
+      The past tense is not a style but a check. If it cannot be named that way,
+      it is not a fact but a request — and it should have arrived as a command
+      from the other side.
+  - id: recording
+    title: The aggregate records facts
+    narration: |-
+      The aggregate records the fact where it changes state. It cannot send it:
+      it has neither a bus nor a transaction, and it has no business knowing
+      about them.
+
+      So the facts pile up inside and are handed out as a list — `Events()`.
+      Taking them and sending them is decided by the level above.
+
+      The point is that the state and the fact about it change in one place and
+      in one operation. Send the event from inside the method, and one day you
+      get an event about something that never made it to storage.
+  - id: publisher
+    title: 'The second port: publisher'
+    narration: |-
+      Someone has to send the facts. Here too the domain declares a port
+      instead of taking a ready-made bus: who gets them and over what is the
+      infrastructure's business.
+
+      One method, taking a list: the facts leave in the same batch the
+      aggregate recorded them in. Sending half of them would be a lie about the
+      operation.
+  - id: files
+    title: What the domain came out as
+    narration: |-
+      The whole domain — six files. The tree and the contents are side by side
+      now: click any file and see what is in it.
+
+      - `invoice.go` — the aggregate: fields closed, `Issue` builds the invoice
+        and sums up the lines.
+      - `paid.go` — the state change, one file per method.
+      - `events/event.go` — the facts and their names.
+      - `repository.go` — the storage port.
+      - `publisher.go` — the publishing port.
+      - `vo/money.go` — money: whole cents and its own arithmetic.
+
+      None of them knows about a database, about HTTP or about a bus. From the
+      outside there is only `context` and two interfaces the domain declared
+      itself.
+
+      That is why the next part changes nothing in the domain: it writes what
+      implements those interfaces and what calls them.
+---
+
+The first chapter ended with a tree of three empty directories: the boundaries
+are drawn, the glossary sits at the root of the context, the domains are named.
+
+What follows is what lives inside the domain. In Go, file by file.

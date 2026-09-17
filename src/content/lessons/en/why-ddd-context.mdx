@@ -1,15 +1,23 @@
 ---
-title: DDD in action
+title: 'Why DDD: boundary context'
 description: ''
 problem: >-
-  Every service is arranged its own way: its own directory layout, its own words
-  for the same things, its own answer to a problem already solved twice next
-  door. What you know about one service does not carry to the next — not for the
+  Every service is arranged its own way: its own directory layout, a muddle of
+  terms, a wheel reinvented and the same mistake made for the hundredth time.
+  What you know about one service does not carry to the next — not for the
   author, not at review, not for whoever arrives a year later.
 tags: [ddd]
 order: 4
-deck: ddd-in-action
-draft: true
+deck: why-ddd-context
+series: why-ddd
+labels:
+  kindTeam: team
+  product: Product
+  productSays: the user saw a checkmark
+  ledger: Accounting
+  ledgerSays: the money arrives with a statement in two days
+  sameWord: one word, "payment"
+  nobodyAsked: everyone nodded at the meeting
 terms:
   C1: >-
     The system as a whole, one block, and everything that talks to it: people
@@ -33,6 +41,9 @@ terms:
   DTO: >-
     A structure of plain fields in which data crosses a boundary: a request
     body, a table row, a message on the bus. It has no behaviour.
+  command: >-
+    A request to change state, named as a single type: what to do and with
+    which data. It has a shape, so it can be passed on, logged and replayed.
   aggregate: >-
     A cluster of objects that changes as one whole, with a root through which
     everything outside refers to it. The consistency and transaction boundary.
@@ -45,6 +56,9 @@ terms:
   transport: >-
     The point at which the service is called: by a person or by another
     system. No decision about the domain is made here.
+  value object: >-
+    A value with no identity: compared by its contents, never changed after it
+    is created, and keeping its own rules inside itself.
   vertical slice: >-
     A module cut along the scenario rather than the layer: transport, scenario
     and the work with the aggregate live together because they change together.
@@ -222,10 +236,6 @@ steps:
       The entry points already show it: `issuing` is called by the bus,
       `payment` by a synchronous call from processing, `overdue` by a schedule.
       Three different ways in, and none of them belongs to the domain.
-
-      The directories are still empty. What lives inside a module is the next
-      conversation.
-
 ---
 
 import Levels from '../../../components/Levels.astro';
@@ -238,9 +248,9 @@ import Levels from '../../../components/Levels.astro';
       decides: 'where we are called, and which code we answer with',
       text: `The point at which the service is called: by a person or by another system. Data arrives here, and the answer to the request leaves from here.
 
-No decision about the domain is made at this level — transport translates: protobuf, JSON or Avro into the words of the domain and back, through a [[DTO]], one per protocol.
+No decision about the domain is made at this level — transport translates: protobuf, JSON or Avro into domain entities and back, through a [[DTO]], one per protocol.
 
-The DTO goes no further: what reaches application is a command in the words of the domain rather than whatever the caller sent.`,
+The DTO goes no further: what reaches application is a [[command]] built from domain entities rather than whatever the caller sent. How a command differs from a query, and why it is worth naming as a type, is in [the chapter on CQRS](../why-cqrs/).`,
     },
     {
       key: 'application',
@@ -283,10 +293,10 @@ This decision comes before the others: until it is said what the context owns an
   ]}
 >
 **<span data-term="DDD">DDD</span>** answers that with a single agreement: a
-service has levels, and each level decides exactly one thing. Knowledge only
+service has levels, and each level has exactly one job. Knowledge only
 points down: a level knows the one below it and nothing about the one above.
-That is why the domain depends on neither the database nor the protocol it was
-called over.
+That is why the domain depends on neither the database nor the protocol of the
+call.
 </Levels>
 
 What follows is a walkthrough of one example. An online shop: the catalogue,

@@ -191,10 +191,18 @@ for (const [slug, perLocale] of bySlug) {
     }
   }
 
-  // Комментарии в коде — placeholder'ы {{ключ}}. Собираем, что код требует.
+  // Комментарии в коде — placeholder'ы {{ключ}}. Собираем, что код требует:
+  // и панели кода в колоде, и файлы дерева со всеми их правками.
   const neededComments = new Set();
-  for (const step of deck) {
-    for (const match of (step.code ?? '').matchAll(/\{\{(\w+)\}\}/g)) {
+  const codes = [
+    ...deck.map((step) => step.code ?? ''),
+    ...(deckModule.tree?.files ?? []).flatMap((file) => [
+      file.code ?? '',
+      ...(file.edits ?? []).map((edit) => edit.code ?? ''),
+    ]),
+  ];
+  for (const code of codes) {
+    for (const match of code.matchAll(/\{\{(\w+)\}\}/g)) {
       neededComments.add(match[1]);
     }
   }

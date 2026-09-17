@@ -1,0 +1,211 @@
+---
+title: 'Why DDD: domain services'
+description: ''
+problem: >-
+  The late fee is calculated from the due date, the daily rate and the working
+  calendar. It does not fit in the aggregate — the invoice would start knowing
+  about calendars; it cannot go into the scenario either — the rule would leave
+  the domain, and the next caller would calculate it differently.
+tags: [ddd]
+order: 6
+deck: why-ddd-services
+series: why-ddd
+labels:
+  kindRule: rule
+  rule: Late fee
+  ruleNeeds: due date, rate, working calendar
+  invoice: Invoice
+  invoiceKnows: knows only about itself
+  notOneAggregate: the rule is not about one aggregate
+  leaksToScenario: in a scenario it leaves the domain
+terms:
+  доменный сервис: >-
+    A domain rule that belongs in no aggregate: it is about several of them, or
+    about something the aggregate does not have. It does not leave the domain,
+    though — it lives in the same model. It has no ports and no transactions.
+  анемичный домен: >-
+    Data in structs, rules in procedures around them. The DDD words stay in the
+    directory names while the domain itself is in someone else's hands.
+  агрегат: >-
+    A cluster of objects that changes as one whole, with a root the outside world
+    goes through. A consistency boundary and a transaction boundary.
+  инвариант: >-
+    A statement about state that must hold before and after every change. Not an
+    input check but a property the aggregate keeps at all times.
+  application: >-
+    The layer that decides what jobs the program does. It hands work to the
+    domain, holds no domain rules and stays thin.
+  value object: >-
+    A value with no identity: compared by its contents, never changed after it is
+    created, and keeping its own rules inside itself.
+comments:
+  aggCharge: puts the fee on the invoice; a paid invoice takes none
+  aggCopy: 'a copy of the lines: unchangeable from outside'
+  aggEvents: 'hands the recorded facts to the outside'
+  aggIssue: 'builds an invoice and sums up the lines'
+  aggPaid: 'marks the invoice paid; paying it twice is not allowed'
+  aggRecord: 'records the fact; sending it is not for the aggregate to do'
+  aggRoot: 'the invoice: aggregate root'
+  eventIssued: 'the invoice has been issued'
+  eventPaid: 'the invoice has been paid'
+  eventPenalty: the invoice was charged a late fee
+  eventWhat: 'a domain fact; the name goes to the bus as the message type'
+  moneyMinor: 'an amount in cents'
+  portPublisher: 'the port: where facts are sent'
+  portRepo: 'the port: how an invoice reaches storage and comes back'
+  svcCalendar: 'the working calendar: part of the model, not a storage port'
+  svcPenalty: 'the rule: an invoice, a rate and a calendar — an amount out'
+  svcFromAggregate: 'the rule takes the due date from the invoice itself, not from the caller'
+  ucOverdueCall: the rule computes the amount from the invoice, the rate and the calendar
+  ucOverdueApply: only the invoice itself can charge a penalty to the invoice
+  ucOverdueDeps: two ports, a calendar and a rate — all the scenario needs
+  ucOverdueRun: load, calculate, apply, save, tell
+steps:
+  - id: problem
+    title: The rule has nowhere to live
+    narration: |-
+      On the right is the tree, and `overdue` in it is still empty. Time to work
+      out why.
+
+      The late fee is calculated from the due date, the daily rate and the
+      working calendar: weekends do not count, holidays do not either. That is a
+      domain rule — it is discussed with accounting, not with developers.
+
+      It cannot go into the [[агрегат|aggregate]]: the invoice would start
+      knowing about calendars and rates, and neither belongs to it — the rate is
+      changed by an order, the calendar comes from a reference table. It cannot
+      go into the scenario either: the rule would leave the domain for
+      [[application]], and the next caller — from another module — would
+      calculate it differently.
+
+      So the rule needs a place of its own inside the domain.
+  - id: service
+    title: The domain service
+    narration: |-
+      A [[доменный сервис|domain service]] is a rule that belongs in no
+      aggregate. Here it is a function: due date, time, rate, calendar → an
+      amount.
+
+      The invoice arrives as an aggregate rather than a handful of fields, and
+      that is not a detail of the signature. The rule asks the invoice for what
+      it needs — `overdue.DueOn()` — so the caller does not have to know what
+      the amount is computed from. Pass a date instead of the invoice, and the
+      rule becomes a calculator while the knowledge "a penalty is counted from
+      the due date" moves out to whoever called it.
+
+      Why not a method on the invoice, then? A fair question: there is one
+      aggregate here, and `ChargePenalty` already exists. But the method would
+      have to take the rate and the calendar — things the invoice does not have
+      and should not know about: the rate comes from a tariff, the calendar from
+      another service with its holidays and shifted days. The invoice would
+      start depending on both of them to compute a single number.
+
+      There are exactly two reasons for a service, and the second is the more
+      obvious one: a rule about **several aggregates**, where a method will not
+      do at all — none of them may change the others. This is the first case: a
+      rule about one invoice, but from data the invoice does not hold.
+
+      It does not leave the domain, though: the penalty is a rule about the
+      invoice — just not about what the invoice knows on its own. That is why it
+      sits inside the invoice domain rather than beside all the domains:
+      `domains/invoice/services/penalty`. A package of its own rather than a
+      file next to the aggregate — the rule has its own inputs and its own set
+      of calendar implementations, and putting it into the shared domain package
+      would mix "what an invoice is" with "how a penalty is computed". It is
+      named after the package: `penalty.Amount(...)`.
+
+      There is deliberately no `services/` at the root of the domains. A rule is
+      either about one model — and then it lives in it — or about several
+      domains at once, and then it is not a domain service but coordination: its
+      place is [[application]], which already holds the order of the operation
+      and the transaction. A shared folder for "rules in general" ends up a
+      dumping ground with no domain visible in it.
+
+      What it does not have: `context`, a repository, infrastructure errors.
+      That is why it can be called in one line and answer without starting a
+      database or a bus.
+
+      `Calendar` stayed in the domain, in `calendar.go`: more than the penalty
+      uses it — the overdue rule will answer by it a chapter later. It is an
+      interface but not a port: it has neither `ctx` nor an
+      error, and it speaks about the domain, not about storage. The sign is
+      simple: a port describes where to get data from, while this is part of the
+      model that may have several implementations, because a business has
+      several calendars.
+  - id: applying
+    title: The service calculates, the aggregate applies
+    narration: |-
+      The service calculated the amount — from the very invoice it was handed —
+      but only the invoice itself can put it on the invoice. So `ChargePenalty`
+      is a method of the aggregate, and it keeps its own
+      [[инвариант|invariants]]: a paid invoice takes no fee, a zero fee changes
+      nothing.
+
+      Hence the line between them: the service **reads** the aggregate and
+      cannot change it — it has neither access to the fields nor the right to
+      record a fact.
+
+      The line and the total change here, in one operation, and the fact —
+      `PenaltyCharged` — is recorded here too. The service publishes no facts and
+      changes no state: it calculates.
+
+      That is the division of labour inside the domain: the rule in the service,
+      the state in the aggregate. Swap them and either the aggregate grows
+      reference tables, or the service starts writing into fields that are not
+      its own.
+  - id: scenario
+    title: Who calls it
+    narration: |-
+      The last empty module is filled: `applications/overdue` — a scheduled
+      scenario. It loads the invoice, calls the service, applies the result
+      through the method, saves and publishes the facts.
+
+      Compare it with the service next to it. The scenario has `ctx`, two ports
+      and the order of the operation — and not a single rule. The service has a
+      rule — and not a single port. The sign that keeps them apart: once `ctx` or
+      an interface to storage appears, it is not a domain service any more but
+      application.
+
+      The scenario does not touch the due date at all: it hands the rule the
+      invoice, and the rule takes the date itself. The invoice knows the date
+      because the invoice issued it; the rate and the calendar are not kept on
+      the invoice — the scenario brings those. That is the difference between a
+      field of the aggregate and an input of the rule.
+  - id: notneeded
+    title: When a service is not needed
+    narration: |-
+      A domain service is the most abused tool in DDD, so here is the other side
+      of it, honestly.
+
+      - A rule about one aggregate, from its own data only, is **a method of the
+        aggregate**. `MarkPaid` must not be a service: it changes the state of
+        one invoice and needs nothing from outside to do it.
+      - A rule about one value is **a method of a [[value object]]**. Adding
+        money is the job of `Money`, not of a service next to it.
+      - A rule that needs a repository or a bus is **not a domain service**. It
+        is a scenario, and it lives in `application`.
+
+      If services appear by default for everything, you get an
+      [[анемичный домен|anemic domain]]: structs with fields, procedures around
+      them and DDD words in the directory names. That differs from the original
+      "everything in one file" only by the number of files.
+  - id: files
+    title: What came out
+    narration: |-
+      Click a file to read it.
+
+      - `domains/invoice/services/penalty/penalty.go` — the rule: due date,
+        rate, calendar → an amount.
+      - `domains/invoice/calendar.go` — the working calendar: part of the model. No ports, no `ctx`.
+      - `domains/invoice/charged.go` — the aggregate method: applies the amount,
+        keeps the invariants, records the fact.
+      - `applications/overdue/charge.go` — the scheduled scenario: load,
+        calculate, apply, save, tell.
+
+      The domain grew by two files and still knows nothing about a database or a
+      schedule. All three modules now have code.
+---
+
+The domain from the second chapter: the aggregate, the values, the facts and two
+ports. Here a rule joins it that belongs to no aggregate — along with the place
+where such a rule is supposed to live.

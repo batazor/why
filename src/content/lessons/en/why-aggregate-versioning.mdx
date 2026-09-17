@@ -1,0 +1,236 @@
+---
+title: Why aggregate versioning
+description: ''
+problem: >-
+  Two calls read the same invoice, each applied its own rule, both saved. What
+  stayed in the database is whatever was written second — the first change is
+  gone, and neither transaction noticed: both `UPDATE`s succeeded.
+tags: [ddd, concurrency, pattern]
+order: 11
+deck: why-aggregate-versioning
+series: why-ddd
+labels:
+  kindCall: call
+  first: Payment
+  firstDoes: marked the invoice paid
+  second: Overdue
+  secondDoes: charged a penalty
+  sameState: both read the same state
+  lastWins: what stayed is what was written second
+terms:
+  lost update: >-
+    A change that disappeared not because of a failure but because a second
+    call wrote over it, using state read before the first one landed.
+  optimistic locking: >-
+    The write checks that the state has not changed since it was read, and
+    refuses if it has. It locks nothing — it only detects.
+  pessimistic locking: >-
+    The row is locked for the length of the transaction and everyone else
+    waits. No conflict arises, but no parallel work on that row does either.
+  aggregate: >-
+    A cluster of objects that changes as one whole, with a root through which
+    everything outside refers to it. The consistency and transaction boundary.
+  unit of work: >-
+    A port that runs the work it is given as a whole or does not run it at all.
+    The word "transaction" never appears in the domain.
+  outbox: >-
+    A table the fact is written to by the same transaction that makes the
+    change. A separate process reads that table and puts the fact on the bus.
+  idempotency: >-
+    The property of an operation to give the same result when repeated. The
+    second time adds nothing and breaks nothing.
+  projection: >-
+    A model for reading: data laid out the way it is shown, not the way it is
+    changed.
+  application: >-
+    The level that defines the jobs the software is supposed to do. It hands
+    the work to the domain, holds no domain rules and is kept thin.
+comments:
+  aggRoot: 'the invoice: the aggregate root'
+  aggIssue: creates the invoice and sums the lines
+  aggIssueVer: 'creates the invoice; the version stays zero — it is not in the database yet'
+  aggCopy: 'a copy of the lines: they cannot be changed from outside'
+  aggRecord: 'records the fact; sending it is not the aggregate''s job'
+  aggEvents: hands the collected facts outward
+  aggVersion: the number of the state that was read from the database
+  aggVersionGet: 'returns the version; nothing outside can change it'
+  aggPaid: 'marks the invoice paid; paying twice is not allowed'
+  aggRestore: rebuilds the invoice from what was in the database
+  aggRestoreVer: the version arrives together with the data
+  eventWhat: 'a domain fact; its name travels to the bus as the message type'
+  eventIssued: the invoice was issued
+  eventPaid: the invoice was paid
+  portRepo: 'port: how the invoice gets into the database and comes back'
+  portSaveConflict: 'returns ErrConflict if the invoice was changed in the meantime'
+  errConflict: the invoice changed between the read and the write
+  portPublisher: 'port: where the facts go'
+  portUoW: 'port: run the work as a whole or do not run it'
+  moneyMinor: the amount in minor units
+  ucTxDeps: the dependencies are domain ports and nothing else
+  ucIssueRun: 'the order of the operation: build, save, tell'
+  ucPayRun: 'load, call the method, save, tell — as one operation'
+  ucAttempts: how many times to try on a conflict
+  ucRetryRun: retries the whole attempt while someone else is changing the invoice
+  ucRetryConflict: 'a conflict is not a bad call: the data went stale'
+  ucRetryOnce: 'one attempt: load, apply, save, tell'
+  repoWhat: the storage port implemented on Postgres
+  repoLoad: loads the invoice and rebuilds the aggregate
+  repoLoadVer: loads the invoice together with the row version
+  repoRestore: rebuilding the aggregate is the domain's job
+  repoSave: writes the invoice and its lines
+  repoSaveVer: 'writes the invoice if its version in the database is still the same'
+  repoInsert: 'version zero — the invoice is new, so it is inserted'
+  repoUpdateVer: the version check sits inside the UPDATE itself
+  repoNoRows: no rows — the version in the database is a different one
+  uowWhat: 'the unit of work implemented as a Postgres transaction'
+  uowDo: all of the work inside one transaction
+  uowRollback: an error inside — rolled back as a whole
+  uowConn: 'the transaction from ctx, if the operation has already begun'
+  outboxWhat: 'publishing implemented as rows in the database'
+  outboxPublish: writes the facts into the same transaction
+  outboxRow: the fact name and the message body
+steps:
+  - id: lost
+    title: Two calls, one invoice
+    narration: |-
+      On the right is the payment use case as the infrastructure chapter left
+      it: a [[unit of work]], a repository, published facts.
+
+      While it is called one at a time it is correct. Now two calls at once: one
+      takes a payment, the other charges a penalty — the overdue scheduler woke
+      up a second earlier.
+
+      Both loaded the invoice in the same state. Both applied their rule to
+      their own copy in memory. Both saved. What stayed in the database is
+      whatever was written second: the penalty wiped the payment, or the payment
+      wiped the penalty.
+
+      This is a [[lost update]], and a transaction does not cure it. The
+      transactions never overlapped, each did exactly what it was asked to do,
+      and both committed. Nothing failed, the logs are clean.
+  - id: locks
+    title: Why not lock the row
+    narration: |-
+      The first idea is to add `FOR UPDATE` to the `SELECT` and make the second
+      call wait for the first. That is [[pessimistic locking]], and it does work.
+
+      Here is what it costs. The row stays locked until the transaction ends:
+      while the use case computes a penalty or calls the payment gateway,
+      everyone else on that invoice waits in line. Two use cases that take rows
+      in a different order give you a deadlock.
+
+      And the main thing: you can only lock what happens inside one
+      transaction. A person opened the invoice, changed the due date and pressed
+      save a minute later — you cannot hold a transaction for a minute, and at
+      the moment of their edit there is nothing to lock.
+
+      So the answer is not to forbid the state from changing, but to notice that
+      it did.
+  - id: version
+    title: The invoice gets a version
+    narration: |-
+      A version is the number of the state that was read. When we write, we tell
+      the database which number we saw; if the number there is different,
+      someone was between our read and our write.
+
+      The field belongs to the [[aggregate]] rather than to a table on its own:
+      the aggregate is the consistency boundary, so it has one counter for
+      everything inside it. Change a line of the invoice, and the invoice's
+      version goes up.
+
+      The version adds no domain rule: `Issue` creates the invoice with zero,
+      `Version()` only returns it, and there is no `SetVersion` — the number is
+      raised by whoever writes. `load.go` changed too: the invoice comes back
+      from the database with the number that was there.
+  - id: conflict
+    title: The conflict is part of the port's contract
+    narration: |-
+      `ErrConflict` is declared next to the port, and that matters: the use case
+      has to tell "it did not save because the invoice was changed" from "the
+      database is down". The first is an ordinary turn of events, the second is
+      an outage.
+
+      The domain learned nothing about SQL or `RowsAffected` along the way. It
+      said exactly the part that belongs to the domain: the invoice may have
+      changed since it was read, and then the write does not happen.
+
+      Checking the version by hand — comparing it in the use case before `Save`
+      — buys nothing: the same gap of time passes between the comparison and the
+      write. The check only has force where the write happens.
+  - id: update
+    title: The check inside the write
+    narration: |-
+      `UPDATE invoices SET ..., version = version + 1 WHERE number = $1 AND
+      version = $2` — that is all of [[optimistic locking]]. The check and the
+      write are one statement, so nothing can slip in between them.
+
+      The interesting line is the next one: `RowsAffected() == 0`. Zero updated
+      rows means there is no invoice with that version. For an invoice we have
+      just read, that means one thing: the version is already different — so
+      `ErrConflict`.
+
+      Version zero means the invoice is new and is inserted. A second creation
+      with the same number is caught by the unique index; no version is needed
+      for that.
+
+      The read now pulls the version from the same row as the rest of the
+      fields: it is part of the state that was read, not a separate query.
+  - id: retry
+    title: A retry instead of an error
+    narration: |-
+      A conflict says: the data you decided on is stale. So the right answer is
+      to decide again on fresh data, not to hand an error outward.
+
+      That is why the whole attempt, the read included, is repeated. Repeating
+      only the write would write the very stale data we were trying to leave
+      behind.
+
+      The retry is safe precisely because the whole attempt sits inside one unit
+      of work. Nothing saved — and what went into the [[outbox]] rolled back too,
+      so subscribers never heard about the cancelled attempt. Without that,
+      every attempt would send the fact again and [[idempotency]] would become
+      someone else's problem.
+
+      Three attempts, not endless ones: a conflict arriving for the third time
+      is no longer a race between two calls but load — and load is answered
+      differently.
+  - id: handover
+    title: When a retry is the wrong answer
+    narration: |-
+      A retry fits when the code decides: `MarkPaid` will look at the fresh
+      invoice again and say itself that a paid invoice is not paid twice.
+
+      It does not fit when a person decided, looking at the old state. Then the
+      version travels outward with the data — a field in the
+      [[projection|projection]] or an `ETag` header — and comes back with the
+      request to change it. It does not match, and the person is told "the
+      invoice has changed, take another look". That is the right answer, not an
+      error.
+
+      The difference is not in the mechanics but in who decided. The mechanics
+      are one: the number of the state that was read, checked at the moment of
+      the write.
+
+      And the boundary: a version detects a conflict on one aggregate. A rule
+      that ties two of them together cannot be held this way — there it is
+      either one aggregate, or consistency stretched over time.
+  - id: files
+    title: What came out of it
+    narration: |-
+      Click a file to read it.
+
+      - `domains/invoice/invoice.go` — the version field and `Version()`.
+      - `domains/invoice/load.go` — the version arrives from the database
+        with the data.
+      - `domains/invoice/repository.go` — `ErrConflict` next to the port.
+      - `infrastructure/postgres/invoices.go` — the version check and
+        `RowsAffected`.
+      - `applications/payment/pay.go` — the whole attempt retried.
+
+      The domain grew by one field and one error. Everything else is a write
+      that checks, and a use case that knows how to start over.
+---
+
+The same service as in the DDD chapters: the invoice, its modules, ports and
+adapters. The domain barely changes here — the invoice gains one field, and
+with it an answer to the question of who wins when two calls arrive at once.

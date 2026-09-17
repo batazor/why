@@ -4,6 +4,7 @@ import Base from '../../../layouts/Base.astro';
 import StepPlayer from '../../../components/StepPlayer.astro';
 import Quiz from '../../../components/Quiz.astro';
 import Incidents from '../../../components/Incidents.astro';
+import Chapters from '../../../components/Chapters';
 import FlowDiagram from '../../../components/FlowDiagram';
 import { getDeck } from '../../../code/registry';
 import { useTranslations, isLocale, localePath, type Locale } from '../../../i18n/ui';
@@ -23,14 +24,28 @@ export async function getStaticPaths() {
 
   return lessons.map((lesson) => {
     const [lang, ...rest] = lesson.id.split('/');
-    const siblings = byLocale.get(lang)!.filter((item) => !item.data.draft);
+    /**
+     * Соседи считаются по серии, если урок — глава книги.
+     *
+     * Внутри серии порядок задан главами, а не каталогом, и черновики из него
+     * не выбрасываются: пока книга пишется, соседних глав иначе нет вовсе.
+     */
+    const series = lesson.data.series
+      ? byLocale.get(lang)!.filter((item) => item.data.series === lesson.data.series)
+      : undefined;
+    const siblings = series ?? byLocale.get(lang)!.filter((item) => !item.data.draft);
     const index = siblings.findIndex((item) => item.id === lesson.id);
+
     return {
       params: { lang, slug: rest.join('/') },
       props: {
         lesson,
         prev: index > 0 ? siblings[index - 1] : undefined,
         next: index >= 0 && index < siblings.length - 1 ? siblings[index + 1] : undefined,
+        chapters: (series ?? []).map((item) => ({
+          slug: item.id.slice(lang.length + 1),
+          title: item.data.title,
+        })),
       },
     };
   });
@@ -40,9 +55,11 @@ interface Props {
   lesson: CollectionEntry<'lessons'>;
   prev?: CollectionEntry<'lessons'>;
   next?: CollectionEntry<'lessons'>;
+  /** Главы серии, если урок в неё входит. */
+  chapters?: { slug: string; title: string }[];
 }
 
-const { lesson, prev, next } = Astro.props;
+const { lesson, prev, next, chapters = [] } = Astro.props;
 const { lang: langParam, slug } = Astro.params;
 if (!isLocale(langParam)) throw new Error(`Unknown locale: ${langParam}`);
 const lang: Locale = langParam;
@@ -95,6 +112,22 @@ const siblingHref = (entry: CollectionEntry<'lessons'>) =>
   <article>
     <h1>{lesson.data.title}</h1>
 
+    {/* Остров: меню держит Popover, и он же закрывается по Escape и щелчку
+        снаружи. Ссылки глав считает страница — у неё есть локаль и base.
+        Урок вне серии острова не получает вовсе: одной главе оглавление не
+        нужно, а грузить ради него React незачем. */
+    chapters.length > 1 && (
+      <Chapters
+        client:load
+        label={t('lesson.chapters')}
+        current={slug!}
+        chapters={chapters.map((chapter) => ({
+          ...chapter,
+          href: localePath(lang, `lessons/${chapter.slug}`),
+        }))}
+      />
+    )}
+
     <div class:list={['callout', poster && 'callout--illustrated']}>
       <div class="callout__body">
         <span class="callout__label">{t('catalog.problem')}</span>
@@ -139,7 +172,9 @@ const siblingHref = (entry: CollectionEntry<'lessons'>) =>
       {
         prev ? (
           <a class="lesson-nav__link lesson-nav__link--prev" href={siblingHref(prev)}>
-            <span class="lesson-nav__label">← {t('nav.prevLesson')}</span>
+            <span class="lesson-nav__label">
+              ← {chapters.length ? t('nav.prevChapter') : t('nav.prevLesson')}
+            </span>
             <span class="lesson-nav__title">{prev.data.title}</span>
           </a>
         ) : (
@@ -150,7 +185,9 @@ const siblingHref = (entry: CollectionEntry<'lessons'>) =>
       {
         next ? (
           <a class="lesson-nav__link lesson-nav__link--next" href={siblingHref(next)}>
-            <span class="lesson-nav__label">{t('nav.nextLesson')} →</span>
+            <span class="lesson-nav__label">
+              {chapters.length ? t('nav.nextChapter') : t('nav.nextLesson')} →
+            </span>
             <span class="lesson-nav__title">{next.data.title}</span>
           </a>
         ) : (
@@ -212,10 +249,19 @@ const siblingHref = (entry: CollectionEntry<'lessons'>) =>
         el.dataset.open = 'true';
         open = el;
 
-        // visibility:hidden сохраняет геометрию, поэтому мерить можно и до показа.
+        /* Замеры после открытия: закрытая подсказка не показывается вовсе
+           (display:none), иначе её край растягивал бы прокрутку страницы.
+           Правки стиля идут в том же кадре, поэтому промежуточное положение
+           читатель не видит. */
         if (tip.getBoundingClientRect().top < 8) tip.dataset.placement = 'below';
+
         const overflow = tip.getBoundingClientRect().right - (window.innerWidth - 8);
         if (overflow > 0) tip.style.left = `${-overflow}px`;
+
+        // И то же самое у левого края: термин в начале строки уводил сдвинутую
+        // подсказку за экран влево, а прокрутки влево не бывает.
+        const left = tip.getBoundingClientRect().left;
+        if (left < 8) tip.style.left = `${parseFloat(tip.style.left || '0') + (8 - left)}px`;
       };
 
       el.addEventListener('pointerenter', show);
@@ -230,5 +276,8 @@ const siblingHref = (entry: CollectionEntry<'lessons'>) =>
       if (e.key === 'Escape') hide();
     });
     window.addEventListener('scroll', hide, { passive: true });
+    /* Ресайз и поворот экрана: сдвиг посчитан для прежней ширины, и держать
+       подсказку с ним — значит держать её за краем. */
+    window.addEventListener('resize', hide);
   }
 </script>

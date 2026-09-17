@@ -1,0 +1,190 @@
+---
+title: Why CQRS
+description: ''
+problem: >-
+  The scenario takes five parameters, and every call writes its own signature.
+  Reading goes through the same aggregate: to show one row on a screen the
+  service loads the whole invoice with all the rules reading does not need.
+tags: [ddd, cqrs]
+order: 10
+deck: why-cqrs
+series: why-ddd
+labels:
+  kindSide: side
+  write: Writing
+  writeNeeds: needs invariants and a transaction
+  read: Reading
+  readNeeds: needs a response shape and speed
+  oneModel: one model for both
+  bothSuffer: and both are cramped
+terms:
+  команда: >-
+    A request to change state, named by a type: what to do and with what data.
+    It has a shape, so it can be passed on, logged and retried.
+  запрос: >-
+    A request to read. It changes no state, so it needs neither invariants nor a
+    transaction — it needs a response shape.
+  проекция: >-
+    A model for reading: data laid out the way it is shown, not the way it is
+    changed.
+  агрегат: >-
+    A cluster of objects that changes as one whole, with a root the outside world
+    goes through. A consistency boundary and a transaction boundary.
+  DTO: >-
+    A struct of plain fields in which data crosses a boundary: a request body, a
+    table row, a message on a bus. No behaviour in it.
+comments:
+  ucDeps: dependencies are domain ports and nothing else
+  handleCmd: one argument — the command, and it checks its own shape
+  cmdWhat: 'the command: what to do and with what data'
+  cmdValidate: the shape is checked here, not the domain rules
+  cardsSQL: 'the query returns exactly what the screen shows'
+  cardsWhat: 'the read port implemented: one query, no aggregate'
+  cardsRead: reads an invoice card by its number
+  cardsScan: 'the columns land straight in the projection'
+  cardWhat: an invoice card for the screen, not an aggregate
+  queryWhat: 'the query: what is asked for, named as a type'
+  cardPort: 'the read port: hands out a ready card'
+  aggCopy: 'a copy of the lines: unchangeable from outside'
+  aggEvents: 'hands the recorded facts to the outside'
+  aggIssue: 'builds an invoice and sums up the lines'
+  aggPaid: 'marks the invoice paid; paying it twice is not allowed'
+  aggRecord: 'records the fact; sending it is not for the aggregate to do'
+  aggRoot: 'the invoice: aggregate root'
+  eventIssued: 'the invoice has been issued'
+  eventPaid: 'the invoice has been paid'
+  eventWhat: 'a domain fact; the name goes to the bus as the message type'
+  moneyMinor: 'an amount in cents'
+  portPublisher: 'the port: where facts are sent'
+  portRepo: 'the port: how an invoice reaches storage and comes back'
+  ucIssueRun: 'the order of the operation: build, save, tell'
+  ucPayRun: 'load, call the method, save, tell'
+  ucPublish: 'facts leave after the save, not before'
+steps:
+  - id: problem
+    title: Five parameters and one aggregate
+    narration: |-
+      On the right is the scenario from the third chapter. It works, and it has
+      two troubles, both visible right in its signature.
+
+      The first: there are already five parameters and there will be seven. Every
+      call writes them in its own order, nothing stops you from swapping two of
+      the same type, and the call cannot be passed on — into a queue, a log, a
+      retry — because it has no shape.
+
+      The second trouble is not visible but it is right there. To show an invoice
+      on a screen the same code loads the whole aggregate: lines, invariants,
+      transaction. For one card in a list that is expensive and pointless —
+      reading needs nothing of what the aggregate exists for.
+  - id: command
+    title: The command as a type
+    narration: |-
+      A [[команда|command]] is a request to change state, named by a type. Here
+      it sits next to the scenario, in its own module: the command is invented
+      by whoever carries it out.
+
+      What that buys immediately: the call now has a shape. It can be put in a
+      queue, written to a log, retried after a failure and compared with what
+      arrived — there was nothing to compare before.
+
+      `Validate` checks the shape, not the domain: the number is not empty, the
+      lines are not zero. The rules stayed in the domain, and that is the line
+      not to blur — a shape check answers "can this be read at all", not "does
+      such an invoice exist".
+  - id: handler
+    title: The command handler
+    narration: |-
+      The same file, and one argument in it instead of four. The scenario became
+      a handler: took the command, checked the shape, handed the work to the
+      domain, saved, published the facts.
+
+      The order has not changed by a single step — what changed is what calls it.
+      That is why CQRS starts neither with two databases nor with a bus, but with
+      a type: the command separates what is being asked from how it is carried
+      out.
+  - id: query
+    title: The query and its own read model
+    narration: |-
+      A [[запрос|query]] lives in its own module and knows neither the aggregate
+      nor the write ports. It returns a `Card` — a [[проекция|projection]] for
+      the screen: number, total, status, overdue flag.
+
+      That is a [[DTO]], not an [[агрегат|aggregate]]: no invariants, no methods,
+      no rules.
+
+      The request itself is named as a type too — `CardQuery`, exactly like the
+      command on the write side. It holds one number for now, but it already
+      says what is being asked for: such a request can be logged, cached by key,
+      passed on. Add a filter or a page, and they go into this type rather than
+      into a sixth argument of a method.
+
+      The query has no shape check, and that is not an oversight: a command
+      changes state, so its shape is checked before the domain; a query changes
+      nothing, and the worst it can do is not find the card.
+
+      Reading has its own port — `Cards`: it takes the query and hands out the
+      card ready to use. Behind that port there can be the same Postgres with
+      one `SELECT`, a materialized view or a separate database — reading does
+      not care, and the domain cares even less.
+
+      What is missing here is a handler with a `Run` that would only pass the
+      call along to the port. Reading has neither invariants nor a transaction
+      for such a layer to exist for; it appears once it starts doing something:
+      checking permissions, joining two sources, holding a cache.
+
+      This module does not touch a single line of the domain: it simply cannot.
+  - id: reading
+    title: The reading itself
+    narration: |-
+      Here is the reading: one `SELECT` and not a single aggregate. The invoice
+      lines are not loaded, no invariants are checked, no facts are recorded —
+      the reader needs none of that.
+
+      The columns land straight in the fields of the projection, because the
+      query is written for the screen rather than for the model. The overdue
+      flag is computed by the query itself — roughly, from the due date and the
+      status; the exact rule lives in the domain and is asked there, where
+      decisions are made, not where things are displayed.
+
+      The connection comes from the field rather than from `ctx`: reading needs
+      no transaction — there is nothing to roll back.
+
+      Behind the port is still the same table the writes go to, and that is a
+      fine first step. A separate read table, a materialized view or a database
+      of its own appear once reading starts getting in the way of writing — and
+      the code above will not change by a line: it has a port.
+  - id: split
+    title: Why this is a split, not two styles
+    narration: |-
+      Writing and reading ask different things of a model. Writing needs
+      invariants and a transaction boundary — the whole aggregate. Reading needs
+      a response shape and speed — a flat table for one specific screen.
+
+      One model serves both badly: it either drags rules where nobody checks
+      them, or spreads into fields only a screen needs.
+
+      The split is cheap: two types and two ports, each in its own module. Behind
+      that boundary you can go as far as you like — a separate read database, a
+      projection updated from a fact on the bus, a cache. Or you can not go
+      anywhere: the same database, the same `SELECT` — the split has already done
+      the main thing.
+  - id: files
+    title: What came out
+    narration: |-
+      Click a file to read it.
+
+      - `applications/issuing/command.go` — the command and its shape check.
+      - `applications/issuing/issue.go` — the handler: one argument.
+      - `applications/views/card.go` — the projection for the screen and the
+        read port.
+      - `infrastructure/postgres/cards.go` — the reading itself: one query for
+        that screen.
+
+      The domain has not changed by a single line. That is the check: if splitting
+      commands and queries required edits in the aggregate, the split was made in
+      the wrong place.
+---
+
+The same service as in the three DDD chapters: the invoice, its modules and its
+ports. The domain does not change from here on — what changes is how it is
+called and how it is read.

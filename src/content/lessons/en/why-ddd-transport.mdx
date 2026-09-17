@@ -1,0 +1,265 @@
+---
+title: 'Why DDD: transport && wiring'
+description: ''
+problem: >-
+  The use cases are written and the ports have implementations — and still the
+  service cannot be called: outside there is JSON, and the use case expects the
+  domain entities. Nor is there anyone to assemble it into a running
+  process: `cmd/` is empty.
+tags: [ddd]
+order: 9
+deck: why-ddd-transport
+series: why-ddd
+labels:
+  kindEdge: boundary
+  request: JSON outside
+  requestHas: strings, numbers, an ISO date
+  scenario: Use case
+  scenarioWants: expects domain entities
+  noTranslator: nobody to translate
+  noMain: and nobody to assemble
+terms:
+  DTO: >-
+    A structure of plain fields in which data crosses a boundary: a request
+    body, a table row, a message on the bus. It has no behaviour.
+  transport: >-
+    The point at which the service is called: by a person or by another
+    system. No decision about the domain is made here.
+  application: >-
+    The level that defines the jobs the software is supposed to do. It hands
+    the work to the domain, holds no domain rules and is kept thin.
+  aggregate: >-
+    A cluster of objects that changes as one whole, with a root through which
+    everything outside refers to it. The consistency and transaction boundary.
+  unit of work: >-
+    A port that runs the work it is given as a whole or does not run it at all.
+    The word "transaction" never appears in the domain.
+  vertical slice: >-
+    A module cut along the scenario rather than the layer: transport, scenario
+    and the work with the aggregate live together because they change together.
+  wire: >-
+    Google's dependency-wiring generator: it reads a list of constructors and
+    writes the function that connects them. At run time it does nothing.
+comments:
+  aggRoot: 'the invoice: the aggregate root'
+  aggIssue: creates the invoice and sums the lines
+  aggCopy: 'a copy of the lines: they cannot be changed from outside'
+  aggRecord: 'records the fact; sending it is not the aggregate''s job'
+  aggEvents: hands the collected facts outward
+  aggPaid: 'marks the invoice paid; paying twice is not allowed'
+  aggRestore: rebuilds the invoice from what was in the database
+  eventWhat: 'a domain fact; its name travels to the bus as the message type'
+  eventIssued: the invoice was issued
+  eventPaid: the invoice was paid
+  portRepo: 'port: how the invoice gets into the database and comes back'
+  portPublisher: 'port: where the facts go'
+  portUoW: 'port: run the work as a whole or do not run it'
+  moneyMinor: the amount in minor units
+  ucTxDeps: the dependencies are domain ports and nothing else
+  ucIssueRun: 'the order of the operation: build, save, tell'
+  ucPayRun: 'load, call the method, save, tell — as one operation'
+  repoWhat: the storage port implemented on Postgres
+  repoLoad: loads the invoice and rebuilds the aggregate
+  repoRestore: rebuilding the aggregate is the domain's job
+  repoSave: writes the invoice and its lines
+  uowWhat: 'the unit of work implemented as a Postgres transaction'
+  uowDo: all of the work inside one transaction
+  uowRollback: an error inside — rolled back as a whole
+  uowConn: 'the transaction from ctx, if the operation has already begun'
+  outboxWhat: 'publishing implemented as rows in the database'
+  outboxPublish: writes the facts into the same transaction
+  outboxRow: the fact name and the message body
+  dtoWhat: 'the request body: what the data crosses the boundary in'
+  dtoLine: an invoice line the way it is sent
+  dtoValidate: 'the shape of the request is checked, not the rules of the domain'
+  dtoDomain: 'what the use case needs from the request, already in domain types'
+  dtoToDomain: translates the request body into domain types
+  hWhat: the handler owns the use case and nothing else
+  hIssue: 'POST /invoices: parse, translate, call'
+  hDecode: the body does not read — that is the client's error
+  hToDomain: translating into domain types is the dto package's job
+  hCall: the use case gets domain entities, not a request
+  hFail: a separate function turns a domain error into a status code
+  hCreated: '201 and an empty body: the client sent the number itself'
+  errWhat: turns a domain error into a response code
+  errRule: 'a broken domain rule is the request''s error, not the server''s'
+  errUnknown: 'the cause stays in the log, the code goes out'
+  routeWhat: the module declares the address of its own handler
+  mainByHand: 'assembled by hand, top to bottom'
+  mainAdapters: one connection for every adapter
+  mainWire: 'the use case is handed ports; the assembly picks the implementations'
+  mainWired: the assembly moved into a generated function
+  wireSet: 'the set of adapters: one for every application of the service'
+  wireBind: which implementation stands behind the port
+  wireInject: 'what to assemble — stated by the result type'
+  wireStub: 'a stub body: the real one is written by the generator'
+steps:
+  - id: entry
+    title: Nobody to call it
+    narration: |-
+      On the right is the use case for issuing an invoice, as the previous
+      chapter left it. It takes a number, a customer, lines and a due date: the
+      domain entities and nothing else.
+
+      What arrives from outside is not that. Outside there is JSON: the number
+      as a string, the amounts as numbers, the date in ISO. Something has to
+      translate between them, and the question is not which framework to take
+      but who translates and where that translation lives.
+
+      The second thing is visible in the tree: an empty `cmd/api` appeared. The
+      use case needs three port implementations, those need a database
+      connection, and the connection needs a string from the environment.
+      Nobody does any of this yet, and the service cannot be started.
+  - id: dto
+    title: The request body
+    narration: |-
+      A [[DTO]] is a structure of plain fields: what the data crosses the
+      boundary in. The `json` tags are part of the handler's contract and they
+      live here, not in the domain — the domain knows nothing about JSON.
+
+      The types are primitive on purpose. `invoice.Number` is not accepted from
+      outside: anything at all may arrive, and turning a string into a domain
+      type is the [[transport|transport's]] job.
+
+      `Validate` checks the shape, not the domain: the number is not empty, the
+      body reads. "An invoice with no lines" is a domain rule and `Issue` will
+      check it; duplicating it here would mean two places, one of which goes
+      stale eventually.
+
+      The request body lives in a package of its own — `transport/http/dto`. The
+      handler and its contract then have separate files and separate reasons to
+      change: the contract is edited when something is agreed with the client,
+      the handler when the order of the call changes. And the names read as they
+      are: `dto.IssueRequest`.
+
+      The translation lives there too — `ToDomain()`. It returns not the
+      aggregate but what the aggregate is created from: the number, the
+      customer, the lines and the due date, already in domain types. The
+      transport may not assemble the invoice — `Issue` in the domain does that,
+      and the checks stay there. The handler, in exchange, grows no loops: one
+      line instead of six.
+
+      The DTO travels no further than the transport: what goes inward are the
+      use case's arguments.
+  - id: handler
+    title: 'The handler: translate and call'
+    narration: |-
+      One handler, four actions: parse the body, check the shape, ask it for the
+      domain entities, call the use case.
+
+      Not one decision about the domain is made here. The total is not
+      computed, the status is not set, the order of the operation is not held —
+      all of that stayed in the [[aggregate]] and in [[application]]. The
+      handler translates, and that is all.
+
+      Look at what it owns: `*application.UseCase` and nothing more. No
+      database, no transaction, no bus. That is why the handler has one reason
+      to change — the contract of the request: the database, the transaction and
+      the bus change without touching it.
+
+      The answer is `201` with an empty body: the client sent the number
+      itself, so there is nothing to hand back.
+  - id: errors
+    title: Domain errors into status codes
+    narration: |-
+      The most common transport mistake is to answer everything the use case
+      returned with a 500. The client then cannot tell its own error from ours
+      and starts retrying what is pointless to retry.
+
+      Translating errors is translation too, and it lives on the same boundary:
+      a broken domain rule is `422`, a conflicting state is `409`, everything
+      else is `500` and a line in the log.
+
+      Nothing of the database error or the stack goes out: the cause stays in
+      the log, the client gets a code and a short phrase.
+
+      An unknown error gets `500` on purpose. The list of codes is part of the
+      handler's contract, and it should be extended by a person, not by
+      `err.Error()`.
+  - id: router
+    title: The slice knows its route
+    narration: |-
+      The address of the handler is declared by the module, not by a router
+      somewhere at the root. That keeps the [[vertical slice]] whole: the use
+      case, the DTO, the handler and the address live together because they
+      change together.
+
+      The multiplexer is the standard one: since Go 1.22 it understands both
+      the method and path parameters. A framework has nothing to add here; when
+      one is needed — logging, authorisation, limits — its place is in the
+      assembly, not in the module.
+
+      The assembly is left with a single `Register` call: it knows neither
+      paths nor methods.
+  - id: wiring
+    title: Nobody to assemble it
+    narration: |-
+      `cmd/api` finally has code, and the assembly is written by hand. It reads
+      top to bottom: the connection, three adapters, the use case, the handler,
+      the multiplexer, the server.
+
+      The good news: this is all of DI. Dependencies arrive as constructor
+      arguments, the implementations are chosen in one place, and no container
+      is needed for that.
+
+      The bad news starts with the second application. An outbox sender and a
+      payments consumer will stand next to this one: they need the same
+      database and the same adapters but a different entry point. These seven
+      lines get copied, the copies drift apart, and in half a year the sender
+      is running on its own connection pool.
+
+      And the order: to learn that `issuing.New` wants a [[unit of work]] you
+      have to open its signature. Forget it, and the compiler tells you about a
+      type mismatch on line six, not about what is missing.
+  - id: wire
+    title: 'wire: the same assembly, generated'
+    narration: |-
+      [[wire]] is not a container and not reflection. It is a generator: it
+      reads a list of constructors and writes exactly the code we wrote by hand
+      a step earlier.
+
+      `wire.NewSet` is the set of adapters shared by every application of the
+      service. `wire.Bind` says which implementation stands behind a port: the
+      constructor returns `*postgres.Invoices`, and the use case wants
+      `invoice.Repository`.
+
+      `initHandler` never runs: the file is only built under the `wireinject`
+      tag and its body is a stub. `wire` reads `wire.Build` and creates
+      `wire_gen.go` next to it — that file is committed, and it is what runs in
+      production.
+
+      What this buys: a forgotten dependency is reported by the generator, with
+      the name of the type, before anything starts; the set of adapters is one
+      for every entry point; and the generated code reads like your own.
+
+      And no zealotry about it. For one application with five constructors
+      `wire` is not worth it — by hand is shorter and clearer. It starts paying
+      off when a second and a third application are assembled from the same
+      set.
+  - id: files
+    title: What came out of it
+    narration: |-
+      Click a file to read it.
+
+      - `applications/issuing/transport/http/dto/issue.go` — the request body
+        and its shape check.
+      - `applications/issuing/transport/http/handler.go` — translation and the call.
+      - `applications/issuing/transport/http/errors.go` — domain errors into status codes.
+      - `applications/issuing/transport/http/routes.go` — the address of the handler.
+      - `cmd/api/main.go` — the entry point.
+      - `cmd/api/wire.go` — the list of providers for the generator.
+
+      The chain is closed: a request arrives at `POST /invoices`, becomes the
+      domain entities, and the use case builds the [[aggregate]], saves it
+      and writes the fact — all as one operation.
+
+      The domain did not change by a single line in this chapter. A second
+      handler is one more file next to this one; a second application is one
+      more function in `wire.go`.
+---
+
+The domain is described, the use cases are written, the ports have
+implementations. Two things are missing: the incoming call, and whoever
+assembles all of it into a running process.
+
+One handler — `POST /invoices` — and the assembly of the whole service.

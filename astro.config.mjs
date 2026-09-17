@@ -51,6 +51,22 @@ export default defineConfig({
 
   integrations: [mdx(), react(), sitemap({ i18n: { defaultLocale: 'en', locales: { en: 'en', ru: 'ru' } } })],
 
+  vite: {
+    /**
+     * Зависимости схем объявлены заранее, а не обнаруживаются по ходу.
+     *
+     * Сгенерированный модуль LikeC4 грузится только на странице урока со
+     * схемой — то есть позже старта. Vite, встретив в нём новые зависимости,
+     * пересобирает их и меняет ревизию, а уже отданные браузеру модули
+     * остаются со старой: они получают 504 Outdated Optimize Dep, острова не
+     * гидрируются, и схема пропадает при живом сервере. Список гасит это в
+     * корне: всё оптимизируется до первого запроса.
+     */
+    optimizeDeps: {
+      include: ['likec4/react', '@likec4/core/model'],
+    },
+  },
+
   markdown: {
     shikiConfig: {
       themes: { light: 'github-light', dark: 'github-dark' },

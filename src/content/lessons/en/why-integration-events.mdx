@@ -1,0 +1,302 @@
+---
+title: Why integration events
+description: ''
+problem: >-
+  A domain fact went onto the bus as it was, with its own fields and types. A
+  neighbouring service parsed it and built on it: renaming a field inside the
+  domain now breaks somebody else's service, and we learn about it from their
+  alerts.
+tags: [ddd, events, distributed-systems]
+order: 12
+deck: why-integration-events
+series: why-ddd
+labels:
+  kindService: service
+  ours: Billing
+  oursDoes: published a domain fact
+  theirs: Delivery
+  theirsDoes: parsed it as it was
+  asIs: the domain structure became a contract
+  renamed: rename a field — break the neighbour
+terms:
+  domain event: >-
+    A fact inside the context: recorded by the aggregate and written in the
+    same words and types as the domain. It changes when the domain changes.
+  integration event: >-
+    The message a service uses to tell its neighbours about a fact. A separate
+    type with a separate schema: strangers read it, so it changes by the rules
+    of compatibility.
+  envelope: >-
+    The wrapper around a message: identifier, type, time, key. The data of the
+    fact sits inside it as a separate body.
+  at-least-once: >-
+    Delivery that promises the message will arrive but does not promise it will
+    arrive once. A repeat is an ordinary turn of events, not a failure.
+  idempotency: >-
+    The property of an operation to give the same result when repeated. The
+    second time adds nothing and breaks nothing.
+  outbox: >-
+    A table the fact is written to by the same transaction that makes the
+    change. A separate process reads that table and puts the fact on the bus.
+  unit of work: >-
+    A port that runs the work it is given as a whole or does not run it at all.
+    The word "transaction" never appears in the domain.
+  bounded context: >-
+    The stretch of a system inside which one word has one meaning. Outside it
+    the same word may mean something else, and the translation happens at the
+    border.
+  DTO: >-
+    A structure of plain fields in which data crosses a boundary: a request
+    body, a table row, a message on the bus. It has no behaviour.
+  application: >-
+    The level that defines the jobs the software is supposed to do. It hands
+    the work to the domain, holds no domain rules and is kept thin.
+comments:
+  aggRoot: 'the invoice: the aggregate root'
+  aggIssue: creates the invoice and sums the lines
+  aggCopy: 'a copy of the lines: they cannot be changed from outside'
+  aggRecord: 'records the fact; sending it is not the aggregate''s job'
+  aggEvents: hands the collected facts outward
+  aggPaid: 'marks the invoice paid; paying twice is not allowed'
+  aggRestore: rebuilds the invoice from what was in the database
+  eventWhat: 'a domain fact; its name is an internal one'
+  eventIssued: the invoice was issued
+  eventPaid: the invoice was paid
+  portRepo: 'port: how the invoice gets into the database and comes back'
+  portPublisher: 'port: where the facts go'
+  portUoW: 'port: run the work as a whole or do not run it'
+  moneyMinor: the amount in minor units
+  ucTxDeps: the dependencies are domain ports and nothing else
+  ucIssueRun: 'the order of the operation: build, save, tell'
+  ucPayRun: 'load, call the method, save, tell — as one operation'
+  repoWhat: the storage port implemented on Postgres
+  repoLoad: loads the invoice and rebuilds the aggregate
+  repoRestore: rebuilding the aggregate is the domain's job
+  repoSave: writes the invoice and its lines
+  uowWhat: 'the unit of work implemented as a Postgres transaction'
+  uowDo: all of the work inside one transaction
+  uowNested: 'the operation has already begun — run inside it, no second transaction'
+  uowRollback: an error inside — rolled back as a whole
+  uowConn: 'the transaction from ctx, if the operation has already begun'
+  outboxWhat: 'publishing implemented as rows in the database'
+  outboxAppend: writes the message row; knows nothing of the domain or the contract
+  pubAppender: 'the write port: where the message row goes'
+  pubWhat: 'the publish port implemented: translates and hands over for writing'
+  pubPublish: one message per fact, and not a single send
+  pubSkip: a fact with no outward contract does not leave
+  pubAppend: the row lands in the same transaction as the invoice
+  outboxPublish: writes the facts into the same transaction
+  outboxAsIs: the domain structure is serialised as it is
+  outboxRow: the fact name and the message body
+  outboxRowKey: 'type, key and body — all the sender needs'
+  intTypes: message names with the version at the end
+  intIssued: 'the integration event: what the neighbours see'
+  intPaid: 'exactly as many fields as the reader needs'
+  envWhat: 'the envelope: message metadata apart from the data of the fact'
+  envKey: 'the ordering key: messages about one invoice keep their order'
+  transInternal: a fact that has no outward contract
+  transWhat: translates a domain fact into a message
+  transIssued: 'an explicit switch: what goes out is decided here'
+  transSkip: a new fact does not leave on its own
+  inWhat: 'the neighbour''s schema, the way we read it'
+  inInbox: 'port: have we seen this message before'
+  inDeps: 'the unit of work, the memory of messages and the use case'
+  inHandle: 'parse, check for a repeat, call the use case'
+  inFirstTime: the same message a second time — do nothing
+  inAlreadyPaid: 'a repeat is not an error: the invoice is already in that state'
+  inboxWhat: 'the implementation: a table of handled messages'
+  inboxRemember: an insert by unique id inside the same transaction
+  inboxRows: it inserted — so the message is new
+steps:
+  - id: leak
+    title: The domain went onto the bus
+    narration: |-
+      On the right is the publishing from the infrastructure chapter. The fact
+      goes into the [[outbox]] written the way the domain writes it:
+      `json.Marshal` takes the whole `Issued` structure, and the message type is
+      the internal name `invoice.issued`.
+
+      While we are the only readers, that is honest. But a neighbour read the
+      message — delivery subscribed and started packing parcels. From that
+      minute the internal structure of the domain became a contract: rename the
+      `Total` field and you break somebody's parser; add a field for yourself
+      and you have told the neighbours something they have no business knowing.
+
+      It works the other way round too. Delivery needs the customer's address,
+      which the fact does not carry — and the request to add a field arrives in
+      the domain.
+
+      A [[domain event|domain fact]] and a message sent outward are different
+      things, and they change at different speeds. We edit the first whenever we
+      like; the second only after agreeing with everyone who reads it.
+  - id: contract
+    title: The integration event
+    narration: |-
+      An [[integration event]] is a separate type in a separate package, and the
+      version stands right in its path:
+      `infrastructure/broker/contracts/v1`.
+
+      It lives in the bus infrastructure rather than at the root of the service,
+      and that is not a detail. The shape of a message belongs to the transport
+      that carries it: on the bus it is JSON in an envelope with a partition
+      key, over gRPC it would be protobuf with its own compatibility rules, over
+      HTTP a response body and a status. A service often has several transports,
+      each with a contract of its own; a shared `contracts` folder pretends
+      there is only one.
+
+      The types inside are primitive: strings and `int64`. Neither `vo.Money`
+      nor `invoice.Number` crosses the boundary — out there it is JSON, and the
+      fields are named the way a foreign service will read them. This is a
+      boundary [[DTO]] and nothing more.
+
+      The message name is a constant with the version at the end:
+      `billing.invoice.issued.v1`. From it the reader can see where the message
+      came from, what it is about and which schema it follows. The internal
+      `FactName()` stayed internal: that one we rename freely, this one we do
+      not.
+
+      The set of fields here is a decision, not a reflection of the fact. What
+      the neighbours actually need goes into the contract: a field can be added
+      later, but it cannot be taken away.
+  - id: envelope
+    title: The envelope
+    narration: |-
+      The data of the fact is one thing, the metadata of the message is another,
+      which is why they sit apart: the body in `Payload`, and around it an
+      identifier, a type, a time and a key.
+
+      `ID` is for the receiver: [[at-least-once]] delivery promises the message
+      will arrive, not that it will arrive once. A repeat is recognised by that
+      identifier — we come back to this on the receiving side.
+
+      `Key` is about order. A broker keeps order inside a partition, not across
+      the whole topic; a key equal to the invoice number puts every message
+      about one invoice into one partition, so "issued" arrives before "paid".
+      Between different invoices there is no order, and none is needed.
+
+      `Type` sits in the [[envelope]] rather than only in the body: a subscriber
+      decides whether to parse the body before having parsed it.
+  - id: translate
+    title: Who does the translating
+    narration: |-
+      The translation lives in the infrastructure: the domain knows nothing
+      about the contract and should not. `Contract` takes a domain fact and
+      returns a finished envelope.
+
+      The `switch` on the fact type looks dull — that is the point. It is
+      explicit: for a new message to go outward, somebody has to add it here.
+      Until they do, the fact stays internal and publishing skips it —
+      `ErrInternalFact`.
+
+      This is the part people forget. Publish everything indiscriminately, and
+      every new domain fact becomes public on the day it was written, silently
+      and without anyone deciding so.
+
+      Next to it is whoever calls `Contract`: `broker.Publisher`. It implements
+      the `invoice.Publisher` port the domain declared back in the third
+      chapter — translate the fact, serialise it and hand the row over for
+      writing. It sends nothing itself; why, on the next step.
+
+      The row is written not by it but by `Appender` — a narrow one-method port
+      declared right here, by the one who uses it. Behind it stands
+      `postgres.Outbox`, and after this chapter it does exactly one thing: puts
+      a row into a table. Neither the domain nor the contract is in its imports
+      any more — it used to know both.
+
+      That straightens out the direction of the dependencies: the one that works
+      with the bus knows the contract, and storage knows only rows. The assembly
+      connects them: `wire.Bind(new(broker.Appender), new(*postgres.Outbox))`.
+  - id: inbound
+    title: They send to us as well
+    narration: |-
+      The other side of the boundary. The payment gateway publishes
+      `payments.payment.received.v1`, and that message is what makes an invoice
+      paid — so somebody has to take it and call the use case on the right.
+
+      There are two ways to do this badly.
+
+      The first: parse the foreign JSON inside the use case. Then
+      [[application]] starts knowing the neighbour's format, and renaming a
+      field in someone else's service travels all the way into our domain.
+
+      The second: call the use case as it is. The same message will arrive a
+      second time — after a broker retry, after a consumer restart, after a
+      partition moves. The second time `MarkPaid` returns `ErrAlreadyPaid`, the
+      consumer treats that as a handling error and puts the message back on the
+      queue. And round it goes, until someone looks at the logs.
+  - id: consume
+    title: 'Receiving: translate, remember, forgive'
+    narration: |-
+      The handler lives in the payment slice, next to its use case, and does
+      three things.
+
+      **It translates.** `PaymentReceived` is our copy of a foreign schema, and
+      it stands on the boundary. The neighbour changes their schema — we edit
+      this file; the domain does not notice.
+
+      **It remembers.** `Remember` answers "first time" or "seen it", and the
+      call sits inside the same [[unit of work]] as the use case. Otherwise a
+      gap is left between the mark and the change, and that gap is exactly where
+      a repeat lands. That is why the `Do` implementation gained one line: the
+      transaction is already in `ctx`, so run the work inside it instead of
+      starting a second one.
+
+      **It forgives.** `ErrAlreadyPaid` is not a handling error: the invoice is
+      already in the state we wanted, so we acknowledge the message and move on.
+      That is [[idempotency]] at the entrance — two identical messages give one
+      result.
+  - id: inbox
+    title: The memory of messages
+    narration: |-
+      The implementation is plain: a table with a unique identifier and
+      `INSERT ... ON CONFLICT DO NOTHING`. A row was inserted — the message is
+      new; zero rows — we have handled this message already.
+
+      The connection comes from the same `conn(ctx, db)` as in every other
+      adapter, so the mark lands in the transaction of the operation. Either the
+      invoice is paid and the message is marked, or neither.
+
+      What not to forget: the table grows. Identifiers older than the broker's
+      retention are of no use — they are cleaned out by time, in partitions,
+      like ordinary logs.
+  - id: evolve
+    title: How to change a contract
+    narration: |-
+      There is one rule, and it is not about code: strangers read this schema,
+      so change it in a way the reader will not notice.
+
+      - **Adding an optional field** is fine. An old reader ignores it.
+      - **Renaming, removing, changing the meaning or the type** is not. That is
+        `v2`: a new message type living next to `v1` until the last reader has
+        moved.
+
+      Which means you have to know who reads it. Without that `v1` can never be
+      switched off — and versions pile up instead of replacing each other.
+
+      And the line not to cross: an event says what happened, not what to do.
+      The moment `ChargePenalty` appears in the contract it is no longer a fact
+      but a command — and a neighbour starts driving our domain over the bus.
+  - id: files
+    title: What came out of it
+    narration: |-
+      Click a file to read it.
+
+      - `infrastructure/broker/contracts/v1/events.go` — what the neighbours see.
+      - `infrastructure/broker/contracts/v1/envelope.go` — the envelope: id, type, time, key.
+      - `infrastructure/broker/outbound.go` — the fact translated into a message.
+      - `infrastructure/broker/publisher.go` — publishing: translates and hands
+        the row over for writing.
+      - `infrastructure/postgres/outbox.go` — one row into a table, and nothing
+        else.
+      - `applications/payment/transport/consumer/received.go` — receiving a foreign message.
+      - `infrastructure/postgres/inbox.go` — the memory of what was handled.
+
+      The domain did not change by a single line: it still has its own facts and
+      its own name for each of them. Everything new landed on the boundary — on
+      both of its sides.
+---
+
+The same service as in the DDD chapters: the invoice, its modules, ports and
+adapters. Here the boundary of the context appears — the one beyond which other
+people's services begin. On that boundary a fact has a different name, a
+different shape and different rules for changing it.

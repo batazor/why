@@ -1,18 +1,23 @@
 import type { FlowSpec } from './flow';
 
-/** Постер: суть проблемы одной схемой. Один шаг, поэтому fixedStep. */
+/**
+ * Главная связь идёт сверху: в зазоре между карточками подписи не хватает
+ * строки, и она налезает на соседний узел.
+ *
+ * Постер: суть проблемы одной схемой. Один шаг, поэтому fixedStep.
+ */
 const poster: FlowSpec = {
-  height: 215,
+  height: 235,
   fixedStep: 'problem',
   compact: true,
   nodes: [
-    { id: 'client', kind: '{{kindService}}', title: '{{client}}', sub: '{{checkoutFlow}}', position: { x: 0, y: 30 } },
+    { id: 'client', kind: '{{kindService}}', title: '{{client}}', sub: '{{checkoutFlow}}', position: { x: 0, y: 62 } },
     {
       id: 'payments',
       kind: '{{kindExternal}}',
       title: 'Payments API',
       sub: '{{notIdempotent}}',
-      position: { x: 240, y: 30 },
+      position: { x: 240, y: 62 },
       bad: ['problem'],
     },
   ],
@@ -21,8 +26,8 @@ const poster: FlowSpec = {
       id: 'charge',
       source: 'client',
       target: 'payments',
-      sourceHandle: 'r',
-      targetHandle: 'l',
+      sourceHandle: 't',
+      targetHandle: 't',
       label: '{{charge}} 99.00',
     },
     {

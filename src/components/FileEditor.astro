@@ -17,11 +17,38 @@ interface Props {
   tree: FileTreeSpec;
   /** Отрендеренные документы локали — для файлов дерева без кода. */
   docs?: { path: string; Content: any }[];
+  /**
+   * Локализованные комментарии кода.
+   *
+   * Сам код общий на все локали, поэтому комментарии в нём — ключи `{{key}}`.
+   * Читатель видит комментарий на языке урока: код без пояснений на своём
+   * языке читается вдвое дольше, а держать два файла на две локали значит
+   * держать две расходящиеся копии.
+   */
+  comments?: Record<string, string>;
   /** Порядок шагов разбора: по нему считается, что в дереве уже появилось. */
   order: string[];
+  /**
+   * Шаги, которым этот редактор принадлежит.
+   *
+   * Экземпляров на странице несколько — по одному на группу шагов, — и каждый
+   * прилипший: он попадает на экран раньше, чем его первый шаг становится
+   * активным. Без своего диапазона он показывал состояние чужого шага: режим
+   * по умолчанию и файл, до которого читатель ещё не дошёл.
+   */
+  scope?: string[];
 }
 
-const { lang, tree, docs = [], order } = Astro.props;
+const { lang, tree, docs = [], order, scope = [], comments = {} } = Astro.props;
+
+/**
+ * Подстановка до подсветки: иначе `{{…}}` попадёт в токены и подсветится.
+ *
+ * Плюс пустая строка в конце — как в редакторе: файл кончается переводом
+ * строки, и последняя строка у него пустая.
+ */
+const localize = (code: string) =>
+  `${code.replace(/\{\{(\w+)\}\}/g, (_, key: string) => comments[key] ?? `{{${key}}}`).replace(/\s*$/, '')}\n\n`;
 const doc = (path: string) => docs.find((item) => item.path === path)?.Content;
 const t = useTranslations(lang);
 
@@ -35,9 +62,14 @@ const shikiOptions = {
  * сравнивает «появился ли уже» с номером текущего шага, а id для этого
  * пришлось бы каждый раз искать в списке.
  */
-const appearsAt = (step: string) => {
-  const index = order.indexOf(step);
-  if (index === -1) throw new Error(`FileEditor: шаг "${step}" не существует в разборе`);
+const appearsAt = (item: { from?: string; seed?: boolean }) => {
+  // Наследство: −1 не совпадёт ни с одним шагом, поэтому файл виден сразу и
+  // никогда не помечается новым.
+  if (item.seed) return -1;
+  if (!item.from) throw new Error('FileEditor: у файла нет ни шага появления, ни seed');
+
+  const index = order.indexOf(item.from);
+  if (index === -1) throw new Error(`FileEditor: шаг "${item.from}" не существует в разборе`);
   return index;
 };
 
@@ -50,7 +82,7 @@ const appearsAt = (step: string) => {
  * висит пустая папка.
  */
 type Node =
-  | { kind: 'file'; name: string; path: string; step: number }
+  | { kind: 'file'; name: string; path: string; step: number; edits: number[] }
   | { kind: 'dir'; name: string; path: string; step: number; children: Node[] };
 
 function build(files: FileTreeSpec['files'], dirs: NonNullable<FileTreeSpec['dirs']>): Node[] {
@@ -82,14 +114,22 @@ function build(files: FileTreeSpec['files'], dirs: NonNullable<FileTreeSpec['dir
   for (const file of files) {
     const parts = file.path.split('/');
     const name = parts.pop()!;
-    const step = appearsAt(file.from);
+    const step = appearsAt(file);
     const level = parts.length ? open(parts.join('/'), step) : roots;
-    level.push({ kind: 'file', name, path: file.path, step });
+    level.push({
+      kind: 'file',
+      name,
+      path: file.path,
+      step,
+      // Шаги, на которых файл поправили: строка помечается так же, как на
+      // шаге своего появления — в дереве видно, что изменилось.
+      edits: (file.edits ?? []).map((edit) => appearsAt(edit)),
+    });
   }
 
   /* Пустые каталоги идут после файлов: если каталог назван и там, и там, шаг у
      него берётся минимальный — тот, на котором он появился раньше. */
-  for (const dir of dirs) open(dir.path, appearsAt(dir.from));
+  for (const dir of dirs) open(dir.path, appearsAt(dir));
 
   const sort = (nodes: Node[]): Node[] =>
     nodes
@@ -133,9 +173,8 @@ const leafIcon = (name: string) =>
   LEAF_ICONS[name.split('.').pop()?.toLowerCase() ?? ''] ?? 'file';
 ---
 
-<div class="editor" data-editor data-view="both">
+<div class="editor" data-editor data-view="both" data-scope={scope.join(' ') || undefined}>
   <nav class="editor__tree" aria-label={t('lesson.files')}>
-    <p class="editor__root">{tree.root}</p>
     {/*
       Дерево рисует `vscode-tree` из VS Code Elements — UI-кит самого
       редактора. Своя разметка выглядела самоделкой: шевроны, направляющие,
@@ -147,6 +186,16 @@ const leafIcon = (name: string) =>
       дерево редактора.
     */}
     <vscode-tree indent-guides="always">
+      {/*
+        Корень — обычная папка дерева, а не подпись панели.
+        Ограниченный контекст это такой же каталог, как всё остальное, и путь
+        к файлу начинается с него: `billing/invoice/...`. Подписью он читался
+        как имя рабочей области, и контекст из дерева пропадал.
+      */}
+      <vscode-tree-item branch open>
+        <span class="codicon codicon-folder" slot="icon-branch" aria-hidden="true" />
+        <span class="codicon codicon-folder-opened" slot="icon-branch-opened" aria-hidden="true" />
+        {tree.root}
       {(function branch(list: Node[]) {
         return list.map((node) =>
           node.kind === 'dir' ? (
@@ -169,6 +218,7 @@ const leafIcon = (name: string) =>
             <vscode-tree-item
               data-file={node.path}
               data-appears={node.step}
+              data-edits={node.edits.join(' ') || undefined}
               hidden={node.step > 0}
             >
               <span
@@ -181,16 +231,50 @@ const leafIcon = (name: string) =>
           ),
         );
       })(nodes)}
+      </vscode-tree-item>
     </vscode-tree>
   </nav>
 
   <div class="editor__panes">
     {
-      tree.files.map((file) => {
+      /* Версий у файла столько, сколько раз урок его правит: панели лежат
+         рядом, а шаг решает, какая из них видна. */
+      tree.files.flatMap((file) => {
         const Document = doc(file.path);
-        return (
-          <div class="editor__pane" data-pane={file.path} hidden>
-            <div class="editor__path">{tree.root}/{file.path}</div>
+        const versions = [
+          { step: appearsAt(file), code: file.code },
+          ...(file.edits ?? []).map((edit) => ({ step: appearsAt(edit), code: edit.code })),
+        ];
+
+        return versions.map((version) => (
+          <div class="editor__pane" data-pane={file.path} data-since={version.step} hidden>
+            <div class="editor__path">
+              <span>{tree.root}/{file.path}</span>
+              {/* Копирование — та же кнопка, что у панели кода: разметка и
+                  обработчик общие, отличается только контейнер, из которого
+                  берётся текст. Документу кнопка не нужна: копировать
+                  отрендеренный markdown незачем. */}
+              {!Document && (
+                <button
+                  class="panel__copy"
+                  type="button"
+                  data-copy
+                  data-copied-label={t('lesson.copied')}
+                  data-copy-label={t('lesson.copy')}
+                  aria-label={t('lesson.copy')}
+                  title={t('lesson.copy')}
+                  hidden
+                >
+                  <svg class="panel__copy-icon" viewBox="0 0 16 16" aria-hidden="true">
+                    <rect x="5.75" y="5.75" width="8.5" height="9.5" rx="1.5" />
+                    <path d="M11 3.25v-1a1.5 1.5 0 0 0-1.5-1.5h-7a1.5 1.5 0 0 0-1.5 1.5v9a1.5 1.5 0 0 0 1.5 1.5h1" />
+                  </svg>
+                  <svg class="panel__copy-done" viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M3 8.5 6.5 12 13 4.75" />
+                  </svg>
+                </button>
+              )}
+            </div>
             {Document ? (
               /* Документ показывается отрендеренным, а не исходником: таблица,
                  ради которой он написан, в виде разметки не читается. */
@@ -198,10 +282,14 @@ const leafIcon = (name: string) =>
                 <Document />
               </div>
             ) : (
-              <Code code={file.code!} lang={(file.lang ?? 'text') as any} {...shikiOptions} />
+              <Code
+                code={localize(version.code!)}
+                lang={(file.lang ?? 'text') as any}
+                {...shikiOptions}
+              />
             )}
           </div>
-        );
+        ));
       })
     }
   </div>
@@ -231,7 +319,12 @@ const leafIcon = (name: string) =>
   if (editors.length && player) {
     const steps = JSON.parse(player.dataset.editorSteps || '{}') as Record<
       string,
-      { open?: string; view?: 'tree' | 'file' | 'both' }
+      {
+        open?: string;
+        view?: 'tree' | 'file' | 'both';
+        summary?: boolean;
+        lines?: number[];
+      }
     >;
     const order = JSON.parse(player.dataset.editorOrder || '[]') as string[];
 
@@ -240,12 +333,134 @@ const leafIcon = (name: string) =>
     const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     const wire = (editor: HTMLElement) => {
+    /**
+     * Шаги этого редактора. Шаг вне диапазона прижимается к ближнему краю:
+     * пока читатель не дошёл, редактор показывает своё начало, а не состояние
+     * чужого шага.
+     */
+    const scope = (editor.dataset.scope ?? '')
+      .split(' ')
+      .filter(Boolean)
+      .map((id) => order.indexOf(id))
+      .filter((index) => index >= 0);
+    const clamp = (index: number) =>
+      scope.length ? Math.min(Math.max(index, scope[0]), scope[scope.length - 1]) : index;
+
     const panes = [...editor.querySelectorAll<HTMLElement>('[data-pane]')];
     const files = [...editor.querySelectorAll<HTMLElement>('[data-file]')];
     const rows = [...editor.querySelectorAll<HTMLElement>('[data-appears]')];
 
+    /** Шаг, на котором стоит читатель: по нему выбирается версия файла. */
+    let current = 0;
+    /**
+     * Файл, который читатель выбрал сам.
+     *
+     * Шаг без своего `open` держится этого выбора, а не последнего открытого:
+     * иначе при прокрутке вверх шаг показывал файл из более позднего шага —
+     * тот, о котором он ещё не говорил.
+     */
+    let picked: string | undefined;
+    let switching: ReturnType<typeof setTimeout>;
+    /** Второй такт шага: что открыть, когда читатель пройдёт часть шага. */
+    let waiting: { id: string; view: string; path?: string } | null = null;
+    let frame = 0;
+
+    /**
+     * Последний файл, появившийся к этому шагу.
+     *
+     * Нужен шагу, который говорит о показанном файле, но своего `open` не
+     * объявляет: при входе в такой шаг сверху — прокруткой или по ссылке —
+     * открывать было нечего, и панель оставалась пустой.
+     */
+    /** Шаг, на котором файл последний раз появился или поменялся. */
+    const touched = (file: HTMLElement, index: number) =>
+      Math.max(
+        Number(file.dataset.appears),
+        ...(file.dataset.edits ?? '')
+          .split(' ')
+          .filter(Boolean)
+          .map(Number)
+          .filter((step) => step <= index),
+      );
+
+    const latest = (index: number) =>
+      files
+        .filter((file) => Number(file.dataset.appears) <= index)
+        .sort((a, b) => touched(a, index) - touched(b, index))
+        .pop()?.dataset.file;
+
+    /** Появился ли уже файл, который читатель выбрал сам. */
+    const reached = (path: string, index: number) => {
+      const row = files.find((file) => file.dataset.file === path);
+      return !!row && Number(row.dataset.appears) <= index;
+    };
+
+    /**
+     * Вводит ли шаг новый файл: у его строки в дереве шаг появления — этот.
+     * Шаг, который просто говорит о показанном файле, в два такта не читается.
+     */
+    const introduces = (id: string, index: number) => {
+      const step = steps[id] ?? {};
+      if (!step.open || (step.view ?? 'both') !== 'file') return false;
+      const row = files.find((file) => file.dataset.file === step.open);
+      return !!row && Number(row.dataset.appears) === index;
+    };
+
+    /**
+     * Второй такт по прокрутке: содержимое открывается, когда шаг прошёл
+     * примерно треть экрана — этого хватает, чтобы увидеть появившуюся строку
+     * и прочитать первый абзац.
+     */
+    const follow = () => {
+      if (!waiting) return;
+
+      const step = document.querySelector<HTMLElement>(`.step[data-step-id="${waiting.id}"]`);
+      if (!step) return;
+
+      const line =
+        parseFloat(getComputedStyle(player).getPropertyValue('--reading-top')) ||
+        window.innerHeight * 0.34;
+      if (line - step.getBoundingClientRect().top < window.innerHeight * 0.3) return;
+
+      editor.dataset.view = waiting.view;
+      if (waiting.path) show(waiting.path);
+      lit(steps[waiting.id]?.lines);
+      waiting = null;
+    };
+
+    window.addEventListener(
+      'scroll',
+      () => {
+        cancelAnimationFrame(frame);
+        frame = requestAnimationFrame(follow);
+      },
+      { passive: true },
+    );
+
+    /**
+     * Строки, о которых говорит шаг, — подсвечены в открытом файле.
+     *
+     * Читателю иначе приходится искать в тридцати строках те четыре, про
+     * которые текст рядом. Подсветка снимается, когда файл выбрал сам
+     * читатель: строки относятся к файлу шага, а не к любому открытому.
+     */
+    const lit = (lines: number[] = []) => {
+      for (const pane of panes) {
+        const rows = pane.querySelectorAll<HTMLElement>('.astro-code .line');
+        rows.forEach((row, i) =>
+          row.classList.toggle('is-lit', !pane.hidden && lines.includes(i + 1)),
+        );
+      }
+    };
+
     const show = (path: string) => {
-      for (const pane of panes) pane.hidden = pane.dataset.pane !== path;
+      const versions = panes.filter((pane) => pane.dataset.pane === path);
+      /* Версия файла на этом шаге — последняя, которая успела появиться:
+         правка, до которой читатель ещё не дошёл, ему ничего не скажет. */
+      const shown =
+        versions.filter((pane) => Number(pane.dataset.since) <= current).pop() ?? versions[0];
+
+      for (const pane of panes) pane.hidden = pane !== shown;
       // Выделение — состояние строки дерева, и держит его сам компонент.
       for (const file of files) (file as any).selected = file.dataset.file === path;
     };
@@ -253,14 +468,35 @@ const leafIcon = (name: string) =>
     const grow = (index: number) => {
       /** Строки, которых на прошлом шаге не было: им и достаётся движение. */
       const arrived: HTMLElement[] = [];
+      /**
+       * Итоговый шаг помечает всё, что глава добавила или изменила.
+       *
+       * На обычном шаге пометка отвечает «что случилось сейчас», и этого
+       * достаточно. На итоговом вопрос другой: из десятка файлов в дереве
+       * читателю нужно видеть, что трогали в этой главе, а что досталось от
+       * предыдущих.
+       */
+      const summary = Boolean(steps[order[index]]?.summary);
 
       for (const row of rows) {
         const appears = Number(row.dataset.appears);
+        const edits = (row.dataset.edits ?? '')
+          .split(' ')
+          .filter(Boolean)
+          .map(Number);
         const was = row.hidden;
         row.hidden = appears > index;
-        // Файл, появившийся именно на этом шаге, помечен: иначе в дереве из
-        // десяти строк читателю придётся искать, что изменилось.
-        row.classList.toggle('is-new', appears === index);
+        // Строка, которая на этом шаге появилась или изменилась, помечена:
+        // иначе в дереве из десяти строк читателю придётся искать, что нового.
+        row.classList.toggle(
+          'is-new',
+          summary
+            ? // Наследство (`seed`) у главы шага появления нет — оно и не
+              // помечается: «новое» здесь про эту главу, а не про историю
+              // проекта.
+              appears >= 0 || edits.length > 0
+            : appears === index || edits.includes(index),
+        );
         if (was && !row.hidden) arrived.push(row);
       }
 
@@ -275,31 +511,86 @@ const leafIcon = (name: string) =>
       if (arrived.length && !calm) {
         animate(
           arrived,
-          { opacity: [0, 1], transform: ['translateX(-6px)', 'translateX(0)'] },
-          { duration: 0.26, delay: stagger(0.045) },
+          { opacity: [0, 1], transform: ['translateX(-10px)', 'translateX(0)'] },
+          { duration: 0.45, delay: stagger(0.07) },
         );
       }
     };
 
     /* Выбор строки объявляет дерево одним событием на всё дерево; ветку оно
        на том же щелчке само раскрывает и закрывает. */
+    /**
+     * В `detail` приезжает массив выбранных строк, а не объект: типы
+     * компонента обещают `{ selectedItems }`, а реализация отдаёт
+     * `Array.from(...)`. Читаем оба вида — обещанное однажды может сойтись с
+     * фактическим.
+     */
     editor.querySelector('vscode-tree')?.addEventListener('vsc-tree-select', (event) => {
-      const picked = (event as CustomEvent<{ selectedItems: HTMLElement[] }>).detail
-        .selectedItems[0];
-      if (picked?.dataset.file) show(picked.dataset.file);
+      const detail = (event as CustomEvent<HTMLElement[] | { selectedItems: HTMLElement[] }>)
+        .detail;
+      const chosen = Array.isArray(detail) ? detail[0] : detail?.selectedItems?.[0];
+
+      if (chosen?.dataset.file) {
+        picked = chosen.dataset.file;
+        show(picked);
+        lit();
+      }
     });
 
     const goTo = (id: string) => {
-      const index = order.indexOf(id);
-      if (index === -1) return;
-      grow(index);
+      const raw = order.indexOf(id);
+      if (raw === -1) return;
 
-      const step = steps[id] ?? {};
+      const index = clamp(raw);
+      grow(index);
+      current = index;
+
+      const step = steps[order[index]] ?? {};
       // Режим панели объявлен шагом: показать дерево, показать файл или и то и
       // другое. Ширины на всё сразу не хватает, и делить её всегда пополам
       // значит всегда показывать половину ненужного.
-      editor.dataset.view = step.view ?? 'both';
-      if (step.open) show(step.open);
+      const view = step.view ?? 'both';
+      /* Шаг без своего файла оставляет открытым прежний — но версию его
+         пересматривает: правка могла случиться именно на этом шаге. */
+      const path =
+        step.open ?? (picked && reached(picked, index) ? picked : undefined) ?? latest(index);
+
+      /**
+       * Шаг, который вводит новый файл, читается в два такта.
+       *
+       * Раньше дерево гасло в тот же момент, когда в нём появлялась строка, и
+       * увидеть появление было невозможно. Теперь сперва остаётся дерево — в
+       * нём видно, где файл лёг, — а содержимое открывается ниже по прокрутке,
+       * когда читатель прошёл часть шага.
+       */
+      const twoBeat = introduces(order[index], index);
+
+      /**
+       * Панель переключается с задержкой.
+       *
+       * Дерево и файл — половины разной высоты, и смена режима меняет размер
+       * коробки. На быстрой прокрутке шаги проходят пачкой, и коробка успевала
+       * дважды поменять и режим, и файл: экран дёргался на каждом шаге, мимо
+       * которого читатель просто проехал. Задержка означает «показываем то, на
+       * чём читатель остановился», а дерево в это время растёт сразу — оно
+       * дёшево и идёт вместе с текстом.
+       */
+      clearTimeout(switching);
+      switching = setTimeout(() => {
+        editor.dataset.view = twoBeat ? 'tree' : view;
+        /* В режиме дерева файл не открывают вовсе: половина с ним скрыта, а
+           открытый файл запомнился бы и всплыл на следующем шаге вместо того,
+           о котором тот говорит. */
+        if (path && !twoBeat && view !== 'tree') show(path);
+        /* Подсветка ставится после показа: класс вешается на строки той
+           панели, что осталась видимой. */
+        lit(twoBeat ? [] : step.lines);
+
+        waiting = twoBeat ? { id: order[index], view, path } : null;
+        // Читатель мог войти в шаг уже в его середине — тогда второй такт
+        // наступает сразу, ждать прокрутки нечего.
+        follow();
+      }, 180);
     };
 
     goTo(player.dataset.stepId || order[0]);
@@ -308,6 +599,30 @@ const leafIcon = (name: string) =>
     });
     };
 
-    for (const editor of editors) wire(editor);
+    /**
+     * Ведём дерево только после того, как компонент готов.
+     *
+     * Строки приезжают из разметки сервера, и до первого обновления компонента
+     * у них ещё нет ни пути, ни уровня. Мы же на старте сразу снимаем `hidden`
+     * и ставим выделение — компонент ловил это посреди своей инициализации и
+     * ронял в консоль ошибку на каждой строке.
+     */
+    Promise.all([
+      customElements.whenDefined('vscode-tree'),
+      customElements.whenDefined('vscode-tree-item'),
+    ])
+      .then(() =>
+        Promise.all(
+          editors.map((editor) => {
+            const tree = editor.querySelector('vscode-tree') as HTMLElement & {
+              updateComplete?: Promise<unknown>;
+            };
+            return tree?.updateComplete ?? Promise.resolve();
+          }),
+        ),
+      )
+      .then(() => {
+        for (const editor of editors) wire(editor);
+      });
   }
 </script>

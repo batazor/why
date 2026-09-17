@@ -227,9 +227,48 @@ const railTo = midY(levels.length - 1);
         progress.style.strokeDashoffset = String(full - (full * to) / (steps.length - 1));
       }
 
+      syncHash();
     };
 
     const readingTop = () => window.innerHeight * 0.34;
+
+    /**
+     * Уровень в адресе: `#level-<ключ>`.
+     *
+     * Полоски уровней стоят в той же строке навигации, что и точки разбора, и
+     * щёлкаются так же — значит и ссылка на уровень должна работать так же.
+     * Пишется через replaceState: уровень меняется на каждой прокрутке, и push
+     * набил бы историю так, что «назад» перестало бы уводить со страницы.
+     */
+    const levelHash = (i: number) => `#level-${steps[i].dataset.levelStep ?? ''}`;
+    const hashIndex = () => steps.findIndex((_, i) => levelHash(i) === location.hash);
+    let urlReady = false;
+    let hashTimer: ReturnType<typeof setTimeout>;
+
+    /**
+     * Адрес пишет тот блок, в котором стоит линия чтения.
+     *
+     * Уровни и разбор ведут адрес каждый свой, и пока читатель в разборе,
+     * уровни молчат: иначе два скрипта перезаписывали бы хеш друг за другом
+     * каждые четверть секунды.
+     */
+    const owns = () => {
+      const box = root.getBoundingClientRect();
+      const line = readingTop();
+      return box.top <= line && box.bottom > line;
+    };
+
+    const syncHash = () => {
+      clearTimeout(hashTimer);
+      hashTimer = setTimeout(() => {
+        if (!urlReady || active < 0 || !owns() || location.hash === levelHash(active)) return;
+        try {
+          history.replaceState(null, '', levelHash(active));
+        } catch {
+          // Браузер придержал историю — адрес догонит на следующем уровне.
+        }
+      }, 250);
+    };
 
     /**
      * Прокрутка к шагу уровня: пирог служит ещё и навигацией.
@@ -280,6 +319,10 @@ const railTo = midY(levels.length - 1);
         if (step.getBoundingClientRect().top <= boundary) next = i;
       });
       mark(next);
+      /* Адрес сверяется на каждой прокрутке, а не только при смене уровня:
+         запись, пропущенная пока линия чтения была в другом блоке, иначе
+         никогда бы не повторилась. */
+      syncHash();
     };
 
     window.addEventListener(
@@ -293,6 +336,28 @@ const railTo = midY(levels.length - 1);
       },
       { passive: true },
     );
-    follow();
+
+    /* Пришли по ссылке на уровень — встаём на него, а не на тот, что оказался
+       у линии чтения после восстановления прокрутки. Браузер восстанавливает
+       её сам и перебивал бы переход, поэтому на время перехода управление
+       берём себе — тем же приёмом, что и разбор ниже. */
+    const start = hashIndex();
+    if (start >= 0) {
+      const restore = history.scrollRestoration;
+      history.scrollRestoration = 'manual';
+      goTo(start);
+      requestAnimationFrame(() => {
+        goTo(start);
+        history.scrollRestoration = restore;
+      });
+    } else {
+      follow();
+    }
+    urlReady = true;
+
+    window.addEventListener('hashchange', () => {
+      const to = hashIndex();
+      if (to >= 0 && to !== active) goTo(to);
+    });
   });
 </script>

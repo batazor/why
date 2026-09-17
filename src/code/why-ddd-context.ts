@@ -1,17 +1,18 @@
 import type { CodeDeck } from './types';
+import posterSpec from './why-ddd-context.poster.ts';
 import type { FileTreeSpec } from './tree';
 import type { LikeC4Spec } from './likec4';
 
 /**
- * Колода шагов урока «DDD in action».
+ * Колода первой части: границы контекста и язык.
  *
  * ПРАВИЛО: код, дерево и схема общие для всех локалей, поэтому в них только
  * английский. Любая проза идёт в `narration` локализованного урока — иначе
  * русский комментарий вылезет на английской странице.
  *
- * Урок идёт сверху вниз, и на разных уровнях смотрит на разное: границы
- * контекстов — схемой, файлы сервиса — редактором. Панель одна, шаг объявляет,
- * что в ней: свой view — схема, свой файл — редактор.
+ * Часть ведут схемы: контексты, домены, хранилища, шина, провайдер. Дерево
+ * появляется дважды — под словарь и под каталоги модулей, с которых начнётся
+ * вторая часть.
  */
 
 export const likec4: LikeC4Spec = {
@@ -45,13 +46,7 @@ export const likec4: LikeC4Spec = {
   wide: ['overview'],
 };
 
-/**
- * Дерево сервиса, которое урок заполняет по шагам.
- *
- * Появление файла и его содержимое — два разных шага: на первом важно, что
- * файл в каталоге появился и лежит именно здесь, и панель отдана дереву, на
- * втором дерево уже всё сказало, и ширина нужна содержимому.
- */
+
 export const tree: FileTreeSpec = {
   root: 'billing',
   steps: {
@@ -72,11 +67,14 @@ export const tree: FileTreeSpec = {
    * поэтому пока пустые.
    */
   dirs: [
-    { path: 'invoice/issuing', from: 'slices' },
-    { path: 'invoice/payment', from: 'slices' },
-    { path: 'invoice/overdue', from: 'slices' },
+    { path: 'invoice/applications/issuing', from: 'slices' },
+    { path: 'invoice/applications/payment', from: 'slices' },
+    { path: 'invoice/applications/overdue', from: 'slices' },
   ],
 };
+
+/** Постер каталога: суть главы одной схемой. */
+export const poster = posterSpec;
 
 const deck: CodeDeck = [
   { id: 'boundary' },

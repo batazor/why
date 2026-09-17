@@ -62,7 +62,9 @@ const tags = [...new Set(lessons.flatMap((lesson) => lesson.data.tags))].sort();
             /* Постер пересказывает тот же текст, что и «Проблема» ниже,
                поэтому для скринридера он декоративный. */
             <div class="card__poster" aria-hidden="true">
-              <FlowDiagram client:visible spec={lesson.poster} />
+              {/* Подписи — проза локали: без них на карточке видны сами
+                  placeholder'ы `{{ключ}}`, как было до этой правки. */}
+              <FlowDiagram client:visible spec={lesson.poster} labels={lesson.data.labels} />
             </div>
           )}
           <h2 class="card__title">
@@ -71,7 +73,17 @@ const tags = [...new Set(lessons.flatMap((lesson) => lesson.data.tags))].sort();
           <p class="card__problem">{lesson.data.problem}</p>
           <div class="card__tags">
             {lesson.data.tags.map((tag) => (
-              <span class="tag">{tag}</span>
+              /* Тег — ссылка на отфильтрованный каталог: увидел метку на
+                 карточке, щёлкнул, получил всё с этой меткой. Без JS это
+                 обычный переход по адресу с ?tag=, с JS фильтр применяется
+                 на месте. */
+              <a
+                class="tag tag--link"
+                href={`${localePath(lang)}?tag=${encodeURIComponent(tag)}`}
+                data-tag-link={tag}
+              >
+                {tag}
+              </a>
             ))}
           </div>
         </li>
@@ -120,6 +132,20 @@ const tags = [...new Set(lessons.flatMap((lesson) => lesson.data.tags))].sort();
         else if (selected.has(tag)) selected.delete(tag);
         else selected.add(tag);
         render();
+      });
+
+      // Тег на карточке ведёт туда же, куда кнопка фильтра, поэтому со
+      // скриптом он и работает как кнопка: уходить со страницы за тем же
+      // списком незачем. Клик с модификатором остаётся переходом по ссылке —
+      // «открыть в новой вкладке» ломать нельзя.
+      document.querySelectorAll<HTMLAnchorElement>('[data-tag-link]').forEach((link) => {
+        link.addEventListener('click', (event) => {
+          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          event.preventDefault();
+          selected.clear();
+          selected.add(link.dataset.tagLink!);
+          render();
+        });
       });
 
       const known = new Set(buttons.map((button) => button.dataset.tag).filter(Boolean));

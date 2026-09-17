@@ -172,12 +172,18 @@ pre {
 }
 
 .term__tip {
+  /* display, а не visibility: скрытая через visibility подсказка сохраняет
+     геометрию, и на узком экране её правый край растягивал прокрутку всей
+     страницы — при том, что читатель её даже не открывал. Мерить это не
+     мешает: скрипт снимает размеры уже после того, как открыл подсказку. */
+  display: none;
   position: absolute;
   bottom: calc(100% + 0.5rem);
   left: 0;
   z-index: 20;
   width: max-content;
-  max-width: min(22rem, 78vw);
+  /* Шире экрана подсказка не бывает: 0.5rem по краям остаётся на воздух. */
+  max-width: min(22rem, calc(100vw - 1rem));
   padding: 0.6rem 0.75rem;
   background: var(--panel);
   color: var(--fg);
@@ -188,11 +194,6 @@ pre {
   line-height: 1.5;
   font-weight: 400;
   text-align: left;
-  opacity: 0;
-  /* visibility, а не display: скрытая подсказка сохраняет геометрию, и скрипт
-     может померить её до показа, чтобы решить, куда раскрывать. */
-  visibility: hidden;
-  transition: opacity 0.12s ease;
 }
 
 .term__tip[data-placement='below'] {
@@ -201,14 +202,7 @@ pre {
 }
 
 .term[data-open='true'] .term__tip {
-  opacity: 1;
-  visibility: visible;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .term__tip {
-    transition: none;
-  }
+  display: block;
 }
 
 /* Видимый фокус одинаковый по всему сайту: браузерный outline на кнопках и
@@ -471,6 +465,10 @@ main:focus {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--panel);
+  /* Постер идёт от края до края и своего скругления не знает: без обрезки его
+     фон лез прямым углом за скруглённую рамку, и у карточки было два разных
+     угла — цветной прямой и серый круглый. */
+  overflow: hidden;
   transition: border-color 0.15s ease, transform 0.15s ease;
 }
 
@@ -511,6 +509,20 @@ main:focus {
   gap: 0.35rem;
   margin-top: auto;
   padding-top: 0.4rem;
+  /* Выше невидимой ссылки заголовка, растянутой на всю карточку: иначе щелчок
+     по метке доставался бы уроку, а не фильтру. */
+  position: relative;
+  z-index: 1;
+}
+
+/* Метка-ссылка: ведёт в каталог, отфильтрованный по ней. */
+a.tag--link {
+  text-decoration: none;
+}
+
+a.tag--link:hover {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  color: var(--fg);
 }
 
 .tag {
@@ -1599,6 +1611,18 @@ main:focus {
   padding: 0;
 }
 
+/**
+ * Воздух между шагами внутри группы.
+ *
+ * Границы между шагами здесь нет, и когда текста в шаге много, абзац одного и
+ * заголовок следующего оказываются на том же расстоянии, что абзацы внутри
+ * шага, — текст читается сплошняком. Расстояние берётся то же, что между
+ * шагами снаружи группы: воздух плюс отбивка шага.
+ */
+.player--scroll.is-enhanced .step--in-run + .step--in-run {
+  padding-top: calc(var(--step-air) + 1.75rem);
+}
+
 .player--scroll.is-enhanced .step-run__stage {
   position: sticky;
   /**
@@ -1722,15 +1746,53 @@ main:focus {
   backdrop-filter: blur(8px);
 }
 
+/**
+ * В скролл-режиме строка навигации общая на всю страницу разбора.
+ *
+ * Уровни идут выше плеера, и их шаги — в этой же строке. Со `sticky` строка
+ * появлялась только там, где начинался сам плеер, то есть в уровнях
+ * навигации не было вовсе. Поэтому `fixed` и ширина по контейнеру страницы.
+ */
+.player--scroll.is-enhanced .player__controls {
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  width: min(calc(100vw - 2 * var(--page-pad)), calc(var(--page-max) - 2 * var(--page-pad)));
+  transform: translateX(-50%);
+  transition: opacity 0.2s ease;
+}
+
+/* Вне разбора строки нет: над вступлением и под последним шагом она висела бы
+   поверх обычного текста. */
+.player--scroll.is-enhanced[data-nav='off'] .player__controls {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Место под строку: она вынута из потока, и последний шаг иначе уезжает под
+   неё. */
+.player--scroll.is-enhanced {
+  padding-bottom: calc(var(--controls-height, 4rem) + 0.5rem);
+}
+
 
 .player__dots {
   display: flex;
   gap: 0.4rem;
   flex: 1;
+  /* Шагов может быть и шесть, и двадцать пять: строка навигации обязана
+     сжаться, а не выдавить страницу за край окна. */
+  min-width: 0;
+  flex-wrap: wrap;
+  row-gap: 0.35rem;
 }
 
+/* Полоска тянется и сжимается. Верхний предел — прежняя ширина: на коротком
+   разборе строка выглядит так же, как раньше. */
 .player__dot {
-  width: 1.75rem;
+  flex: 1 1 0;
+  min-width: 0.55rem;
+  max-width: 1.75rem;
   height: 4px;
   border: 0;
   padding: 0;
@@ -1742,6 +1804,12 @@ main:focus {
 
 .player__dot[aria-current='true'] {
   background: var(--accent);
+}
+
+/* Полоски уровней — та же строка, но своя группа: последняя отбивается от
+   шагов разбора, чтобы две части навигации не читались одним рядом. */
+.player__dot--level:last-of-type {
+  margin-right: 0.6rem;
 }
 
 /**
@@ -1976,6 +2044,97 @@ main:focus {
   }
 }
 
+/* ---------- Оглавление серии ---------- */
+
+/**
+ * Кнопка со списком глав. `details` вместо своего выпадающего меню: открытие и
+ * закрытие, клавиатура и скринридер достаются от браузера, а не от скрипта.
+ */
+.chapters {
+  /* Панель поповера лежит абсолютно: открытое меню не должно раздвигать текст
+     под собой. */
+  position: relative;
+  margin: -0.35rem 0 1.5rem;
+}
+
+.chapters__summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.7rem 0.3rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--fg);
+  font-size: 0.8rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.chapters__summary:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.chapters__icon {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  color: var(--muted);
+}
+
+.chapters__count {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.chapters__list {
+  position: absolute;
+  z-index: 5;
+  list-style: none;
+  min-width: min(22rem, 100%);
+  max-width: min(var(--measure), 100%);
+  margin: 0.4rem 0 0;
+  padding: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: 0 6px 20px var(--shadow);
+}
+
+.chapters__link {
+  display: flex;
+  gap: 0.6rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: 6px;
+  color: var(--fg);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+a.chapters__link:hover {
+  background: color-mix(in srgb, var(--muted) 12%, transparent);
+}
+
+/* Текущая глава — не ссылка: щёлкать по странице, на которой стоишь, незачем. */
+.chapters__link[aria-current='page'] {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  font-weight: 600;
+}
+
+.chapters__num {
+  flex: none;
+  width: 1.1rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.chapters__link[aria-current='page'] .chapters__num {
+  color: var(--accent);
+}
+
 /* ---------- LikeC4 ---------- */
 
 /* Полотно LikeC4 живёт по тому же контракту, что и схема на React Flow:
@@ -2108,10 +2267,27 @@ main:focus {
   align-self: start;
   grid-column: 2;
   margin: 0;
+  /* Коробка меняет высоту на смене шага — дерево ниже файла. Браузер в ответ
+     подтягивает прокрутку, чтобы «удержать» содержимое, и это читается как
+     скачок экрана. Здесь якорь не нужен: текст слева не двигается. */
+  overflow-anchor: none;
   /* Фон непрозрачный, и в этом весь смысл смены кадров: кадр следующего шага
      стоит в разметке позже, поэтому наезжает поверх — уходящий не убегает
      вверх на глазах, а закрывается тем, что пришло снизу. */
   background: var(--bg);
+}
+
+/**
+ * Группа шагов с одним редактором.
+ *
+ * Колонки те же, что у шага с кадром: раскладка разбора одна на все шаги, и
+ * менять её от шага к шагу значит двигать колонку текста под читателем.
+ * Редактор внутри группы прилипший — он носит тот же класс, что кадр.
+ */
+.player--scroll.is-enhanced .step-run--editor {
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 24rem) minmax(0, 1fr);
+  padding-bottom: var(--step-air);
 }
 
 /* Ряд тянется на всю высоту шага: без этого он не выше самого кадра, и
@@ -2145,22 +2321,6 @@ main:focus {
 }
 
 /**
- * Шаг, у которого справа дерево, а не схема.
- *
- * Пути в дереве короткие: в колонке, рассчитанной под кадр, оно смотрится
- * пустой коробкой на пол-экрана. Ширина уходит тексту — читают здесь его, а
- * дерево только показывает, где читаемое лежит. К краю окна такой шаг не
- * выносится: узкой колонке вылет не нужен.
- */
-.player--editor .step--narrow {
-  grid-template-columns: minmax(0, var(--measure)) minmax(0, 17rem);
-}
-
-.player--editor .step--narrow .step__aside {
-  margin-right: 0;
-}
-
-/**
  * Высота кадра внутри шага — из пропорций схемы: их ставит сам компонент
  * инлайновым `aspect-ratio`, посчитанным по раскладке из модели.
  *
@@ -2189,6 +2349,20 @@ main:focus {
   margin-left: calc(
     max((100vw - var(--frame-max)) / 2, 0px) - max((100vw - var(--page-max)) / 2, 0px) -
       var(--page-pad)
+  );
+}
+
+/**
+ * Редактор во всю ширину — всё же не вплотную к краям окна.
+ *
+ * Схеме край не мешает: у неё внутри свои поля. А дерево и код у самого края
+ * читаются как обрезанные, поэтому слева и справа остаётся отступ страницы.
+ */
+.player__editor.step__wide {
+  width: min(calc(100vw - 2 * var(--page-pad)), var(--frame-max));
+  margin-left: calc(
+    max((100vw - var(--frame-max)) / 2, var(--page-pad)) -
+      max((100vw - var(--page-max)) / 2, 0px) - var(--page-pad)
   );
 }
 
@@ -2236,9 +2410,9 @@ main:focus {
 
 .editor {
   display: grid;
-  /* Высота фиксированная снизу: в начале разбора в дереве один файл, и коробка
-     в три строки читалась бы как обрезанная панель, а не как редактор. */
-  min-height: 16rem;
+  /* Высота по содержимому: коробка известной высоты держала пустое поле под
+     деревом из пяти строк и под коротким файлом. Предел сверху остаётся у
+     самого содержимого — `.editor__panes` не даёт файлу вырасти выше экрана. */
   grid-template-columns: minmax(0, 12rem) minmax(0, 1fr);
   overflow: hidden;
   border: 1px solid var(--border);
@@ -2280,18 +2454,6 @@ main:focus {
   --vscode-list-focusAndSelectionOutline: var(--accent);
   --vscode-tree-indentGuidesStroke: color-mix(in srgb, var(--muted) 45%, transparent);
   --vscode-tree-inactiveIndentGuidesStroke: color-mix(in srgb, var(--muted) 22%, transparent);
-}
-
-/* Корень — заголовок панели, как в проводнике редактора: это не строка, по
-   которой щёлкают, а подпись, от чего считаются пути. */
-.editor__root {
-  margin: 0 0 0.25rem;
-  padding: 0 0.5rem;
-  font-size: 0.66rem;
-  font-weight: 600;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--muted);
 }
 
 /* Иконки типов файлов и каталогов. Цвет берут оттуда же, откуда берут его
@@ -2345,19 +2507,26 @@ vscode-tree-item.is-new {
 .editor__panes {
   transition:
     grid-template-columns 0.3s ease,
+    max-width 0.3s ease,
+    max-height 0.3s ease,
     opacity 0.2s ease;
 }
 
 .editor[data-view='tree'] {
   grid-template-columns: minmax(0, 1fr) 0;
-  /* 16rem просит код, а не пять строк путей: в режиме дерева коробка по
-     содержимому, иначе под деревом остаётся пустое поле. */
-  min-height: 0;
+  /* И по ширине тоже по содержимому: пути короткие, и растянутая на всю
+     колонку коробка читается пустой панелью. Колонка при этом не меняется —
+     она одна на все шаги разбора. */
+  max-width: 22rem;
 }
 
+/* Погашенная половина не должна держать высоту: она сжата в ноль по ширине,
+   но её содержимое всё равно задавало высоту коробки — дерево из пяти строк
+   растягивалось на высоту открытого файла. */
 .editor[data-view='tree'] .editor__panes {
   opacity: 0;
   visibility: hidden;
+  max-height: 0;
 }
 
 .editor[data-view='file'] {
@@ -2369,6 +2538,7 @@ vscode-tree-item.is-new {
   border-right: 0;
   opacity: 0;
   visibility: hidden;
+  max-height: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2380,7 +2550,11 @@ vscode-tree-item.is-new {
 }
 
 .editor__path {
-  padding: 0.45rem 0.7rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.3rem 0.45rem 0.3rem 0.7rem;
   border-bottom: 1px solid var(--border);
   font-family: var(--mono);
   font-size: 0.72rem;
@@ -2391,6 +2565,41 @@ vscode-tree-item.is-new {
   margin: 0;
   border: 0;
   border-radius: 0;
+}
+
+/**
+ * Нумерация строк в файле.
+ *
+ * Счётчиком, а не разметкой: Shiki уже разложил строки по `.line`, а номер,
+ * добавленный в токены, уехал бы в буфер вместе с кодом. `::before` не
+ * копируется — кнопка «скопировать» отдаёт чистый файл.
+ */
+.editor__pane .astro-code {
+  counter-reset: line;
+}
+
+.editor__pane .astro-code .line::before {
+  counter-increment: line;
+  content: counter(line);
+  display: inline-block;
+  width: 2.5ch;
+  margin-right: 1rem;
+  text-align: right;
+  color: color-mix(in srgb, var(--muted) 50%, transparent);
+  user-select: none;
+}
+
+/**
+ * Строка, о которой говорит шаг.
+ *
+ * Тот же фон, что у подсветки Shiki в панелях кода: читатель уже знает это
+ * выделение, и второй язык для той же мысли ему не нужен.
+ */
+.editor__pane .astro-code .line.is-lit {
+  display: inline-block;
+  width: 100%;
+  background: var(--accent-soft);
+  transition: background 0.2s ease;
 }
 
 /* Документ в редакторе: отрендеренный markdown, а не исходник. Набор правил

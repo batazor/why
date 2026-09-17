@@ -1,0 +1,174 @@
+---
+title: 'Why DDD: specification'
+description: ''
+problem: >-
+  The rule "the invoice is overdue" lives in three places and is named in none:
+  the scenario assumes it from outside, the read projection keeps a field, the
+  database keeps a `WHERE` clause. The first change to the rule reaches one of
+  the three.
+tags: [ddd, pattern]
+order: 7
+deck: why-ddd-specification
+series: why-ddd
+labels:
+  kindRule: rule
+  rule: "\"Invoice is overdue\""
+  ruleParts: due date, calendar, status
+  places: Three places
+  placesList: scenario, projection, WHERE
+  threeCopies: one rule, three copies
+  onlyOne: one of them gets changed
+terms:
+  спецификация: >-
+    A predicate rule extracted into an object: it answers yes or no about one
+    domain object and lives in the domain, not in a query clause.
+  агрегат: >-
+    A cluster of objects that changes as one whole, with a root the outside world
+    goes through. A consistency boundary and a transaction boundary.
+  доменный сервис: >-
+    A domain rule that belongs in no aggregate: it is about several of them, or
+    about something the aggregate does not have. It does not leave the domain,
+    though — it lives in the same model. It has no ports and no transactions.
+  проекция: >-
+    A model for reading: data laid out the way it is shown, not the way it is
+    changed.
+  application: >-
+    The layer that decides what jobs the program does. It hands work to the
+    domain, holds no domain rules and stays thin.
+comments:
+  aggCharge: puts the fee on the invoice; a paid invoice takes none
+  aggCopy: 'a copy of the lines: unchangeable from outside'
+  aggEvents: 'hands the recorded facts to the outside'
+  aggIssue: 'builds an invoice and sums up the lines'
+  aggPaid: 'marks the invoice paid; paying it twice is not allowed'
+  aggRecord: 'records the fact; sending it is not for the aggregate to do'
+  aggRoot: 'the invoice: aggregate root'
+  eventIssued: 'the invoice has been issued'
+  eventPaid: 'the invoice has been paid'
+  eventPenalty: the invoice was charged a late fee
+  eventWhat: 'a domain fact; the name goes to the bus as the message type'
+  moneyMinor: 'an amount in cents'
+  portPublisher: 'the port: where facts are sent'
+  portRepo: 'the port: how an invoice reaches storage and comes back'
+  specAll: 'composition: requires every predicate at once'
+  specBig: 'a second predicate: the invoice is above the limit'
+  specIface: 'the specification contract: one question about one aggregate'
+  specSatisfied: 'a paid invoice is never overdue'
+  specWhat: 'the predicate: is this invoice overdue?'
+  svcCalendar: 'the working calendar: part of the model, not a storage port'
+  svcPenalty: 'the rule: an invoice, a rate and a calendar — an amount out'
+  svcFromAggregate: 'the rule takes the due date from the invoice itself, not from the caller'
+  ucOverdueCall: the rule computes the amount from the invoice, the rate and the calendar
+  ucOverdueApply: only the invoice itself can charge a penalty to the invoice
+  ucOverdueDeps: two ports, a calendar and a rate — all the scenario needs
+  ucOverdueRun: load, calculate, apply, save, tell
+  ucSpecGuard: 'the scenario asks the rule instead of trusting the caller'
+steps:
+  - id: problem
+    title: The predicate that is not in the code
+    narration: |-
+      On the right is the overdue scenario from the previous chapter. It charges
+      the fee — and nowhere does it ask whether the invoice is overdue: it
+      assumes whoever called it has already worked that out.
+
+      And it is worked out in three places. The scheduler picks invoices with a
+      `WHERE` clause. The read [[проекция|projection]] keeps an `Overdue` field.
+      The report for accounting counts it its own way, because it knew about
+      neither of the first two.
+
+      One rule, three records of it, and the word "overdue" is written in none of
+      them. Add holidays to it and only the record someone remembered will change.
+  - id: spec
+    title: The specification
+    narration: |-
+      A [[спецификация|specification]] is a domain predicate extracted into an
+      object. Here it has a name — `Overdue` — and it answers one question: is
+      this invoice overdue?
+
+      Inside is what the rule is made of: the status of the invoice, the due date
+      and the working calendar. No `ctx`, no repository — like a
+      [[доменный сервис|domain service]], only the output is not an amount but
+      yes or no.
+
+      The rule lives in `domains/invoice/rules` — a package of its own, next to
+      `services`. The reason is the same as for the penalty: a rule about the
+      invoice but not from its data — and a separate package keeps it from
+      spreading across the domain as files named `*_spec.go`. It is called by
+      the package: `rules.NewOverdue(...)`.
+
+      What that already buys: the rule became a separate thing you can call. To
+      see how it behaves on holidays, one call is enough — no database and no
+      scheduler are needed for it.
+  - id: usage
+    title: The scenario asks instead of assuming
+    narration: |-
+      The same scenario file with one new check in it. Now it does not take the
+      caller's word: it asks the specification and leaves without changes if the
+      invoice is not overdue.
+
+      That costs one line and closes a whole class of mistakes: the scheduler
+      picked an extra invoice, a retry arrived a day after the payment, someone
+      triggered the wrong number by hand — in all three cases no fee is charged.
+
+      Note that the scenario still holds no rule. It **calls** one: the rule is in
+      the domain, the order of the operation in [[application]].
+  - id: combine
+    title: Combining — and when it is redundant
+    narration: |-
+      Specifications compose: `AllOf` takes any predicates and requires all of
+      them. A `Specification` interface appeared — and it is the whole contract:
+      one method answering about one [[агрегат|aggregate]].
+
+      Next to it is a second predicate, `OverBudget`, about an invoice above a
+      limit. Together with the first it gives "overdue and large" — the rule by
+      which someone on duty calls the customer instead of waiting.
+
+      And right away about the other side: combinators are not always needed. If
+      two predicates always travel together, it is more honest to give them a
+      third name — `RequiresCall` — than to assemble `AllOf` in four places and
+      later work out which assembly was right. I deliberately did not add `Or`:
+      it almost always means there are really two rules.
+  - id: cost
+    title: What it costs
+    narration: |-
+      Now honestly about the price. A specification cannot select overdue
+      invoices from the database: it works with a loaded aggregate, and nobody
+      will load everything to filter out a hundred.
+
+      So the selecting will be done by a query anyway. There are two ways out of
+      that.
+
+      - **The specification builds the query.** The rule is written once, but the
+        domain starts knowing about SQL: the object gets a method returning a
+        clause and, with it, a dependency on how storage is arranged.
+      - **The query picks candidates, the specification decides.** The clause is
+        deliberately coarse — the due date and the status, no calendar and no
+        holidays. It narrows the selection, and "is it overdue" is asked of the
+        rule once the invoice is loaded.
+
+      The second way is usually cheaper, and here is why: the query and the rule
+      have different jobs. The query is allowed to err in one direction only —
+      to bring extra invoices; the rule will sieve them out afterwards. Nothing
+      is duplicated, because the query is not trying to be the rule.
+
+      The price of the second way is the wasted loads: the coarser the clause,
+      the more invoices arrive for nothing. That is a question of volume, and it
+      is answered by narrowing the clause, not by moving the rule into SQL.
+  - id: files
+    title: What came out
+    narration: |-
+      Click a file to read it.
+
+      - `domains/invoice/rules/overdue.go` — the predicates: "overdue", "large"
+        and their composition.
+      - `applications/overdue/charge.go` — the scenario that asks instead of
+        assuming.
+
+      The rule is finally named and lives in the domain. Reading still answers
+      its own question — "which invoices look overdue" — and that is fine: the
+      projection narrows, the domain decides. That is exactly why no second rule
+      appears here.
+---
+
+A rule that answers yes or no. In the previous chapter the domain learned to
+calculate what belongs to no single aggregate; here it learns to ask about it.

@@ -80,38 +80,24 @@ type Panel = 'diagram' | 'editor' | 'none';
  * принадлежит. Кадр внутри шага приезжает и уходит вместе со своим текстом:
  * подменять нечего, и перебивать друг друга кадрам нечем.
  *
+ * Так же устроен и редактор: дерево с файлами едет внутри своих шагов. Прежде
+ * оно жило в прилипшей панели на весь разбор, и итоговый шаг — дерево и файл
+ * разом — показывал этот режим рядом с любым соседним шагом.
+ *
  * Схема, нарисованная руками (`flow`), остаётся на прилипшей сцене: она одна
  * на весь разбор и по шагам не меняется, а переезжают по ней пометки.
  */
-const inStep = Boolean(likec4);
+const inStep = Boolean(likec4 || tree);
 
 /** Шаги с кадром внутри. `wide` — во всю ширину окна, остальные — рядом с текстом. */
 const wideSteps = new Set(likec4?.wide ?? []);
 const inlineSteps = new Set(Object.keys(likec4?.views ?? {}));
 
 /**
- * Шаги, внутри которых стоит редактор.
- *
- * Их может быть несколько: дерево растёт по шагам, и шаг про раскладку и шаг
- * про содержимое файла — разные разговоры. Экземпляров редактора тогда тоже
- * несколько, по одному на шаг, и каждый слушает шаги сам: состояние у них
- * общее, а видно всегда тот, чей шаг на экране.
+ * Шаги, которым нужен редактор.
  *
  * Шаг со своим кадром в этот список не попадает: в колонке уже занято.
  */
-/**
- * Шаги, где справа стоит одно дерево.
- *
- * Пути в дереве короткие, и в колонке, рассчитанной под кадр, оно смотрится
- * пустой коробкой. Такому шагу колонки меняют местами по ширине: читать здесь
- * текст, а дерево только показывает, где это читаемое лежит.
- */
-const narrowSteps = new Set(
-  Object.entries(tree?.steps ?? {})
-    .filter(([, step]) => step.view === 'tree')
-    .map(([id]) => id),
-);
-
 const editorSteps = new Set(
   inStep
     ? steps.filter((step) => tree?.steps[step.id] && !inlineSteps.has(step.id)).map((s) => s.id)
@@ -212,6 +198,25 @@ merged.forEach((step, index) => {
   else groups.push([index]);
 });
 
+/**
+ * Шаги, идущие подряд и просящие редактор, объединяются в одну группу.
+ *
+ * Редактор у группы один и прилипает, пока читатель идёт по её шагам: дерево
+ * растёт, файл меняется, а панель стоит на месте. По экземпляру на шаг вместо
+ * этого читалось бы как копия за копией одного и того же дерева.
+ */
+const runs: { steps: number[]; editor: boolean; solo: boolean }[] = [];
+
+for (const group of groups) {
+  const editor = group.length === 1 && editorSteps.has(merged[group[0]].id);
+  /* Шаг со своим редактором ни к кому не примыкает и никого не принимает. */
+  const solo = editor && Boolean(tree?.steps[merged[group[0]].id]?.standalone);
+  const last = runs[runs.length - 1];
+
+  if (editor && !solo && last?.editor && !last.solo) last.steps.push(group[0]);
+  else runs.push({ steps: group, editor, solo });
+}
+
 const shikiOptions = {
   themes: { light: 'github-light', dark: 'github-dark' },
   transformers: codeTransformers(),
@@ -260,7 +265,13 @@ const shikiOptions = {
       {
         tree && !inStep && (
           <aside class="player__editor">
-            <FileEditor lang={lang} tree={tree} docs={docs} order={merged.map((step) => step.id)} />
+            <FileEditor
+              lang={lang}
+              tree={tree}
+              docs={docs}
+              order={merged.map((step) => step.id)}
+              comments={comments}
+            />
           </aside>
         )
       }
@@ -268,8 +279,9 @@ const shikiOptions = {
 
     <ol class="player__steps">
       {
-        groups.map((group) => {
-          const solo = group.length === 1;
+        runs.map((run) => {
+          const group = run.steps;
+          const solo = group.length === 1 && !run.editor;
 
           const body = (i: number) => (
             <div>
@@ -351,13 +363,6 @@ const shikiOptions = {
       </figure>
     );
 
-  /** Редактор — в той же колонке, что кадры: на своём шаге он вместо кадра. */
-  const inlineEditor = (i: number) =>
-    editorSteps.has(merged[i].id) && (
-      <aside class="player__editor step__aside">
-        <FileEditor lang={lang} tree={tree!} docs={docs} order={merged.map((step) => step.id)} />
-      </aside>
-    );
 
           const panel = (i: number) =>
             !tree &&
@@ -382,10 +387,7 @@ const shikiOptions = {
                   'step',
                   !merged[i].panel?.code && 'step--text',
                   wideSteps.has(merged[i].id) && 'step--wide',
-                  (inlineSteps.has(merged[i].id) || editorSteps.has(merged[i].id)) &&
-                    !wideSteps.has(merged[i].id) &&
-                    'step--aside',
-                  editorSteps.has(merged[i].id) && narrowSteps.has(merged[i].id) && 'step--narrow',
+                  inlineSteps.has(merged[i].id) && !wideSteps.has(merged[i].id) && 'step--aside',
                   i === 0 && 'is-active',
                 ]}
                 data-step={i}
@@ -395,7 +397,59 @@ const shikiOptions = {
                 {body(i)}
                 {panel(i)}
                 {inlineStage(i)}
-                {inlineEditor(i)}
+              </li>
+            );
+          }
+
+          /* Группа шагов с одним редактором: дерево и файл стоят на месте,
+             пока читатель идёт по шагам группы. */
+          if (run.editor && tree?.steps[merged[group[0]].id]?.wide) {
+            const i = group[0];
+
+            /* Итоговый шаг: текст сверху, редактор под ним во всю ширину окна.
+               Так дерево и файл видны разом, а в половине ширины не читалось
+               бы ни то, ни другое. */
+            return (
+              <li
+                class="step step--text step--wide"
+                data-step={i}
+                data-step-id={merged[i].id}
+              >
+                {body(i)}
+                <aside class="player__editor step__wide">
+                  <FileEditor
+                    lang={lang}
+                    tree={tree!}
+                    docs={docs}
+                    order={merged.map((step) => step.id)}
+                    scope={[merged[i].id]}
+                    comments={comments}
+                  />
+                </aside>
+              </li>
+            );
+          }
+
+          if (run.editor) {
+            return (
+              <li class="step-run step-run--editor">
+                <div class="step-run__text">
+                  {group.map((i) => (
+                    <div class="step step--in-run" data-step={i} data-step-id={merged[i].id}>
+                      {body(i)}
+                    </div>
+                  ))}
+                </div>
+                <aside class="player__editor step__aside">
+                  <FileEditor
+                    lang={lang}
+                    tree={tree!}
+                    docs={docs}
+                    order={merged.map((step) => step.id)}
+                    scope={group.map((i) => merged[i].id)}
+                    comments={comments}
+                  />
+                </aside>
               </li>
             );
           }
@@ -494,6 +548,15 @@ const shikiOptions = {
     const hashIndex = () => steps.findIndex((step, i) => stepHash(i) === location.hash);
     let urlReady = false;
     let hashTimer: ReturnType<typeof setTimeout>;
+    /**
+     * Адрес пишет тот блок, в котором стоит линия чтения.
+     *
+     * Выше разбора та же страница ведёт уровни, и у них свой хеш. Пока
+     * читатель там, разбор в адрес не лезет: иначе два скрипта переписывали бы
+     * хеш друг за другом. В пошаговом режиме линии чтения нет — там шаг
+     * меняется только щелчком, и писать всегда правильно.
+     */
+    let ownsReading = () => true;
 
     /**
      * Запись откладывается и оборачивается в try.
@@ -506,7 +569,7 @@ const shikiOptions = {
     function syncHash() {
       clearTimeout(hashTimer);
       hashTimer = setTimeout(() => {
-        if (!urlReady || location.hash === stepHash(index)) return;
+        if (!urlReady || !ownsReading() || location.hash === stepHash(index)) return;
         try {
           history.replaceState(null, '', stepHash(index));
         } catch {
@@ -586,7 +649,7 @@ const shikiOptions = {
      */
     const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    player.querySelectorAll<HTMLElement>('.player__dot').forEach((dot) => {
+    const wireTip = (dot: HTMLElement) => {
       const box = dot.querySelector<HTMLElement>('.player__dot-tip__box');
       if (!box) return;
 
@@ -613,7 +676,12 @@ const shikiOptions = {
       dot.addEventListener('focus', show);
       dot.addEventListener('pointerleave', hide);
       dot.addEventListener('blur', hide);
-    });
+    };
+
+    /* Полоски уровней дописываются позже, в скролл-режиме, и подсказку им
+       вешает та же функция: иначе у клона есть разметка подсказки, но нет
+       обработчиков, и при наведении не видно ничего. */
+    player.querySelectorAll<HTMLElement>('.player__dot').forEach(wireTip);
 
     /**
      * Копирование кода. Берём текст из подсвеченного блока, а не из исходной
@@ -626,7 +694,9 @@ const shikiOptions = {
         let reset: ReturnType<typeof setTimeout>;
 
         button.addEventListener('click', async () => {
-          const code = button.closest('.panel')?.querySelector('.astro-code')?.textContent ?? '';
+          const code =
+            button.closest('.panel, .editor__pane')?.querySelector('.astro-code')?.textContent ??
+            '';
           try {
             await navigator.clipboard.writeText(code);
           } catch {
@@ -674,9 +744,79 @@ const shikiOptions = {
        */
       const readingTop = () =>
         stage && !panel ? stage.getBoundingClientRect().height + 24 : window.innerHeight * 0.34;
+
+      ownsReading = () => {
+        const box = player.getBoundingClientRect();
+        const line = readingTop();
+        return box.top <= line && box.bottom > line;
+      };
       let navigating = false;
       let scrollFrame = 0;
       let settleTimer: ReturnType<typeof setTimeout>;
+
+      /**
+       * Шаги уровней живут выше разбора, но навигация на странице одна.
+       *
+       * Их полоски дописываются в начало той же строки: щелчок уводит к
+       * уровню, активная подсвечивается по той же линии чтения. Разметка
+       * клонируется с готовой полоски — подсказка и все состояния достаются
+       * вместе с ней.
+       */
+      const levels = [...document.querySelectorAll<HTMLElement>('[data-level-step]')];
+      const dotsRow = player.querySelector<HTMLElement>('.player__dots');
+      const levelDots: HTMLElement[] = [];
+
+      if (levels.length > 1 && dotsRow && dots[0]) {
+        const batch = document.createDocumentFragment();
+
+        levels.forEach((level, i) => {
+          const dot = dots[0].cloneNode(true) as HTMLElement;
+          const title = level.querySelector('.levels__name')?.textContent?.trim() ?? '';
+
+          dot.removeAttribute('data-goto');
+          dot.classList.add('player__dot--level');
+          dot.setAttribute('aria-current', 'false');
+          dot.setAttribute('aria-label', title);
+
+          const box = dot.querySelector('.player__dot-tip__box');
+          if (box) box.textContent = title;
+
+          dot.addEventListener('click', () => {
+            window.scrollTo({
+              top: window.scrollY + level.getBoundingClientRect().top - readingTop(),
+              behavior: smooth,
+            });
+          });
+
+          wireTip(dot);
+          batch.append(dot);
+          levelDots.push(dot);
+          void i;
+        });
+
+        dotsRow.prepend(batch);
+      }
+
+      /**
+       * Пока читатель в уровнях, разбор ещё не начался: его полоски гаснут, а
+       * горит полоска уровня. Иначе первый шаг разбора выглядел бы активным
+       * задолго до того, как до него дошли.
+       */
+      const markLevels = () => {
+        if (!levelDots.length) return;
+        const boundary = readingTop() + 8;
+        const started = contentTop(steps[0]) <= boundary;
+        let active = -1;
+
+        levels.forEach((level, i) => {
+          if (level.getBoundingClientRect().top <= boundary) active = i;
+        });
+
+        levelDots.forEach((dot, i) =>
+          dot.setAttribute('aria-current', String(!started && i === active)),
+        );
+        if (!started) dots.forEach((dot) => dot.setAttribute('aria-current', 'false'));
+      };
 
       // Активный шаг определяется в области чтения ПОД схемой. Середина
       // всего экрана могла лежать внутри схемы и включать уже скрытый текст.
@@ -688,6 +828,11 @@ const shikiOptions = {
           if (contentTop(step) <= boundary) active = i;
         });
         if (active !== index) mark(active);
+        /* Адрес сверяется на каждой прокрутке, а не только при смене шага:
+           запись, пропущенная пока линия чтения стояла в уровнях, иначе
+           никогда бы не повторилась. */
+        syncHash();
+        markLevels();
       };
 
       const goTo = (to: number, behavior: ScrollBehavior = smooth) => {
@@ -705,6 +850,26 @@ const shikiOptions = {
         clearTimeout(settleTimer);
         settleTimer = setTimeout(() => { navigating = false; followScroll(); }, 180);
       }, { passive: true });
+
+      /**
+       * Строка навигации видна, пока на экране уровни или разбор: она у них
+       * одна. Над вступлением и под разбором её нет — там навигировать нечем.
+       */
+      const navHosts = [player, ...document.querySelectorAll<HTMLElement>('[data-levels]')];
+      const onScreen = new Set<Element>();
+
+      player.dataset.nav = 'off';
+
+      const navWatch = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) onScreen.add(entry.target);
+          else onScreen.delete(entry.target);
+        }
+
+        player.dataset.nav = onScreen.size ? 'on' : 'off';
+      });
+
+      for (const host of navHosts) navWatch.observe(host);
 
       const measure = () => {
         player.style.setProperty('--reading-top', `${readingTop()}px`);
