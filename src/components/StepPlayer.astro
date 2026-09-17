@@ -539,18 +539,31 @@ const shikiOptions = {
        * шаги не отмечались, прокрутка ничего не листала.
        */
       const stage = player.querySelector<HTMLElement>('.player__stage');
-      const sticky = stage ?? player.querySelector<HTMLElement>('.player__editor');
+      /** Боковая раскладка: обе половины лежат в одной прилипшей панели. */
+      const panel = player.querySelector<HTMLElement>('.player__panel');
+      const sticky = panel ?? stage;
       const controls = player.querySelector<HTMLElement>('.player__controls')!;
       const contentTop = (step: HTMLElement) => step.firstElementChild!.getBoundingClientRect().top;
+
       /**
        * Где начинается область чтения.
        *
        * Под полосой схемы — сразу под ней: середина экрана попадала внутрь
-       * схемы и включала шаг, текста которого ещё не видно. Рядом с
-       * редактором текст идёт от самого верха, и такой границы нет — берётся
-       * верхняя треть экрана, то есть то место, куда смотрят при чтении.
+       * схемы и включала шаг, текста которого ещё не видно. Если полосы сверху
+       * нет — схема стоит сбоку, или у шага панели нет вовсе — текст идёт от
+       * самого верха, и берётся верхняя треть экрана, то есть то место, куда
+       * смотрят при чтении.
+       *
+       * Считать это по высоте полотна, как было раньше, нельзя: на шаге без
+       * панели высота нулевая, граница уезжала к верхнему краю, и шаг
+       * становился активным только когда доезжал до него сам. Читатель при
+       * этом смотрел на второй шаг, а подсвечен был первый.
        */
-      const readingTop = () => (stage ? stage.getBoundingClientRect().height + 24 : window.innerHeight * 0.34);
+      const readingTop = () => {
+        const strip = panel ? player.dataset.panel === 'diagram' : Boolean(stage);
+        const height = sticky?.getBoundingClientRect().height ?? 0;
+        return strip && height > 0 ? height + 24 : window.innerHeight * 0.34;
+      };
       let navigating = false;
       let scrollFrame = 0;
       let settleTimer: ReturnType<typeof setTimeout>;
@@ -586,6 +599,10 @@ const shikiOptions = {
       const measure = () => {
         player.style.setProperty('--reading-top', `${readingTop()}px`);
         player.style.setProperty('--controls-height', `${controls.getBoundingClientRect().height}px`);
+        // Панель меняет высоту, когда шаг меняет её содержимое — схема, файл
+        // или ничего. Линия чтения от этой высоты зависит, поэтому активный
+        // шаг пересчитывается тут же, не дожидаясь следующей прокрутки.
+        followScroll();
       };
       const layout = new ResizeObserver(measure);
       if (sticky) layout.observe(sticky);
