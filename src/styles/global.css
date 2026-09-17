@@ -560,7 +560,7 @@ main:focus {
 
 /* Пока не показано, где это уже стоило денег, урок читается как выдуманная
    задача. Блок стоит сразу за callout'ом: сначала боль, потом счёт за неё.
-   Ширина здесь больше колонки текста намеренно: это лента, а не абзац. */
+   Ширину колонки текста он не соблюдает намеренно: это лента, а не абзац. */
 .incidents {
   margin: 1.5rem 0 2rem;
 }
@@ -617,6 +617,9 @@ main:focus {
   margin: 0;
   padding: 0;
   display: flex;
+  /* start, а не растягивание: развёрнутая карточка не должна тянуть за собой
+     высоту соседних — рядом с ней получилось бы поле пустоты в пол-экрана. */
+  align-items: start;
   gap: 0.75rem;
   overflow-x: auto;
   /* proximity, а не mandatory: колесо двигает ленту маленькими шагами, и
@@ -632,10 +635,12 @@ main:focus {
   outline-offset: 3px;
 }
 
-/* Карточка уже ленты — следующая всегда выглядывает краем. Это и есть
-   единственное честное обещание, что галерея крутится. */
+/* Ширина в долях ленты, а не в rem: она и делает галерею галереей на любом
+   экране — две карточки не влезают никогда, поэтому следующая всегда
+   выглядывает краем. Это единственное честное обещание, что лента крутится.
+   Потолок в rem держит строку читаемой на широком мониторе. */
 .incident {
-  flex: 0 0 min(23rem, 82%);
+  flex: 0 0 min(62%, 38rem);
   scroll-snap-align: start;
   display: flex;
   flex-direction: column;
@@ -651,17 +656,45 @@ main:focus {
   margin: 0 0 0.35rem;
 }
 
+/* Карточка показывает завязку, а не весь случай: лента нужна, чтобы её
+   просматривали. Текст при этом лежит в разметке целиком — обрезает его
+   только эта строка, поэтому он находится поиском по странице. */
 .incident__text {
-  margin: 0 0 0.6rem;
+  margin: 0;
   font-size: 0.9rem;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+
+.incident[data-expanded] .incident__text {
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+}
+
+.incident__more {
+  align-self: flex-start;
+  margin-top: 0.35rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.incident__more:hover {
+  text-decoration: underline;
 }
 
 /* Ссылка ведёт наружу, поэтому подписана доменом, а не словом «источник»:
-   по домену видно, кому верить, ещё до перехода. `auto` прижимает её к низу,
-   чтобы у карточек разной длины подписи стояли на одной линии. */
+   по домену видно, кому верить, ещё до перехода. */
 .incident__source {
-  margin-top: auto;
   align-self: flex-start;
+  margin-top: 0.75rem;
   font-size: 0.8rem;
   color: var(--muted);
   text-decoration: none;
@@ -677,8 +710,8 @@ main:focus {
   border-bottom-color: currentColor;
 }
 
-/* На телефоне лента уезжает под края экрана: обрезанная карточка у самой
-   рамки читается как продолжение, а аккуратная колонка — как конец списка. */
+/* На узком экране лента уезжает под края: обрезанная карточка у самой рамки
+   читается как продолжение, а аккуратная колонка — как конец списка. */
 @media (max-width: 46rem) {
   .incidents__track {
     margin-inline: -1.25rem;
@@ -2280,66 +2313,108 @@ main:focus {
   height: auto;
 }
 
-/* Слои идут от светлого к насыщенному: чем ниже, тем ближе к предметной
-   области, и разница по цвету — это разница по уровню, а не украшение. */
-.levels-cake__layer {
+/* ---------- Пирог: слой ---------- */
+
+.lvl {
   cursor: default;
   outline: none;
+  /* Тень одна на слой и мягкая: она отделяет плашку от фона страницы, а не
+     изображает высоту. */
+  filter: drop-shadow(0 1px 2px var(--shadow));
+  transition:
+    transform 0.16s ease,
+    filter 0.16s ease;
 }
 
-.levels-cake__face {
-  fill: color-mix(in srgb, var(--accent) calc(9% + var(--i) * 6%), var(--panel));
-  stroke: color-mix(in srgb, var(--accent) 30%, transparent);
+.lvl__face {
+  fill: var(--panel);
+  stroke: var(--border);
   stroke-width: 1;
 }
 
-/* Верхняя и правая грани светлее и темнее лицевой: свет падает сверху, и без
-   этой разницы три плоскости читаются как один плоский прямоугольник. */
-.levels-cake__top {
-  fill: color-mix(in srgb, var(--accent) calc(16% + var(--i) * 6%), var(--panel));
-  stroke: color-mix(in srgb, var(--accent) 30%, transparent);
+/* Верхняя и правая грани — тот же белый, притемнённый: объём даёт геометрия,
+   а не цвет. Цвет на этой картинке значит уровень, и тратить его на свет
+   значило бы сказать цветом две разные вещи. */
+.lvl__top {
+  fill: color-mix(in srgb, var(--fg) 4%, var(--panel));
+  stroke: var(--border);
   stroke-width: 1;
 }
 
-.levels-cake__side {
-  fill: color-mix(in srgb, var(--fg) 12%, color-mix(in srgb, var(--accent) calc(9% + var(--i) * 6%), var(--panel)));
-  stroke: color-mix(in srgb, var(--accent) 30%, transparent);
+.lvl__side {
+  fill: color-mix(in srgb, var(--fg) 9%, var(--panel));
+  stroke: var(--border);
   stroke-width: 1;
 }
 
-.levels-cake__name {
+/* Полоска слева насыщается вниз: разница по цвету — это разница по уровню.
+   Тот же приём, которым на странице помечен блок «Проблема». */
+.lvl__bar {
+  fill: color-mix(in srgb, var(--accent) calc(28% + var(--i) * 18%), transparent);
+  transition: fill 0.16s ease;
+}
+
+.lvl__name {
   font-size: 13px;
   font-weight: 600;
   fill: var(--fg);
 }
 
-.levels-cake__decides {
+.lvl__decides {
   font-size: 11px;
   fill: var(--muted);
 }
 
-/* Появление по одному сверху вниз: порядок уровней виден движением. Слой
-   выезжает справа-сверху, оттуда же, откуда на него смотрят. */
-.levels-cake__layer {
-  opacity: 1;
+/* ---------- Пирог: номера и рельса ---------- */
+
+.lvl__mark {
+  fill: var(--panel);
+  stroke: var(--border);
+  stroke-width: 1;
   transition:
-    transform 0.18s ease,
-    opacity 0.18s ease;
+    fill 0.18s ease,
+    stroke 0.18s ease;
 }
 
-.levels:not(.is-in) .levels-cake__layer {
+.lvl__num {
+  font-size: 10px;
+  font-weight: 600;
+  fill: var(--muted);
+  text-anchor: middle;
+  dominant-baseline: central;
+  transition: fill 0.18s ease;
+}
+
+.lvl-rail {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+/* Пройденная часть рельсы. Длина не анимируется, поэтому остаток скрыт
+   пунктиром на всю длину и отодвигается dashoffset'ом. */
+.lvl-rail--done {
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-dasharray: var(--rail);
+  stroke-dashoffset: var(--rail);
+  transition: stroke-dashoffset 0.3s ease;
+}
+
+/* ---------- Пирог: появление ---------- */
+
+.levels:not(.is-in) .lvl {
   opacity: 0;
 }
 
-.levels.is-in .levels-cake__layer {
-  animation: levels-slab-in 0.42s cubic-bezier(0.22, 0.9, 0.24, 1) both;
-  animation-delay: calc(var(--i) * 90ms);
+.levels.is-in .lvl {
+  animation: lvl-in 0.44s cubic-bezier(0.22, 0.9, 0.24, 1) both;
+  animation-delay: calc(var(--i) * 80ms);
 }
 
-@keyframes levels-slab-in {
+@keyframes lvl-in {
   from {
     opacity: 0;
-    transform: translate(14px, -10px);
+    transform: translate(10px, -8px);
   }
   to {
     opacity: 1;
@@ -2347,89 +2422,107 @@ main:focus {
   }
 }
 
-/* Наведение: слой подаётся к читателю, а парное слово в абзаце подсвечивается.
-   То же состояние даёт наведение на слово — связь работает в обе стороны. */
-.levels-cake__layer:hover,
-.levels-cake__layer:focus-visible,
-.levels-cake__layer.is-linked {
-  transform: translate(-3px, -3px);
+/* ---------- Пирог: наведение и проход запроса ---------- */
+
+/* Наведение: слой подаётся к читателю, а парное слово в абзаце
+   подсвечивается. То же состояние даёт наведение на слово — связь работает в
+   обе стороны. */
+.lvl:hover,
+.lvl:focus-visible,
+.lvl.is-linked,
+.lvl.is-lit {
+  transform: translate(-2px, -2px);
+  filter: drop-shadow(0 3px 6px var(--shadow));
 }
 
-.levels-cake__layer:hover .levels-cake__face,
-.levels-cake__layer:focus-visible .levels-cake__face,
-.levels-cake__layer.is-linked .levels-cake__face,
-.levels-cake__layer.is-lit .levels-cake__face {
-  fill: color-mix(in srgb, var(--accent) calc(24% + var(--i) * 6%), var(--panel));
+.lvl:hover .lvl__face,
+.lvl:focus-visible .lvl__face,
+.lvl.is-linked .lvl__face,
+.lvl.is-lit .lvl__face {
   stroke: var(--accent);
+}
+
+.lvl:hover .lvl__bar,
+.lvl:focus-visible .lvl__bar,
+.lvl.is-linked .lvl__bar,
+.lvl.is-lit .lvl__bar {
+  fill: var(--accent);
+}
+
+/* Номер уровня, до которого дошёл запрос. */
+.lvl.is-lit .lvl__mark {
+  fill: var(--accent);
+  stroke: var(--accent);
+}
+
+.lvl.is-lit .lvl__num {
+  fill: var(--panel);
+}
+
+/* Пока запрос идёт, остальные слои приглушены: видно, где он сейчас. */
+.levels.is-running .lvl:not(.is-lit) {
+  opacity: 0.55;
 }
 
 /* Слово в абзаце, парное наведённому слою. Фон, а не цвет текста: слова уже
    помечены пунктиром как термины, и второй цвет спорил бы с первым. */
 .levels__text [data-level].is-linked {
   border-radius: 4px;
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
-/* Запрос: точка, проезжающая уровни по жёлобу слева, и сам жёлоб. Видны
-   только во время проезда: остальное время они ничего не сообщают. */
-.levels-cake__request {
-  fill: var(--accent);
-  stroke: var(--bg);
-  stroke-width: 2;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
+/* ---------- Пирог: кнопка ---------- */
 
-.levels-cake__request.is-on {
-  opacity: 1;
-}
-
-.levels-cake__path {
-  stroke: color-mix(in srgb, var(--accent) 40%, transparent);
-  stroke-width: 1;
-  stroke-dasharray: 3 4;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-
-.levels-cake__path.is-on {
-  opacity: 1;
-}
-
-/* Подпись под картинкой — она же кнопка: текст обещает проезд, и щелчок по
-   нему его показывает. */
 .levels-cake__run {
-  display: block;
-  margin: 0.5rem 0 0;
-  padding: 0;
-  border: 0;
-  border-bottom: 1px dotted var(--accent);
-  background: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.75rem 0 0;
+  padding: 0.3rem 0.6rem 0.3rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
   font: inherit;
   font-size: 0.78rem;
   text-align: left;
   color: var(--muted);
   cursor: pointer;
+  transition:
+    color 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease;
 }
 
 .levels-cake__run:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
   color: var(--fg);
 }
 
+.levels-cake__run-glyph svg {
+  display: block;
+  width: 12px;
+  height: 12px;
+  fill: var(--accent);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .levels.is-in .levels-cake__layer {
+  .levels.is-in .lvl {
     animation: none;
   }
 
-  .levels-cake__layer {
+  .lvl,
+  .lvl__bar,
+  .lvl__mark,
+  .lvl__num,
+  .lvl-rail--done {
     transition: none;
   }
 
-  /* Проезд не запускается, поэтому и кнопка ничего не обещает. */
+  /* Проход не запускается, поэтому и кнопка ничего не обещает. */
   .levels-cake__run {
-    border-bottom: 0;
-    cursor: default;
+    display: none;
   }
 }
 

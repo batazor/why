@@ -5,7 +5,12 @@
  * Абзац рядом перечисляет пять уровней и то, что каждый решает. Список из пяти
  * пунктов в прозе читается как перечисление равноправных вещей, а они вложены
  * друг в друга: запрос входит сверху и проходит их по порядку. Пирог говорит
- * это одной картинкой, а проезжающая по нему точка — что порядок именно такой.
+ * это одной картинкой, а рельса с номерами — что порядок именно такой.
+ *
+ * Плашка нарисована тем же языком, что и остальная страница: белое поле,
+ * волосяная рамка, цветная полоска слева — как у блока «Проблема». Объём даёт
+ * скошенная верхняя грань и тень, а не заливка: градиентный пирог рядом с
+ * такой типографикой выглядел бы наклейкой.
  *
  * Подписи приходят props'ами: файл общий для локалей, а подписи — проза.
  * Геометрия здесь, текст — в MDX той локали, где он к месту.
@@ -27,22 +32,24 @@ interface Props {
 
 const { levels, inbound } = Astro.props;
 
-/** Высота слоя, зазор между слоями и скос верхней грани. */
-const SLAB = 54;
-const GAP = 13;
-const SKEW = 16;
+const SLAB = 56;
+const GAP = 12;
+/** Скос верхней грани: он и делает из плашки слой. */
+const SKEW = 10;
+/** Жёлоб слева под номерами уровней и рельсой между ними. */
+const GUTTER = 30;
 
-const WIDTH = 350;
-const PAD = 10;
-/**
- * Слева остаётся жёлоб: по нему проезжает запрос. Пустить точку по самим
- * слоям значило бы вести её по подписям, а она должна быть видна на каждом
- * кадре, а не тонуть в тексте.
- */
-const GUTTER = 24;
-const height = levels.length * (SLAB + GAP) + SKEW + PAD;
-/** Лицевая грань уже полотна на скос и на жёлоб. */
-const faceWidth = WIDTH - SKEW - GUTTER - PAD;
+const WIDTH = 360;
+const TOP = SKEW + 6;
+const height = levels.length * (SLAB + GAP) - GAP + TOP + 6;
+
+const plateX = GUTTER;
+const plateW = WIDTH - GUTTER - SKEW - 4;
+
+/** Центр слоя по вертикали: по нему стоят номер и подписи. */
+const midY = (i: number) => TOP + i * (SLAB + GAP) + SLAB / 2;
+const railFrom = midY(0);
+const railTo = midY(levels.length - 1);
 ---
 
 <div class="levels" data-levels>
@@ -56,56 +63,66 @@ const faceWidth = WIDTH - SKEW - GUTTER - PAD;
       role="img"
       aria-label={levels.map((level) => `${level.name}: ${level.decides}`).join('. ')}
     >
+      {/* Рельса под номерами: путь запроса. Проложена всегда — она объясняет,
+          что уровни идут в порядке, ещё до того, как по ней что-то поехало. */}
+      <line class="lvl-rail" x1={GUTTER / 2} y1={railFrom} x2={GUTTER / 2} y2={railTo} />
+      <line
+        class="lvl-rail lvl-rail--done"
+        x1={GUTTER / 2}
+        y1={railFrom}
+        x2={GUTTER / 2}
+        y2={railTo}
+        style={`--rail: ${railTo - railFrom}`}
+        data-progress
+      />
+
       {
         levels.map((level, i) => {
-          const y = SKEW + PAD + i * (SLAB + GAP);
-          const left = GUTTER;
-          const right = left + faceWidth;
+          const y = TOP + i * (SLAB + GAP);
+          const mid = midY(i);
           return (
             <g
-              class="levels-cake__layer"
+              class="lvl"
               style={`--i: ${i}`}
               data-level={level.key}
               tabindex="0"
               role="button"
               aria-label={`${level.name}: ${level.decides}`}
             >
-              {/* Три грани: верхняя и правая делают из прямоугольника слой,
-                  лицевая несёт подписи. Порядок важен — лицевая ложится
-                  поверх обеих, иначе её край перечёркивает их. */}
+              {/* Верхняя грань рисуется первой: лицевая ложится поверх её
+                  нижнего края, иначе он перечёркивает плашку. */}
               <path
-                class="levels-cake__top"
-                d={`M ${left + SKEW} ${y - SKEW} H ${right + SKEW} L ${right} ${y} H ${left} Z`}
+                class="lvl__top"
+                d={`M ${plateX + SKEW} ${y - SKEW} H ${plateX + plateW + SKEW} L ${plateX + plateW} ${y} H ${plateX} Z`}
               />
               <path
-                class="levels-cake__side"
-                d={`M ${right} ${y} L ${right + SKEW} ${y - SKEW} V ${y + SLAB - SKEW} L ${right} ${y + SLAB} Z`}
+                class="lvl__side"
+                d={`M ${plateX + plateW} ${y} L ${plateX + plateW + SKEW} ${y - SKEW} V ${y + SLAB - SKEW} L ${plateX + plateW} ${y + SLAB} Z`}
               />
-              <rect class="levels-cake__face" x={left} y={y} width={faceWidth} height={SLAB} rx="5" />
-              <text class="levels-cake__name" x={left + 14} y={y + 22}>{level.name}</text>
-              <text class="levels-cake__decides" x={left + 14} y={y + 40}>{level.decides}</text>
+              <rect class="lvl__face" x={plateX} y={y} width={plateW} height={SLAB} rx="6" />
+              {/* Полоска слева: чем ниже уровень, тем она насыщеннее. */}
+              <rect class="lvl__bar" x={plateX} y={y + 1} width="3" height={SLAB - 2} rx="1.5" />
+
+              <text class="lvl__name" x={plateX + 16} y={mid - 4}>{level.name}</text>
+              <text class="lvl__decides" x={plateX + 16} y={mid + 14}>{level.decides}</text>
+
+              <circle class="lvl__mark" cx={GUTTER / 2} cy={mid} r="10" />
+              <text class="lvl__num" x={GUTTER / 2} y={mid}>{i + 1}</text>
             </g>
           );
         })
       }
-
-      {/* Путь запроса и он сам. Стоят вне слоёв, чтобы не унаследовать их
-          подсветку и их появление; до первого запуска и то и другое спрятано. */}
-      <line
-        class="levels-cake__path"
-        x1={GUTTER / 2}
-        y1={SKEW + PAD}
-        x2={GUTTER / 2}
-        y2={height - GAP}
-        data-path
-      />
-      <circle class="levels-cake__request" r="6" cx={GUTTER / 2} cy={SKEW + PAD} data-request />
     </svg>
 
     {
       inbound && (
         <figcaption>
-          <button class="levels-cake__run" type="button" data-run>{inbound}</button>
+          <button class="levels-cake__run" type="button" data-run>
+            <span class="levels-cake__run-glyph" aria-hidden="true">
+              <svg viewBox="0 0 12 12"><path d="M4 2.5 9 6l-5 3.5z" /></svg>
+            </span>
+            {inbound}
+          </button>
         </figcaption>
       )
     }
@@ -120,7 +137,8 @@ const faceWidth = WIDTH - SKEW - GUTTER - PAD;
    *    вниз виден движением, а не только положением.
    * 2. Наведение на слой подсвечивает парное слово в абзаце, и наоборот. Связь
    *    между текстом и картинкой иначе остаётся на совести читателя.
-   * 3. Запрос проезжает уровни по порядку — то, что подпись говорит словами.
+   * 3. Запрос проходит уровни по порядку: номер уровня загорается, рельса за
+   *    ним дорастает. Это то, что подпись говорит словами.
    *
    * Всё это украшение: без JS картинка остаётся полной и читаемой, поэтому
    * ничего не рисуется скриптом и ничего им не скрывается.
@@ -128,20 +146,21 @@ const faceWidth = WIDTH - SKEW - GUTTER - PAD;
   const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   document.querySelectorAll<HTMLElement>('[data-levels]').forEach((root) => {
-    const layers = [...root.querySelectorAll<SVGGElement>('.levels-cake__layer')];
-    const request = root.querySelector<SVGCircleElement>('[data-request]');
+    const layers = [...root.querySelectorAll<SVGGElement>('.lvl')];
+    const progress = root.querySelector<SVGLineElement>('[data-progress]');
     const run = root.querySelector<HTMLButtonElement>('[data-run]');
     /** Слова в абзаце рядом, помеченные тем же ключом уровня. */
     const words = new Map<string, HTMLElement[]>();
 
-    root.querySelectorAll<HTMLElement>('[data-level]').forEach((node) => {
-      if (node.tagName === 'G') return;
+    root.querySelectorAll<HTMLElement>('.levels__text [data-level]').forEach((node) => {
       const key = node.dataset.level!;
       words.set(key, [...(words.get(key) ?? []), node]);
     });
 
     // 1. Появление по одному.
-    if (!calm) {
+    if (calm) {
+      root.classList.add('is-in');
+    } else {
       const seen = new IntersectionObserver(
         (entries) => {
           for (const entry of entries) {
@@ -153,8 +172,6 @@ const faceWidth = WIDTH - SKEW - GUTTER - PAD;
         { threshold: 0.3 },
       );
       seen.observe(root);
-    } else {
-      root.classList.add('is-in');
     }
 
     // 2. Связь слоя со словом.
@@ -180,34 +197,27 @@ const faceWidth = WIDTH - SKEW - GUTTER - PAD;
       }
     }
 
-    // 3. Проезд запроса.
+    // 3. Проход запроса.
     let running = false;
     const travel = async () => {
-      if (!request || running || calm) return;
+      if (running || calm || !progress) return;
       running = true;
-      request.classList.add('is-on');
-      root.querySelector('[data-path]')?.classList.add('is-on');
+      root.classList.add('is-running');
 
-      for (const layer of layers) {
-        const face = layer.querySelector<SVGRectElement>('.levels-cake__face')!;
-        const y = Number(face.getAttribute('y')) + Number(face.getAttribute('height')) / 2;
+      const full = Number(getComputedStyle(progress).getPropertyValue('--rail')) || 0;
+      const last = layers.length - 1;
 
-        request.animate(
-          { cy: [request.getAttribute('cy') ?? '0', String(y)] },
-          { duration: 260, easing: 'ease-in-out', fill: 'forwards' },
-        );
-        request.setAttribute('cy', String(y));
-
+      for (const [i, layer] of layers.entries()) {
+        // Рельса дорастает до текущего номера: остаток прячется dashoffset'ом,
+        // потому что длина линии в SVG сама по себе не анимируется.
+        progress.style.strokeDashoffset = String(full - (full * i) / last);
         layer.classList.add('is-lit');
-        await new Promise((done) => setTimeout(done, 300));
+        await new Promise((done) => setTimeout(done, 320));
         layer.classList.remove('is-lit');
       }
 
-      request.classList.remove('is-on');
-      root.querySelector('[data-path]')?.classList.remove('is-on');
-      // Возврат наверх без анимации: ехать обратно значило бы показать порядок,
-      // которого в сервисе нет.
-      request.setAttribute('cy', String(Number(layers[0].querySelector('.levels-cake__face')!.getAttribute('y'))));
+      progress.style.strokeDashoffset = String(full);
+      root.classList.remove('is-running');
       running = false;
     };
 

@@ -4,6 +4,10 @@
  *
  * Галерея, а не столбец: случаи равноправны, порядок между ними ничего не
  * значит, и вертикальный список из них отодвигал бы урок на экран вниз.
+ *
+ * Карточка показывает первые строки; остальное читатель разворачивает сам.
+ * Лента из четырёх абзацев перестаёт быть лентой — её приходится читать, а не
+ * просматривать, а этот блок нужен именно для «такое уже было, вот где».
  */
 import { useTranslations, type Locale } from '../i18n/ui';
 
@@ -31,7 +35,7 @@ const t = useTranslations(lang);
         </h2>
         {/* Мышь крутит галерею колесом, палец — свайпом; кнопки нужны тем, у кого
             нет ни того, ни другого. Показывает их скрипт и только когда лента
-            действительно не влезла: на широком экране крутить нечего. */}
+            действительно не влезла: крутить нечего — и кнопок нет. */}
         <div class="incidents__controls" data-controls hidden>
           <button
             class="incidents__arrow"
@@ -55,10 +59,26 @@ const t = useTranslations(lang);
       {/* tabindex — требование доступности к прокручиваемой области: без него до
           скрытых карточек не добраться с клавиатуры. Имя ей даёт заголовок. */}
       <ul class="incidents__track" data-incidents tabindex="0" aria-labelledby="incidents-heading">
-        {items.map((incident) => (
+        {items.map((incident, i) => (
           <li class="incident">
             <h3 class="incident__title">{incident.title}</h3>
-            <p class="incident__text">{incident.text}</p>
+            {/* Текст в разметке целиком, обрезает его CSS: так он остаётся в
+                поиске по странице и достаётся скринридеру без разворачивания. */}
+            <p class="incident__text" id={`incident-text-${i}`}>
+              {incident.text}
+            </p>
+            <button
+              class="incident__more"
+              type="button"
+              data-more
+              data-expand={t('lesson.incidentExpand')}
+              data-collapse={t('lesson.incidentCollapse')}
+              aria-expanded="false"
+              aria-controls={`incident-text-${i}`}
+              hidden
+            >
+              {t('lesson.incidentExpand')}
+            </button>
             {/* Домен как подпись берётся из самой ссылки: отдельное поле
                 рядом с url рано или поздно начинает врать. */}
             <a class="incident__source" href={incident.url} target="_blank" rel="noopener">
@@ -77,6 +97,7 @@ const t = useTranslations(lang);
       .closest('.incidents')!
       .querySelector<HTMLElement>('[data-controls]')!;
     const arrows = [...controls.querySelectorAll<HTMLButtonElement>('[data-scroll]')];
+    const cards = [...track.querySelectorAll<HTMLElement>('.incident')];
 
     /** Сколько ленте осталось проехать вправо; 0 — всё влезло. */
     const limit = () => track.scrollWidth - track.clientWidth;
@@ -86,12 +107,38 @@ const t = useTranslations(lang);
     const atStart = () => track.scrollLeft <= 1;
     const atEnd = () => track.scrollLeft >= limit() - 1;
 
-    function paint() {
+    function paintArrows() {
       controls.hidden = limit() <= 1;
       for (const arrow of arrows) {
         arrow.disabled = arrow.dataset.scroll === '-1' ? atStart() : atEnd();
       }
     }
+
+    /**
+     * «Развернуть» показывается только там, где текст правда обрезан: короткая
+     * заметка с кнопкой обещает продолжение, которого нет.
+     *
+     * Развёрнутые карточки пропускаем — у них обрезки уже нет по построению,
+     * и проверка спрятала бы кнопку, которой их сворачивают обратно.
+     */
+    function paintClamps() {
+      for (const card of cards) {
+        if (card.dataset.expanded !== undefined) continue;
+        const text = card.querySelector<HTMLElement>('.incident__text')!;
+        card.querySelector<HTMLElement>('[data-more]')!.hidden =
+          text.scrollHeight <= text.clientHeight + 1;
+      }
+    }
+
+    track.addEventListener('click', (event) => {
+      const more = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-more]');
+      if (!more) return;
+
+      const card = more.closest<HTMLElement>('.incident')!;
+      const expanded = card.toggleAttribute('data-expanded');
+      more.setAttribute('aria-expanded', String(expanded));
+      more.textContent = expanded ? more.dataset.collapse! : more.dataset.expand!;
+    });
 
     for (const arrow of arrows) {
       arrow.addEventListener('click', () => {
@@ -130,10 +177,15 @@ const t = useTranslations(lang);
       { passive: false },
     );
 
-    track.addEventListener('scroll', paint, { passive: true });
-    // Ширина карточек зависит от ширины экрана, значит и «влезло / не влезло»
-    // меняется на лету: при повороте телефона и перетаскивании окна.
-    new ResizeObserver(paint).observe(track);
-    paint();
+    track.addEventListener('scroll', paintArrows, { passive: true });
+    // Ширина карточек зависит от ширины окна, а вместе с ней меняются и
+    // «влезло / не влезло», и число строк, на котором текст обрывается.
+    new ResizeObserver(() => {
+      paintArrows();
+      paintClamps();
+    }).observe(track);
+
+    paintArrows();
+    paintClamps();
   });
 </script>
