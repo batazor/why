@@ -1783,22 +1783,22 @@ main:focus {
 
 /* ---------- Редактор с деревом файлов ---------- */
 
-/* Разбор про раскладку сервиса: слева текст, справа редактор, который стоит на
-   месте и заполняется по шагам.
-   Текст получает фиксированную колонку по длине строки, а не долю ширины: всё
-   остальное нужно коду, и делить пополам с текстом, которому больше не надо,
-   значит оставить файлу полторы сотни пикселей. */
-/* Селектор с двумя режимами сразу: скролл-режим раскладывает тело схемы
-   блоком (полосой сверху), а здесь прилипшая половина стоит сбоку. */
-.player--editor .player__body,
-.player--editor.player--scroll .player__body {
+/**
+ * Разбор, у которого правая половина — редактор, а не схема.
+ *
+ * Раскладка зависит от того, что на шаге в панели, и это не украшение.
+ * Схема в колонке шириной в половину разбора даёт карточки, подписи в которых
+ * не прочитать: ей нужна вся ширина, а текст уходит под неё полосой. Файлу
+ * наоборот: код рядом с текстом читается лучше, чем под ним, потому что
+ * читатель сверяет одно с другим.
+ */
+.player--editor .player__body {
   display: grid;
   gap: 1.5rem;
-  grid-template-columns: minmax(0, 24rem) minmax(0, 1fr);
   align-items: start;
 }
 
-/* На широком окне редактор уходит за колонку текста к правому краю: страница
+/* На широком окне панель уходит за колонку текста к правому краю: страница
    центрована по 68rem, и справа от неё простаивает половина свободного места.
    1.5rem остаётся полем, чтобы панель не упиралась в край окна. */
 @media (min-width: 68rem) {
@@ -1807,23 +1807,43 @@ main:focus {
   }
 }
 
-.player--editor .player__steps {
+/* Редактор: текст слева фиксированной колонкой по длине строки, всё
+   остальное — коду. */
+.player--editor[data-panel='editor'] .player__body {
+  grid-template-columns: minmax(0, 24rem) minmax(0, 1fr);
+}
+
+.player--editor[data-panel='editor'] .player__steps {
   grid-column: 1;
   grid-row: 1;
 }
 
-/* Панели кода в этом режиме нет, поэтому шаг — одна колонка на всю ширину
-   своей половины, а не 0.85 от неё. */
-.player--editor .step {
+.player--editor[data-panel='editor'] .step {
   grid-template-columns: minmax(0, 1fr);
 }
 
+/* Схема: полотно полосой сверху во всю ширину, шаги под ним. Текст при этом
+   держит свою длину строки, иначе абзац растянется на всю страницу. */
+.player--editor[data-panel='diagram'] .player__body {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.5rem;
+}
+
+.player--editor[data-panel='diagram'] .player__steps {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.player--editor[data-panel='diagram'] .step {
+  grid-template-columns: minmax(0, var(--measure));
+}
+
 @media (max-width: 52rem) {
-  .player--editor .player__body {
+  .player--editor[data-panel='editor'] .player__body {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .player--editor .player__steps {
+  .player--editor[data-panel='editor'] .player__steps {
     grid-column: 1;
     grid-row: 2;
   }
@@ -2023,13 +2043,29 @@ main:focus {
   background: color-mix(in srgb, var(--muted) 14%, transparent);
 }
 
-/* Правая половина держит две панели: схему и редактор. Обе стоят в одной
-   ячейке сетки, показывается объявленная шагом. */
+/* Панель держит обе половины — схему и редактор — и показывает объявленную
+   шагом. Прилипает она, а не то, что внутри: второй sticky внутри sticky не
+   работает. */
 .player--editor .player__panel {
   position: sticky;
+  z-index: 3;
+}
+
+.player--editor[data-panel='editor'] .player__panel {
   top: 1rem;
   grid-column: 2;
   grid-row: 1;
+}
+
+/* Полосой сверху: под панелью проезжает текст, поэтому фон непрозрачный, а
+   граница отделяет её от текста. */
+.player--editor[data-panel='diagram'] .player__panel {
+  top: 0;
+  grid-column: 1;
+  grid-row: 1;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
 }
 
 .player--editor[data-panel='editor'] .player__stage,
@@ -2038,16 +2074,15 @@ main:focus {
 }
 
 @media (max-width: 52rem) {
-  .player--editor .player__panel {
+  .player--editor[data-panel='editor'] .player__panel {
     position: static;
     grid-column: 1;
     grid-row: 1;
   }
 }
 
-/* В боковой раскладке прилипает вся панель, а не схема внутри неё: правила
-   для полосы сверху здесь оставляют лишнюю линию под полотном и второй
-   sticky внутри sticky. */
+/* Стиль полосы переехал на панель, поэтому сама сцена внутри неё нейтральна:
+   иначе под полотном оставалась лишняя линия и второй sticky внутри sticky. */
 .player--editor .player__stage {
   position: static;
   margin: 0;
