@@ -24,12 +24,12 @@ terms:
   aggregate: >-
     A piece of state that changes as a whole and by its own rules. The
     transaction boundary: nothing outside can reach past it.
-  use case: >-
-    One reason the service does something: read, check, change, announce. The
+  application: >-
+    The level that holds one whole scenario: read, check, change, announce. The
     order of the steps and nothing beyond it.
-  adapter: >-
-    The translation between the service and what is outside it: a database, a
-    queue, somebody else's API. No rules live here, only translation.
+  DTO: >-
+    A structure of plain fields in which data crosses a boundary: a request
+    body, a table row, a message on the bus. It has no behaviour.
   transport: >-
     The edge of the service: how a request arrives and which code answers it.
     No decision about the domain is made here.
@@ -97,19 +97,19 @@ import Levels from '../../../components/Levels.astro';
       key: 'transport',
       name: 'Transport',
       decides: 'which code to answer with',
-      text: 'The edge of the service. A request arrives over HTTP or off a queue and leaves as a response; here it becomes a call to a use case and comes back. Not one decision about the domain is made at this level — transport translates.',
+      text: 'The edge where somebody called us. A request arrives over HTTP or off a queue and leaves as a response; no decision about the domain is made here. Transport translates: protobuf, JSON or Avro into the words of the domain and back. What came off the wire goes no further — what reaches application is a command in the words of the domain.',
     },
     {
-      key: 'adapter',
-      name: 'Adapter',
-      decides: 'how it is stored and sent',
-      text: 'Rows in tables, fields in a message, a call to the service next door. No rules here either, only the translation between what the service thinks and how that is stored and carried.',
+      key: 'dto',
+      name: 'DTO',
+      decides: 'which fields it travels in',
+      text: 'The shape in which the domain leaves its boundary, and in which the outside arrives: a request body, a table row, a message on the bus, a protobuf request to the service next door. Plain fields and not one rule. The knowledge runs one way: a DTO knows how to lay an aggregate out in fields, and the domain knows nothing about the DTO.',
     },
     {
-      key: 'usecase',
-      name: 'Use case',
+      key: 'application',
+      name: 'Application',
       decides: 'in what order, and who is called',
-      text: 'One reason the service does something: read, check, change, announce. The order of the steps and nothing beyond it — a use case does not decide what is legal, it asks the level below.',
+      text: 'One reason the service does something: read, check, change, announce. The order of the steps and nothing beyond it — application does not decide what is legal, it asks the aggregate.',
     },
     {
       key: 'aggregate',
