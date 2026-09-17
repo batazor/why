@@ -1,0 +1,139 @@
+---
+/**
+ * Реальные случаи, где та же ошибка уже стоила денег.
+ *
+ * Галерея, а не столбец: случаи равноправны, порядок между ними ничего не
+ * значит, и вертикальный список из них отодвигал бы урок на экран вниз.
+ */
+import { useTranslations, type Locale } from '../i18n/ui';
+
+interface Incident {
+  title: string;
+  text: string;
+  url: string;
+}
+
+interface Props {
+  lang: Locale;
+  items: Incident[];
+}
+
+const { lang, items } = Astro.props;
+const t = useTranslations(lang);
+---
+
+{
+  items.length > 0 && (
+    <section class="incidents" aria-labelledby="incidents-heading">
+      <div class="incidents__head">
+        <h2 class="incidents__heading" id="incidents-heading">
+          {t('lesson.incidents')}
+        </h2>
+        {/* Мышь крутит галерею колесом, палец — свайпом; кнопки нужны тем, у кого
+            нет ни того, ни другого. Показывает их скрипт и только когда лента
+            действительно не влезла: на широком экране крутить нечего. */}
+        <div class="incidents__controls" data-controls hidden>
+          <button
+            class="incidents__arrow"
+            type="button"
+            data-scroll="-1"
+            aria-label={t('lesson.incidentsPrev')}
+          >
+            ←
+          </button>
+          <button
+            class="incidents__arrow"
+            type="button"
+            data-scroll="1"
+            aria-label={t('lesson.incidentsNext')}
+          >
+            →
+          </button>
+        </div>
+      </div>
+
+      {/* tabindex — требование доступности к прокручиваемой области: без него до
+          скрытых карточек не добраться с клавиатуры. Имя ей даёт заголовок. */}
+      <ul class="incidents__track" data-incidents tabindex="0" aria-labelledby="incidents-heading">
+        {items.map((incident) => (
+          <li class="incident">
+            <h3 class="incident__title">{incident.title}</h3>
+            <p class="incident__text">{incident.text}</p>
+            {/* Домен как подпись берётся из самой ссылки: отдельное поле
+                рядом с url рано или поздно начинает врать. */}
+            <a class="incident__source" href={incident.url} target="_blank" rel="noopener">
+              {new URL(incident.url).hostname.replace(/^www\./, '')}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+<script>
+  document.querySelectorAll<HTMLElement>('[data-incidents]').forEach((track) => {
+    const controls = track
+      .closest('.incidents')!
+      .querySelector<HTMLElement>('[data-controls]')!;
+    const arrows = [...controls.querySelectorAll<HTMLButtonElement>('[data-scroll]')];
+
+    /** Сколько ленте осталось проехать вправо; 0 — всё влезло. */
+    const limit = () => track.scrollWidth - track.clientWidth;
+
+    // Отступ в один пиксель: дробный scrollLeft при зуме браузера не доезжает
+    // до целого края, и кнопка «вправо» осталась бы вечно активной.
+    const atStart = () => track.scrollLeft <= 1;
+    const atEnd = () => track.scrollLeft >= limit() - 1;
+
+    function paint() {
+      controls.hidden = limit() <= 1;
+      for (const arrow of arrows) {
+        arrow.disabled = arrow.dataset.scroll === '-1' ? atStart() : atEnd();
+      }
+    }
+
+    for (const arrow of arrows) {
+      arrow.addEventListener('click', () => {
+        // Шаг — видимая ширина ленты минус нахлёст: так следующая карточка
+        // встаёт на место предыдущей, а не улетает через одну.
+        const step = (track.clientWidth - 48) * Number(arrow.dataset.scroll);
+        track.scrollBy({ left: step, behavior: 'smooth' });
+      });
+    }
+
+    /**
+     * Вертикальное колесо над лентой крутит её вбок.
+     *
+     * Перехват заканчивается на краю: дойдя до последней карточки, лента
+     * отдаёт жест странице и та продолжает ехать вниз. Без этого галерея
+     * запирала бы прокрутку — из неё нельзя было бы выкрутиться колесом.
+     */
+    track.addEventListener(
+      'wheel',
+      (event) => {
+        // Горизонтальный жест на трекпаде и зум по ctrl браузер отработает сам.
+        if (event.ctrlKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+        if (limit() <= 1) return;
+
+        // deltaMode: 0 — пиксели, 1 — строки, 2 — экраны. Firefox шлёт строки.
+        const perLine = 16;
+        const delta =
+          event.deltaY *
+          (event.deltaMode === 1 ? perLine : event.deltaMode === 2 ? track.clientWidth : 1);
+
+        if ((delta < 0 && atStart()) || (delta > 0 && atEnd())) return;
+
+        event.preventDefault();
+        track.scrollLeft += delta;
+      },
+      { passive: false },
+    );
+
+    track.addEventListener('scroll', paint, { passive: true });
+    // Ширина карточек зависит от ширины экрана, значит и «влезло / не влезло»
+    // меняется на лету: при повороте телефона и перетаскивании окна.
+    new ResizeObserver(paint).observe(track);
+    paint();
+  });
+</script>

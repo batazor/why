@@ -559,10 +559,18 @@ main:focus {
 /* ---------- реальные случаи ---------- */
 
 /* Пока не показано, где это уже стоило денег, урок читается как выдуманная
-   задача. Блок стоит сразу за callout'ом: сначала боль, потом счёт за неё. */
+   задача. Блок стоит сразу за callout'ом: сначала боль, потом счёт за неё.
+   Ширина здесь больше колонки текста намеренно: это лента, а не абзац. */
 .incidents {
-  max-width: var(--measure);
   margin: 1.5rem 0 2rem;
+}
+
+.incidents__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.6rem;
 }
 
 .incidents__heading {
@@ -570,18 +578,67 @@ main:focus {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
-  margin: 0 0 0.6rem;
+  margin: 0;
 }
 
-.incidents__list {
+.incidents__controls {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.incidents__arrow {
+  width: 1.9rem;
+  height: 1.9rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--fg);
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.incidents__arrow:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Кнопка на краю ленты гаснет, но остаётся на месте: исчезни она — соседняя
+   прыгнула бы под курсор, и следующий клик уехал бы не туда. */
+.incidents__arrow:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.incidents__track {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: grid;
+  display: flex;
   gap: 0.75rem;
+  overflow-x: auto;
+  /* proximity, а не mandatory: колесо двигает ленту маленькими шагами, и
+     обязательная привязка отбрасывала бы её назад посреди жеста. */
+  scroll-snap-type: x proximity;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
 }
 
+.incidents__track:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* Карточка уже ленты — следующая всегда выглядывает краем. Это и есть
+   единственное честное обещание, что галерея крутится. */
 .incident {
+  flex: 0 0 min(23rem, 82%);
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--panel);
@@ -600,8 +657,11 @@ main:focus {
 }
 
 /* Ссылка ведёт наружу, поэтому подписана доменом, а не словом «источник»:
-   по домену видно, кому верить, ещё до перехода. */
+   по домену видно, кому верить, ещё до перехода. `auto` прижимает её к низу,
+   чтобы у карточек разной длины подписи стояли на одной линии. */
 .incident__source {
+  margin-top: auto;
+  align-self: flex-start;
   font-size: 0.8rem;
   color: var(--muted);
   text-decoration: none;
@@ -615,6 +675,16 @@ main:focus {
 .incident__source:hover {
   color: var(--accent);
   border-bottom-color: currentColor;
+}
+
+/* На телефоне лента уезжает под края экрана: обрезанная карточка у самой
+   рамки читается как продолжение, а аккуратная колонка — как конец списка. */
+@media (max-width: 46rem) {
+  .incidents__track {
+    margin-inline: -1.25rem;
+    padding-inline: 1.25rem;
+    scroll-padding-inline: 1.25rem;
+  }
 }
 
 /* ---------- навигация между уроками ---------- */
@@ -2210,17 +2280,31 @@ main:focus {
   height: auto;
 }
 
-/* Слои идут от светлого к насыщенному: чем ниже, тем ближе к железу. Цвет
-   берётся из акцента страницы, поэтому тема переключается сама. */
-.levels-cake__face,
-.levels-cake__top {
-  fill: color-mix(in srgb, var(--accent) calc(10% + var(--i) * 7%), var(--panel));
-  stroke: color-mix(in srgb, var(--accent) 35%, transparent);
+/* Слои идут от светлого к насыщенному: чем ниже, тем ближе к предметной
+   области, и разница по цвету — это разница по уровню, а не украшение. */
+.levels-cake__layer {
+  cursor: default;
+  outline: none;
+}
+
+.levels-cake__face {
+  fill: color-mix(in srgb, var(--accent) calc(9% + var(--i) * 6%), var(--panel));
+  stroke: color-mix(in srgb, var(--accent) 30%, transparent);
   stroke-width: 1;
 }
 
+/* Верхняя и правая грани светлее и темнее лицевой: свет падает сверху, и без
+   этой разницы три плоскости читаются как один плоский прямоугольник. */
 .levels-cake__top {
-  fill: color-mix(in srgb, var(--accent) calc(16% + var(--i) * 7%), var(--panel));
+  fill: color-mix(in srgb, var(--accent) calc(16% + var(--i) * 6%), var(--panel));
+  stroke: color-mix(in srgb, var(--accent) 30%, transparent);
+  stroke-width: 1;
+}
+
+.levels-cake__side {
+  fill: color-mix(in srgb, var(--fg) 12%, color-mix(in srgb, var(--accent) calc(9% + var(--i) * 6%), var(--panel)));
+  stroke: color-mix(in srgb, var(--accent) 30%, transparent);
+  stroke-width: 1;
 }
 
 .levels-cake__name {
@@ -2234,10 +2318,119 @@ main:focus {
   fill: var(--muted);
 }
 
-.levels-cake__caption {
+/* Появление по одному сверху вниз: порядок уровней виден движением. Слой
+   выезжает справа-сверху, оттуда же, откуда на него смотрят. */
+.levels-cake__layer {
+  opacity: 1;
+  transition:
+    transform 0.18s ease,
+    opacity 0.18s ease;
+}
+
+.levels:not(.is-in) .levels-cake__layer {
+  opacity: 0;
+}
+
+.levels.is-in .levels-cake__layer {
+  animation: levels-slab-in 0.42s cubic-bezier(0.22, 0.9, 0.24, 1) both;
+  animation-delay: calc(var(--i) * 90ms);
+}
+
+@keyframes levels-slab-in {
+  from {
+    opacity: 0;
+    transform: translate(14px, -10px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, 0);
+  }
+}
+
+/* Наведение: слой подаётся к читателю, а парное слово в абзаце подсвечивается.
+   То же состояние даёт наведение на слово — связь работает в обе стороны. */
+.levels-cake__layer:hover,
+.levels-cake__layer:focus-visible,
+.levels-cake__layer.is-linked {
+  transform: translate(-3px, -3px);
+}
+
+.levels-cake__layer:hover .levels-cake__face,
+.levels-cake__layer:focus-visible .levels-cake__face,
+.levels-cake__layer.is-linked .levels-cake__face,
+.levels-cake__layer.is-lit .levels-cake__face {
+  fill: color-mix(in srgb, var(--accent) calc(24% + var(--i) * 6%), var(--panel));
+  stroke: var(--accent);
+}
+
+/* Слово в абзаце, парное наведённому слою. Фон, а не цвет текста: слова уже
+   помечены пунктиром как термины, и второй цвет спорил бы с первым. */
+.levels__text [data-level].is-linked {
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+/* Запрос: точка, проезжающая уровни по жёлобу слева, и сам жёлоб. Видны
+   только во время проезда: остальное время они ничего не сообщают. */
+.levels-cake__request {
+  fill: var(--accent);
+  stroke: var(--bg);
+  stroke-width: 2;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.levels-cake__request.is-on {
+  opacity: 1;
+}
+
+.levels-cake__path {
+  stroke: color-mix(in srgb, var(--accent) 40%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.levels-cake__path.is-on {
+  opacity: 1;
+}
+
+/* Подпись под картинкой — она же кнопка: текст обещает проезд, и щелчок по
+   нему его показывает. */
+.levels-cake__run {
+  display: block;
   margin: 0.5rem 0 0;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px dotted var(--accent);
+  background: none;
+  font: inherit;
   font-size: 0.78rem;
+  text-align: left;
   color: var(--muted);
+  cursor: pointer;
+}
+
+.levels-cake__run:hover {
+  color: var(--fg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .levels.is-in .levels-cake__layer {
+    animation: none;
+  }
+
+  .levels-cake__layer {
+    transition: none;
+  }
+
+  /* Проезд не запускается, поэтому и кнопка ничего не обещает. */
+  .levels-cake__run {
+    border-bottom: 0;
+    cursor: default;
+  }
 }
 
 /* Отбивка перед первым шагом нужна схеме-полосе: под ней должно остаться место,

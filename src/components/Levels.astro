@@ -2,74 +2,215 @@
 /**
  * Уровни сервиса слоёным пирогом.
  *
- * Абзац рядом перечисляет пять уровней и то, что каждый решает. Список из
- * пяти пунктов в прозе читается как перечисление равноправных вещей, а они
- * вложены друг в друга: запрос входит сверху и проходит их по порядку. Пирог
- * говорит это одной картинкой.
+ * Абзац рядом перечисляет пять уровней и то, что каждый решает. Список из пяти
+ * пунктов в прозе читается как перечисление равноправных вещей, а они вложены
+ * друг в друга: запрос входит сверху и проходит их по порядку. Пирог говорит
+ * это одной картинкой, а проезжающая по нему точка — что порядок именно такой.
  *
- * Подписи приходят props'ами, а не живут внутри: файл общий для локалей, а
- * подписи — проза. Геометрия здесь, текст — в MDX той локали, где он к месту.
+ * Подписи приходят props'ами: файл общий для локалей, а подписи — проза.
+ * Геометрия здесь, текст — в MDX той локали, где он к месту.
  */
 interface Props {
-  levels: { name: string; decides: string }[];
-  /** Подпись сбоку: откуда приходит запрос. */
+  levels: {
+    /**
+     * Ключ уровня, одинаковый во всех локалях: по нему слой связан со словом
+     * в абзаце рядом (`data-level` на слове). Наведение на одно подсвечивает
+     * другое — иначе читателю приходится сверять их глазами по названию.
+     */
+    key: string;
+    name: string;
+    decides: string;
+  }[];
+  /** Подпись под картинкой: она же кнопка, запускающая проезд запроса. */
   inbound?: string;
 }
 
 const { levels, inbound } = Astro.props;
 
-/** Высота слоя и зазор между слоями — по ним считается вся геометрия. */
-const SLAB = 52;
-const GAP = 10;
-/** Скос верхней грани: он и делает из прямоугольника слой пирога. */
-const SKEW = 14;
+/** Высота слоя, зазор между слоями и скос верхней грани. */
+const SLAB = 54;
+const GAP = 13;
+const SKEW = 16;
 
-const width = 320;
-const height = levels.length * (SLAB + GAP) + SKEW;
+const WIDTH = 350;
+const PAD = 10;
+/**
+ * Слева остаётся жёлоб: по нему проезжает запрос. Пустить точку по самим
+ * слоям значило бы вести её по подписям, а она должна быть видна на каждом
+ * кадре, а не тонуть в тексте.
+ */
+const GUTTER = 24;
+const height = levels.length * (SLAB + GAP) + SKEW + PAD;
+/** Лицевая грань уже полотна на скос и на жёлоб. */
+const faceWidth = WIDTH - SKEW - GUTTER - PAD;
 ---
 
-<div class="levels">
+<div class="levels" data-levels>
   <div class="levels__text">
     <slot />
   </div>
 
   <figure class="levels-cake">
     <svg
-      viewBox={`0 0 ${width} ${height}`}
-    width={width}
-    height={height}
-    role="img"
-    aria-label={levels.map((level) => `${level.name}: ${level.decides}`).join('. ')}
-  >
-    {
-      levels.map((level, i) => {
-        const y = SKEW + i * (SLAB + GAP);
-        const left = 8;
-        const right = width - 8;
-        return (
-          <g class="levels-cake__layer" style={`--i: ${i}`}>
-            {/* Верхняя грань: параллелограмм, из-за которого слой выглядит
-                объёмным. Рисуется первой, чтобы лицевая сторона легла поверх. */}
-            <path
-              class="levels-cake__top"
-              d={`M ${left + SKEW} ${y - SKEW} H ${right} L ${right - SKEW} ${y} H ${left} Z`}
-            />
-            <rect
-              class="levels-cake__face"
-              x={left}
-              y={y}
-              width={right - SKEW - left}
-              height={SLAB}
-              rx="4"
-            />
-            <text class="levels-cake__name" x={left + 12} y={y + 21}>{level.name}</text>
-            <text class="levels-cake__decides" x={left + 12} y={y + 38}>{level.decides}</text>
-          </g>
-        );
-      })
-    }
-  </svg>
+      viewBox={`0 0 ${WIDTH} ${height}`}
+      role="img"
+      aria-label={levels.map((level) => `${level.name}: ${level.decides}`).join('. ')}
+    >
+      {
+        levels.map((level, i) => {
+          const y = SKEW + PAD + i * (SLAB + GAP);
+          const left = GUTTER;
+          const right = left + faceWidth;
+          return (
+            <g
+              class="levels-cake__layer"
+              style={`--i: ${i}`}
+              data-level={level.key}
+              tabindex="0"
+              role="button"
+              aria-label={`${level.name}: ${level.decides}`}
+            >
+              {/* Три грани: верхняя и правая делают из прямоугольника слой,
+                  лицевая несёт подписи. Порядок важен — лицевая ложится
+                  поверх обеих, иначе её край перечёркивает их. */}
+              <path
+                class="levels-cake__top"
+                d={`M ${left + SKEW} ${y - SKEW} H ${right + SKEW} L ${right} ${y} H ${left} Z`}
+              />
+              <path
+                class="levels-cake__side"
+                d={`M ${right} ${y} L ${right + SKEW} ${y - SKEW} V ${y + SLAB - SKEW} L ${right} ${y + SLAB} Z`}
+              />
+              <rect class="levels-cake__face" x={left} y={y} width={faceWidth} height={SLAB} rx="5" />
+              <text class="levels-cake__name" x={left + 14} y={y + 22}>{level.name}</text>
+              <text class="levels-cake__decides" x={left + 14} y={y + 40}>{level.decides}</text>
+            </g>
+          );
+        })
+      }
 
-    {inbound && <figcaption class="levels-cake__caption">{inbound}</figcaption>}
+      {/* Путь запроса и он сам. Стоят вне слоёв, чтобы не унаследовать их
+          подсветку и их появление; до первого запуска и то и другое спрятано. */}
+      <line
+        class="levels-cake__path"
+        x1={GUTTER / 2}
+        y1={SKEW + PAD}
+        x2={GUTTER / 2}
+        y2={height - GAP}
+        data-path
+      />
+      <circle class="levels-cake__request" r="6" cx={GUTTER / 2} cy={SKEW + PAD} data-request />
+    </svg>
+
+    {
+      inbound && (
+        <figcaption>
+          <button class="levels-cake__run" type="button" data-run>{inbound}</button>
+        </figcaption>
+      )
+    }
   </figure>
 </div>
+
+<script>
+  /**
+   * Три вещи, которых картинке не хватает статикой.
+   *
+   * 1. Слои появляются по одному, когда до них доскроллили: порядок сверху
+   *    вниз виден движением, а не только положением.
+   * 2. Наведение на слой подсвечивает парное слово в абзаце, и наоборот. Связь
+   *    между текстом и картинкой иначе остаётся на совести читателя.
+   * 3. Запрос проезжает уровни по порядку — то, что подпись говорит словами.
+   *
+   * Всё это украшение: без JS картинка остаётся полной и читаемой, поэтому
+   * ничего не рисуется скриптом и ничего им не скрывается.
+   */
+  const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  document.querySelectorAll<HTMLElement>('[data-levels]').forEach((root) => {
+    const layers = [...root.querySelectorAll<SVGGElement>('.levels-cake__layer')];
+    const request = root.querySelector<SVGCircleElement>('[data-request]');
+    const run = root.querySelector<HTMLButtonElement>('[data-run]');
+    /** Слова в абзаце рядом, помеченные тем же ключом уровня. */
+    const words = new Map<string, HTMLElement[]>();
+
+    root.querySelectorAll<HTMLElement>('[data-level]').forEach((node) => {
+      if (node.tagName === 'G') return;
+      const key = node.dataset.level!;
+      words.set(key, [...(words.get(key) ?? []), node]);
+    });
+
+    // 1. Появление по одному.
+    if (!calm) {
+      const seen = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) continue;
+            root.classList.add('is-in');
+            seen.disconnect();
+          }
+        },
+        { threshold: 0.3 },
+      );
+      seen.observe(root);
+    } else {
+      root.classList.add('is-in');
+    }
+
+    // 2. Связь слоя со словом.
+    const link = (key: string, on: boolean) => {
+      for (const layer of layers) {
+        if (layer.dataset.level === key) layer.classList.toggle('is-linked', on);
+      }
+      for (const word of words.get(key) ?? []) word.classList.toggle('is-linked', on);
+    };
+
+    for (const layer of layers) {
+      const key = layer.dataset.level!;
+      layer.addEventListener('pointerenter', () => link(key, true));
+      layer.addEventListener('pointerleave', () => link(key, false));
+      layer.addEventListener('focus', () => link(key, true));
+      layer.addEventListener('blur', () => link(key, false));
+    }
+
+    for (const [key, nodes] of words) {
+      for (const word of nodes) {
+        word.addEventListener('pointerenter', () => link(key, true));
+        word.addEventListener('pointerleave', () => link(key, false));
+      }
+    }
+
+    // 3. Проезд запроса.
+    let running = false;
+    const travel = async () => {
+      if (!request || running || calm) return;
+      running = true;
+      request.classList.add('is-on');
+      root.querySelector('[data-path]')?.classList.add('is-on');
+
+      for (const layer of layers) {
+        const face = layer.querySelector<SVGRectElement>('.levels-cake__face')!;
+        const y = Number(face.getAttribute('y')) + Number(face.getAttribute('height')) / 2;
+
+        request.animate(
+          { cy: [request.getAttribute('cy') ?? '0', String(y)] },
+          { duration: 260, easing: 'ease-in-out', fill: 'forwards' },
+        );
+        request.setAttribute('cy', String(y));
+
+        layer.classList.add('is-lit');
+        await new Promise((done) => setTimeout(done, 300));
+        layer.classList.remove('is-lit');
+      }
+
+      request.classList.remove('is-on');
+      root.querySelector('[data-path]')?.classList.remove('is-on');
+      // Возврат наверх без анимации: ехать обратно значило бы показать порядок,
+      // которого в сервисе нет.
+      request.setAttribute('cy', String(Number(layers[0].querySelector('.levels-cake__face')!.getAttribute('y'))));
+      running = false;
+    };
+
+    run?.addEventListener('click', travel);
+  });
+</script>

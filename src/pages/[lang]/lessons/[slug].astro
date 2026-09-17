@@ -3,6 +3,7 @@ import { getCollection, getEntry, render, type CollectionEntry } from 'astro:con
 import Base from '../../../layouts/Base.astro';
 import StepPlayer from '../../../components/StepPlayer.astro';
 import Quiz from '../../../components/Quiz.astro';
+import Incidents from '../../../components/Incidents.astro';
 import FlowDiagram from '../../../components/FlowDiagram';
 import { getDeck } from '../../../code/registry';
 import { useTranslations, isLocale, localePath, type Locale } from '../../../i18n/ui';
@@ -109,28 +110,7 @@ const siblingHref = (entry: CollectionEntry<'lessons'>) =>
       }
     </div>
 
-    {
-      lesson.data.incidents.length > 0 && (
-        <section class="incidents" aria-labelledby="incidents-heading">
-          <h2 class="incidents__heading" id="incidents-heading">
-            {t('lesson.incidents')}
-          </h2>
-          <ul class="incidents__list">
-            {lesson.data.incidents.map((incident) => (
-              <li class="incident">
-                <h3 class="incident__title">{incident.title}</h3>
-                <p class="incident__text">{incident.text}</p>
-                {/* Домен как подпись берётся из самой ссылки: отдельное поле
-                    рядом с url рано или поздно начинает врать. */}
-                <a class="incident__source" href={incident.url} target="_blank" rel="noopener">
-                  {new URL(incident.url).hostname.replace(/^www\./, '')}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )
-    }
+    <Incidents lang={lang} items={lesson.data.incidents} />
 
     <div class="prose" data-terms={JSON.stringify(lesson.data.terms)}>
       <Content />
