@@ -25,11 +25,14 @@ terms:
     A structure of plain fields in which data crosses a boundary: a request
     body, a table row, a message on the bus. It has no behaviour.
   aggregate: >-
-    A piece of state that changes as a whole and by its own rules. The
-    transaction boundary: nothing outside can reach past it.
+    A cluster of objects that changes as one whole, with a root through which
+    everything outside refers to it. The consistency and transaction boundary.
+  invariant: >-
+    A statement about state that must be true before and after every change.
+    Not a check at the door but a property the aggregate keeps at all times.
   application: >-
-    The level that holds one whole scenario: read, check, change, announce. The
-    order of the steps and nothing beyond it.
+    The level that defines the jobs the software is supposed to do. It hands
+    the work to the domain, holds no domain rules and is kept thin.
   transport: >-
     The point at which the service is called: by a person or by another
     system. No decision about the domain is made here.
@@ -102,14 +105,14 @@ import Levels from '../../../components/Levels.astro';
     {
       key: 'application',
       name: 'Application',
-      decides: 'in what order, and who is called',
-      text: 'One reason the service does something: read, check, change, announce. The order of the steps and nothing beyond it — application does not decide what is legal, it asks the aggregate.',
+      decides: 'what jobs the software does',
+      text: 'The level that defines the jobs the software is supposed to do — Evans puts it that way. One business scenario is one use case with its own logic: take a sale, issue an invoice, refund money. The logic here is the order of the steps: fetch the aggregate, call it, save it, announce what happened. No domain rules live at this level and it checks none: application hands the work to the domain and holds only the progress of the operation — the transaction, the permissions, idempotency.',
     },
     {
       key: 'aggregate',
       name: 'Aggregate',
       decides: 'which states are possible',
-      text: 'A piece of state that changes as a whole and by its own rules. Nothing outside can reach past it, which is also why it cannot be left in a state the domain does not allow.',
+      text: 'A cluster of objects that changes as one whole, and a root through which everything outside refers to it. The point of that boundary is the [[invariant]]: a statement that has to hold after every change. The lines add up to the invoice total; an invoice that is already paid does not change its amount. The aggregate checks its own invariants, inside one transaction — which is why from the outside it cannot be left in a state the domain does not allow.',
     },
     {
       key: 'repository',
