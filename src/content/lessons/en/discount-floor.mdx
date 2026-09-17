@@ -4,6 +4,25 @@ description: A test says "this pair is fine". Lean says it about every pair at o
 problem: >-
   Two promos landed on the same item and sold it below what we paid. Each was
   approved and reviewed on its own. Nobody checked what they do together.
+incidents:
+  - title: 'Amazon Prime Day, July 2019: everything at $94.48'
+    text: >-
+      Items sold by Amazon itself, a $13,000 Canon lens among them, went out at
+      $94.48. One shopper worked out that the system was meant to charge 94.48%
+      of the discounted price and instead put $94.48 down as the final amount.
+      A percentage confused with an absolute value — exactly what types and a
+      proof catch. Amazon shipped many of those orders anyway.
+    url: https://www.techspot.com/news/81028-pricing-glitch-allowed-prime-day-customers-buy-13000.html
+  - title: 'Amazon UK and RepricerExpress, December 2014: everything at a penny'
+    text: >-
+      Automatic repricing software was supposed to keep prices just under the
+      competition. Instead, between 7pm and 8pm on a Friday, a bug sent hundreds
+      of items out for nothing. One seller shipped 675 items normally priced at
+      £5–100 for a penny each and lost £20,000. The worse part: Amazon could not
+      cancel orders already on their way — FBA warehouses shipped without ever
+      looking at the price. The invariant "price never below the floor" belongs
+      at the boundary of the system, not in an external repricer you trust.
+    url: https://iol.co.za/technology/2014-12-18-amazon-and-the-1p-glitch/
 tags: [lean, pricing, invariants]
 order: 3
 deck: discount-floor

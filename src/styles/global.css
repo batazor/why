@@ -556,6 +556,67 @@ main:focus {
   margin-bottom: 0.2rem;
 }
 
+/* ---------- реальные случаи ---------- */
+
+/* Пока не показано, где это уже стоило денег, урок читается как выдуманная
+   задача. Блок стоит сразу за callout'ом: сначала боль, потом счёт за неё. */
+.incidents {
+  max-width: var(--measure);
+  margin: 1.5rem 0 2rem;
+}
+
+.incidents__heading {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 0.6rem;
+}
+
+.incidents__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.incident {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: 0.85rem 1.1rem;
+}
+
+.incident__title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0 0 0.35rem;
+}
+
+.incident__text {
+  margin: 0 0 0.6rem;
+  font-size: 0.9rem;
+}
+
+/* Ссылка ведёт наружу, поэтому подписана доменом, а не словом «источник»:
+   по домену видно, кому верить, ещё до перехода. */
+.incident__source {
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.incident__source::after {
+  content: ' ↗';
+}
+
+.incident__source:hover {
+  color: var(--accent);
+  border-bottom-color: currentColor;
+}
+
 /* ---------- навигация между уроками ---------- */
 
 .lesson-nav {
@@ -2088,4 +2149,100 @@ main:focus {
   margin: 0;
   padding: 0;
   border: 0;
+}
+
+/* Шаг, которому нечего показать: панели нет, текст во всю ширину со своей
+   длиной строки. Пустое полотно на этом месте читалось бы как сбой. */
+.player--editor[data-panel='none'] .player__body {
+  grid-template-columns: minmax(0, var(--measure));
+}
+
+.player--editor[data-panel='none'] .player__panel {
+  display: none;
+}
+
+.player--editor[data-panel='none'] .step {
+  grid-template-columns: minmax(0, var(--measure));
+}
+
+/* ---------- Уровни сервиса слоёным пирогом ---------- */
+
+/* Абзац и картинка рядом: картинка объясняет вложенность, о которой абзац
+   говорит словами, и порознь они читаются хуже. */
+.levels {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 20rem);
+  align-items: start;
+  margin: 1.5rem 0;
+  /* Блок шире колонки прозы: текст с картинкой рядом в 34rem не помещается, а
+     измерять длину строки по нему незачем — абзац здесь и так короткий. */
+  max-width: none;
+  width: min(62rem, calc(100vw - 2.5rem));
+}
+
+.levels__text > :first-child {
+  margin-top: 0;
+}
+
+.levels__text > :last-child {
+  margin-bottom: 0;
+}
+
+/* Пустые абзацы MDX делает из пустых строк внутри компонента: они ничего не
+   значат и не должны занимать высоту. */
+.levels__text > p:empty {
+  display: none;
+}
+
+@media (max-width: 52rem) {
+  .levels {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.levels-cake {
+  margin: 0;
+}
+
+.levels-cake svg {
+  width: 100%;
+  height: auto;
+}
+
+/* Слои идут от светлого к насыщенному: чем ниже, тем ближе к железу. Цвет
+   берётся из акцента страницы, поэтому тема переключается сама. */
+.levels-cake__face,
+.levels-cake__top {
+  fill: color-mix(in srgb, var(--accent) calc(10% + var(--i) * 7%), var(--panel));
+  stroke: color-mix(in srgb, var(--accent) 35%, transparent);
+  stroke-width: 1;
+}
+
+.levels-cake__top {
+  fill: color-mix(in srgb, var(--accent) calc(16% + var(--i) * 7%), var(--panel));
+}
+
+.levels-cake__name {
+  font-size: 13px;
+  font-weight: 600;
+  fill: var(--fg);
+}
+
+.levels-cake__decides {
+  font-size: 11px;
+  fill: var(--muted);
+}
+
+.levels-cake__caption {
+  margin: 0.5rem 0 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+/* Отбивка перед первым шагом нужна схеме-полосе: под ней должно остаться место,
+   чтобы первый шаг доехал до линии чтения. В боковой раскладке полосы нет, и
+   18vh пустоты под заголовком «Разбор по шагам» читаются как сбой. */
+.player--editor.is-enhanced .player__steps::before {
+  height: 1rem;
 }

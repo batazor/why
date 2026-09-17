@@ -17,7 +17,6 @@ import type { LikeC4Spec } from './likec4';
 export const likec4: LikeC4Spec = {
   height: 420,
   views: {
-    boundary: 'boundary',
     estate: 'estate',
     kinds: 'kinds',
   },

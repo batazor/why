@@ -43,8 +43,8 @@ steps:
       place: the stretch of a system inside which a word has one meaning, one
       model, and one team answering for both. The boundary follows the language
       rather than the layers of code or the tables: where a word starts to mean
-      something else, the context has ended. The canvas on the right is empty —
-      which is where every system starts.
+      something else, the context has ended. What comes next on the diagram are
+      the areas of an ordinary shop, and every one of them is such a place.
   - id: estate
     title: What an online shop is made of
     narration: >-
@@ -89,6 +89,18 @@ steps:
       not here is not in the code either. Name it first, write it after.
 ---
 
+import Levels from '../../../components/Levels.astro';
+
+<Levels
+  inbound="A request comes in at the top and goes through the levels in order."
+  levels={[
+    { name: 'Transport', decides: 'which code to answer with' },
+    { name: 'Adapter', decides: 'how it is stored and sent' },
+    { name: 'Use case', decides: 'in what order, and who is called' },
+    { name: 'Aggregate', decides: 'which states are possible' },
+    { name: 'Bounded context', decides: 'what we own and what we call it' },
+  ]}
+>
 **<span data-term="DDD">DDD</span>** answers that with a single agreement: a
 service has levels, and each level decides exactly one thing. The
 <span data-term="bounded context">bounded context</span> — what the service
@@ -102,3 +114,4 @@ thing sits in a database and travels over the network. The
 agreement is the same for every service, so the next service reads like the
 last one, and a known problem gets its known answer: it is immediately clear
 which level it lives on and where to put it.
+</Levels>

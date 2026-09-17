@@ -68,7 +68,7 @@ const stage = flow ?? likec4;
  * Шаг объявляет это тем, что для него описано: свой view — схема, свой файл —
  * редактор. Шаг без того и другого оставляет панель прежней.
  */
-type Panel = 'diagram' | 'editor';
+type Panel = 'diagram' | 'editor' | 'none';
 
 const panelOf = (id: string): Panel | undefined =>
   likec4?.views[id] || flow ? 'diagram' : tree?.steps[id] ? 'editor' : undefined;
@@ -77,9 +77,19 @@ const panels = Object.fromEntries(
   steps.map((step) => [step.id, panelOf(step.id)]).filter(([, kind]) => kind),
 ) as Record<string, Panel>;
 
+/**
+ * Шаг, которому нечего показать, показывает пустоту — и она читается как
+ * сломанный блок. Поэтому у такого шага панели нет вовсе: текст занимает всю
+ * ширину, а панель появляется на том шаге, где ей есть что нарисовать.
+ *
+ * Касается только первого шага: у остальных «нет своей панели» значит «остаётся
+ * прежняя», и терять её на полпути разбора нельзя.
+ */
+if (!panels[steps[0].id]) panels[steps[0].id] = 'none';
+
 // Панель на первом шаге ставится разметкой: без JS читатель видит ту же
 // половину, что и с ним, а не обе сразу.
-const firstPanel = panels[steps[0].id] ?? (tree ? 'editor' : 'diagram');
+const firstPanel = panels[steps[0].id];
 
 /** Правая колонка нужна там, где есть редактор: коду нужна ширина. */
 const sideBySide = Boolean(tree);

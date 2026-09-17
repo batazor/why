@@ -1,0 +1,75 @@
+---
+/**
+ * Уровни сервиса слоёным пирогом.
+ *
+ * Абзац рядом перечисляет пять уровней и то, что каждый решает. Список из
+ * пяти пунктов в прозе читается как перечисление равноправных вещей, а они
+ * вложены друг в друга: запрос входит сверху и проходит их по порядку. Пирог
+ * говорит это одной картинкой.
+ *
+ * Подписи приходят props'ами, а не живут внутри: файл общий для локалей, а
+ * подписи — проза. Геометрия здесь, текст — в MDX той локали, где он к месту.
+ */
+interface Props {
+  levels: { name: string; decides: string }[];
+  /** Подпись сбоку: откуда приходит запрос. */
+  inbound?: string;
+}
+
+const { levels, inbound } = Astro.props;
+
+/** Высота слоя и зазор между слоями — по ним считается вся геометрия. */
+const SLAB = 52;
+const GAP = 10;
+/** Скос верхней грани: он и делает из прямоугольника слой пирога. */
+const SKEW = 14;
+
+const width = 320;
+const height = levels.length * (SLAB + GAP) + SKEW;
+---
+
+<div class="levels">
+  <div class="levels__text">
+    <slot />
+  </div>
+
+  <figure class="levels-cake">
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+    width={width}
+    height={height}
+    role="img"
+    aria-label={levels.map((level) => `${level.name}: ${level.decides}`).join('. ')}
+  >
+    {
+      levels.map((level, i) => {
+        const y = SKEW + i * (SLAB + GAP);
+        const left = 8;
+        const right = width - 8;
+        return (
+          <g class="levels-cake__layer" style={`--i: ${i}`}>
+            {/* Верхняя грань: параллелограмм, из-за которого слой выглядит
+                объёмным. Рисуется первой, чтобы лицевая сторона легла поверх. */}
+            <path
+              class="levels-cake__top"
+              d={`M ${left + SKEW} ${y - SKEW} H ${right} L ${right - SKEW} ${y} H ${left} Z`}
+            />
+            <rect
+              class="levels-cake__face"
+              x={left}
+              y={y}
+              width={right - SKEW - left}
+              height={SLAB}
+              rx="4"
+            />
+            <text class="levels-cake__name" x={left + 12} y={y + 21}>{level.name}</text>
+            <text class="levels-cake__decides" x={left + 12} y={y + 38}>{level.decides}</text>
+          </g>
+        );
+      })
+    }
+  </svg>
+
+    {inbound && <figcaption class="levels-cake__caption">{inbound}</figcaption>}
+  </figure>
+</div>

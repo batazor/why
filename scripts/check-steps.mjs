@@ -306,18 +306,12 @@ for (const [slug, perLocale] of bySlug) {
         errors.push(`колода "${deckName}", шаг "${step}": нет view "${viewId}" в likec4/`);
       }
     }
-
-    // Первый шаг обязан принести картинку: шаг без своего view оставляет
-    // предыдущую, а до первого никакой предыдущей нет.
-    const first = deckIds[0];
-    if (!deckModule.likec4.views[first]) {
-      errors.push(`колода "${deckName}": у первого шага "${first}" нет view — полотно откроется пустым`);
-    }
   }
 
   // Эталон порядка шагов — первая локаль по алфавиту; остальные обязаны совпасть.
   let reference = null;
   let quizReference = null;
+  let incidentReference = null;
 
   for (const [locale, { data, where }] of perLocale) {
     const ids = data.steps.map((step) => step.id);
@@ -372,6 +366,20 @@ for (const [slug, perLocale] of bySlug) {
     const strayNotes = noted.filter((id) => !annotatedSteps.includes(id));
     if (strayNotes.length) {
       warnings.push(`${where}: note у шагов ${strayNotes.join(', ')} нигде не показывается — на схеме для них нет пометки`);
+    }
+
+    // Реальные случаи: пересказ переводится, ссылка — нет. Значит набор и
+    // порядок ссылок обязаны совпадать между локалями, иначе на одном языке
+    // читатель увидит случай, которого на другом нет.
+    const incidents = (data.incidents ?? []).map((item) => item.url);
+    if (incidentReference === null) {
+      incidentReference = { locale, urls: incidents };
+    } else if (incidentReference.urls.join('|') !== incidents.join('|')) {
+      errors.push(
+        `${where}: реальные случаи расходятся с ${incidentReference.locale}\n` +
+          `    ${incidentReference.locale}: ${incidentReference.urls.join(', ') || '—'}\n` +
+          `    ${locale}: ${incidents.join(', ') || '—'}`,
+      );
     }
 
     for (const [i, item] of (data.quiz ?? []).entries()) {
