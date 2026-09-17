@@ -167,7 +167,7 @@ pre {
   color: var(--fg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 5px 16px var(--shadow);
+  box-shadow: 0 6px 20px var(--shadow);
   font-size: 0.875rem;
   line-height: 1.5;
   font-weight: 400;
@@ -662,7 +662,7 @@ main:focus {
 .incident:hover {
   transform: translateY(-2px);
   border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
-  box-shadow: 0 6px 20px var(--shadow);
+  box-shadow: 0 5px 16px var(--shadow);
 }
 
 .incident__title {
@@ -1081,6 +1081,12 @@ main:focus {
    Полосой сверху обоим достаётся вся ширина разбора. */
 .player--scroll .player__body {
   display: block;
+}
+
+/* Обёртка половин разбора: в диаграммном режиме её нет в раскладке, и схема
+   прилипает к телу разбора, а не к коробке своей собственной высоты. */
+.player__unwrapped {
+  display: contents;
 }
 
 .player--scroll .player__stage {
@@ -2367,18 +2373,29 @@ main:focus {
   height: 24vh;
 }
 
-/* Номер уровня кружком — тем же, что стоит на пироге: так видно, какая плашка
-   принадлежит этому тексту, без поиска по названию. */
+/* Шапка шага: номер, название и то, что уровень решает. Номер стоит в одной
+   строке с названием, а не отдельной строчкой над ним: он часть заголовка, а
+   не отдельное сообщение. Кружок тот же, что на пироге, — видно, какая
+   карточка принадлежит этому тексту, без поиска по названию. */
+.levels__head {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 0.6rem;
+  align-items: start;
+  margin: 0 0 0.5rem;
+}
+
 .levels__index {
   display: grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
-  margin: 0 0 0.5rem;
+  width: 22px;
+  height: 22px;
+  /* Кружок выравнивается по первой строке названия, а не по верху блока. */
+  margin-top: 0.15rem;
   border: 1px solid var(--border);
   border-radius: 50%;
   background: var(--panel);
-  font-size: 0.68rem;
+  font-size: 0.7rem;
   font-weight: 600;
   color: var(--muted);
   transition:
@@ -2393,13 +2410,16 @@ main:focus {
   color: var(--panel);
 }
 
-.levels__name {
-  margin: 0.2rem 0 0.4rem;
+/* Селектор с шапкой, а не один класс: у заголовков внутри прозы свой отступ
+   сверху в 2.25rem, и он сильнее. Из-за него номер уезжал строкой выше. */
+.levels__head .levels__name {
+  margin: 0;
   font-size: 1.15rem;
+  line-height: 1.25;
 }
 
 .levels__decides {
-  margin: 0 0 0.5rem;
+  margin: 0.15rem 0 0;
   color: var(--accent);
   font-size: 0.92rem;
 }
@@ -2439,8 +2459,9 @@ main:focus {
 .lvl {
   cursor: default;
   outline: none;
-  /* Тень одна на слой и мягкая: она отделяет плашку от фона страницы, а не
-     изображает высоту. */
+  /* Тень мягкая и одна: она отделяет карточку от фона страницы, а не
+     изображает высоту. Объёма у уровней нет — они не лежат друг на друге,
+     они друг в друге. */
   filter: drop-shadow(0 1px 2px var(--shadow));
   transition:
     transform 0.16s ease,
@@ -2449,21 +2470,6 @@ main:focus {
 
 .lvl__face {
   fill: var(--panel);
-  stroke: var(--border);
-  stroke-width: 1;
-}
-
-/* Верхняя и правая грани — тот же белый, притемнённый: объём даёт геометрия,
-   а не цвет. Цвет на этой картинке значит уровень, и тратить его на свет
-   значило бы сказать цветом две разные вещи. */
-.lvl__top {
-  fill: color-mix(in srgb, var(--fg) 4%, var(--panel));
-  stroke: var(--border);
-  stroke-width: 1;
-}
-
-.lvl__side {
-  fill: color-mix(in srgb, var(--fg) 9%, var(--panel));
   stroke: var(--border);
   stroke-width: 1;
 }
@@ -2530,8 +2536,7 @@ main:focus {
 .lvl:focus-visible,
 .lvl.is-linked,
 .lvl.is-lit {
-  transform: translate(-2px, -2px);
-  filter: drop-shadow(0 3px 6px var(--shadow));
+  filter: drop-shadow(0 2px 5px var(--shadow));
 }
 
 .lvl:hover .lvl__face,

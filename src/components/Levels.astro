@@ -30,17 +30,15 @@ const { levels } = Astro.props;
 
 const SLAB = 56;
 const GAP = 12;
-/** Скос верхней грани: он и делает из плашки слой. */
-const SKEW = 10;
 /** Жёлоб слева под номерами уровней и рельсой между ними. */
 const GUTTER = 30;
 
 const WIDTH = 360;
-const TOP = SKEW + 6;
-const height = levels.length * (SLAB + GAP) - GAP + TOP + 6;
+const TOP = 6;
+const height = levels.length * (SLAB + GAP) - GAP + TOP * 2;
 
 const plateX = GUTTER;
-const plateW = WIDTH - GUTTER - SKEW - 4;
+const plateW = WIDTH - GUTTER - 4;
 
 /** Центр слоя по вертикали: по нему стоят номер и подписи. */
 const midY = (i: number) => TOP + i * (SLAB + GAP) + SLAB / 2;
@@ -78,17 +76,7 @@ const railTo = midY(levels.length - 1);
           const mid = midY(i);
           return (
             <g class="lvl" style={`--i: ${i}`} data-level={level.key}>
-              {/* Верхняя грань рисуется первой: лицевая ложится поверх её
-                  нижнего края, иначе он перечёркивает плашку. */}
-              <path
-                class="lvl__top"
-                d={`M ${plateX + SKEW} ${y - SKEW} H ${plateX + plateW + SKEW} L ${plateX + plateW} ${y} H ${plateX} Z`}
-              />
-              <path
-                class="lvl__side"
-                d={`M ${plateX + plateW} ${y} L ${plateX + plateW + SKEW} ${y - SKEW} V ${y + SLAB - SKEW} L ${plateX + plateW} ${y + SLAB} Z`}
-              />
-              <rect class="lvl__face" x={plateX} y={y} width={plateW} height={SLAB} rx="6" />
+              <rect class="lvl__face" x={plateX} y={y} width={plateW} height={SLAB} rx="8" />
               {/* Полоска слева: чем ниже уровень, тем она насыщеннее. */}
               <rect class="lvl__bar" x={plateX} y={y + 1} width="3" height={SLAB - 2} rx="1.5" />
 
@@ -108,9 +96,13 @@ const railTo = midY(levels.length - 1);
     {
       levels.map((level, i) => (
         <li class="levels__step" data-level-step={level.key}>
-          <p class="levels__index">{i + 1}</p>
-          <h3 class="levels__name">{level.name}</h3>
-          <p class="levels__decides">{level.decides}</p>
+          <div class="levels__head">
+            <span class="levels__index" aria-hidden="true">{i + 1}</span>
+            <div>
+              <h3 class="levels__name">{level.name}</h3>
+              <p class="levels__decides">{level.decides}</p>
+            </div>
+          </div>
           <p class="levels__text">{level.text}</p>
         </li>
       ))
@@ -173,7 +165,7 @@ const railTo = midY(levels.length - 1);
       // Текст шага проявляется, а не просто меняет прозрачность: движение
       // снизу вверх повторяет направление прокрутки, и шаг читается как
       // пришедший, а не как подменённый.
-      const body = steps[to].querySelectorAll<HTMLElement>('.levels__name, .levels__decides, .levels__text');
+      const body = steps[to].querySelectorAll<HTMLElement>('.levels__head, .levels__text');
       body.forEach((node, i) => {
         animate(
           node,

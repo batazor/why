@@ -178,7 +178,13 @@ const shikiOptions = {
   aria-label={t('lesson.walkthrough')}
 >
   <div class="player__body">
-    <div class:list={[sideBySide && 'player__panel']}>
+    {/*
+      Обёртка нужна только разбору с редактором: прилипает она, а половину
+      внутри выбирает шаг. В диаграммном режиме она обязана исчезнуть из
+      раскладки (`display: contents`) — иначе схема прилипает к ней, а она
+      ровно её высоты, и полоса уезжает вверх вместе с текстом.
+    */}
+    <div class:list={[sideBySide ? 'player__panel' : 'player__unwrapped']}>
       {
         stage && (
           <figure class="player__stage" style={`--flow-height: ${stage.height}px`}>
