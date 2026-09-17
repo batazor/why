@@ -33,6 +33,9 @@ views {
       shop.billing,
       shop.delivery
 
+
+    /* Исключения идут последними: в LikeC4 предикаты применяются по
+       порядку, и include после exclude втягивает связи обратно. */
     exclude customer -> shop.billing
 
     autoLayout LeftRight
@@ -56,6 +59,9 @@ views {
       shop.delivery,
       auth
 
+
+    /* Исключения идут последними: в LikeC4 предикаты применяются по
+       порядку, и include после exclude втягивает связи обратно. */
     exclude customer -> shop.billing
 
     autoLayout LeftRight
@@ -77,7 +83,220 @@ views {
       shop.billing,
       shop.delivery
 
-    exclude customer -> shop
+    autoLayout LeftRight
+  }
+
+  /**
+   * Экран `domains`: контекст вскрыт на один уровень.
+   *
+   * Тот же магазин, но у биллинга видно домены. Хранилищ здесь ещё нет: про
+   * них следующий шаг.
+   */
+  view domains {
+    title 'Domains inside billing'
+
+    include
+      customer,
+      shop,
+      shop.billing,
+      shop.billing.invoice,
+      shop.billing.payment,
+      shop.billing.settlement
+
+    /* Заголовок рамки — единственное место, где подпись про границу видна. */
+    include shop.billing with {
+      title 'Billing · bounded context'
+    }
+
+
+    /* Исключения идут последними: в LikeC4 предикаты применяются по
+       порядку, и include после exclude втягивает связи обратно. */
+    exclude customer -> shop.billing
+
+    autoLayout LeftRight
+  }
+
+
+  /**
+   * Экран `storage`: у контекста своё хранилище.
+   *
+   * Таблицы поделены по доменам, и это видно стрелками: в чужие таблицы не
+   * ходит ни сосед, ни домен.
+   */
+  view storage {
+    title 'A database per domain'
+
+    include
+      customer,
+      shop,
+      shop.billing,
+      shop.billing.invoice,
+      shop.billing.payment,
+      shop.billing.settlement,
+      shop.billing.invoice_db,
+      shop.billing.payment_db,
+      shop.billing.settlement_db
+
+    /* Заголовок рамки — единственное место, где подпись про границу видна. */
+    include shop.billing with {
+      title 'Billing · bounded context'
+    }
+
+
+    /* Исключения идут последними: в LikeC4 предикаты применяются по
+       порядку, и include после exclude втягивает связи обратно. */
+    exclude customer -> shop.billing
+
+    autoLayout TopBottom
+  }
+
+
+  /**
+   * Экран `bus`: асинхронная половина разговора.
+   *
+   * Биллинг не зовёт доставку, он публикует факт. Стрелка от шины к доставке
+   * показывает, что подписка — дело слушателя.
+   */
+  view bus_view {
+    title 'Facts go to the bus'
+
+    include
+      customer,
+      shop,
+      shop.catalogue,
+      shop.billing,
+      shop.delivery,
+      bus
+
+    /**
+     * Соседи приглушены: относительно биллинга они внешние. Сделано в view, а
+     * не в модели: на C1 они такие же core-области магазина, как и он сам.
+     */
+    include shop.catalogue with {
+      color muted
+    }
+    include shop.delivery with {
+      color muted
+    }
+
+
+    /* Исключения идут последними: в LikeC4 предикаты применяются по
+       порядку, и include после exclude втягивает связи обратно. */
+    exclude customer -> shop.billing
+
+    autoLayout LeftRight
+  }
+
+
+  /**
+   * Экран `provider`: кто на самом деле двигает деньги.
+   *
+   * Провайдер снаружи и вызывается синхронно: биллинг просит и ждёт ответа,
+   * а отказ провайдера — тоже ответ.
+   */
+  view provider_view {
+    title 'The provider moves the money'
+
+    include
+      customer,
+      shop,
+      shop.catalogue,
+      shop.billing,
+      shop.delivery,
+      bus,
+      provider
+
+    include shop.catalogue with {
+      color muted
+    }
+    include shop.delivery with {
+      color muted
+    }
+
+
+    /* Связь с провайдером идёт от контекста целиком: доменов в этом кадре
+       нет, и без неё провайдер повис бы сбоку ни с чем. */
+
+    /* Исключения идут последними: в LikeC4 предикаты применяются по
+       порядку, и include после exclude втягивает связи обратно. */
+    exclude customer -> shop.billing
+
+    autoLayout LeftRight
+  }
+
+  /**
+   * Экран `overview`: итоговая картина.
+   *
+   * Всё, что урок собрал: биллинг с доменами и их базами, соседи по магазину,
+   * шина и внешние сервисы. Кадр большой и идёт во всю ширину разбора —
+   * текста рядом ему уже не нужно.
+   */
+  view overview {
+    title 'Billing in the estate'
+
+    include
+      customer,
+      shop,
+      shop.catalogue,
+      shop.billing,
+      shop.billing.invoice,
+      shop.billing.payment,
+      shop.billing.settlement,
+      shop.billing.invoice_db,
+      shop.billing.payment_db,
+      shop.billing.settlement_db,
+      shop.delivery,
+      bus,
+      provider,
+      auth
+
+    /**
+     * Шина-хаб рисует четыре стрелки, и они пересекают весь кадр: каталог и
+     * доставка стоят левее шины, а разговор идёт через неё. На итоговой схеме
+     * остаётся по одной связи на смысл — что биллинг публикует факты, — а как
+     * именно через шину идёт цепочка, сказано на своём шаге.
+     */
+
+    include shop.billing with {
+      title 'Billing · bounded context'
+    }
+    include shop.catalogue with {
+      color muted
+    }
+    include shop.delivery with {
+      color muted
+    }
+
+    /* Исключения идут последними: в LikeC4 предикаты применяются по
+       порядку, и include после exclude втягивает связи обратно. */
+    exclude customer -> shop.billing
+    exclude shop.catalogue -> bus
+    exclude bus -> shop.billing
+    exclude bus -> shop.delivery
+    exclude shop.billing.payment -> provider
+
+    autoLayout TopBottom
+  }
+
+  /**
+   * Экран `service`: один сервис и ничего кроме.
+   *
+   * Магазин с соседями уже показан, и дальше он в кадре не нужен. Сверки тоже
+   * нет: история, которую разбирает урок, — выставить счёт и принять платёж,
+   * и сверка в ней не участвует.
+   */
+  view service {
+    title 'Billing alone'
+
+    include
+      shop.billing,
+      shop.billing.invoice,
+      shop.billing.invoice_db,
+      bus
+
+    include shop.billing with {
+      title 'Billing · bounded context'
+    }
 
     autoLayout LeftRight
   }

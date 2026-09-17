@@ -15,14 +15,34 @@ import type { LikeC4Spec } from './likec4';
  */
 
 export const likec4: LikeC4Spec = {
-  height: 420,
+  /**
+   * Полотно выше, чем у схемы-полосы: C2 биллинга — это рамка с доменами и
+   * их базами, и в 420px карточки в ней мельчают до нечитаемых подписей.
+   */
+  height: 620,
   views: {
     boundary: 'boundary',
     estate: 'estate',
     kinds: 'kinds',
     language: 'language',
+    domains: 'domains',
+    storage: 'storage',
+    bus: 'bus_view',
+    provider: 'provider_view',
+    overview: 'overview',
+    service: 'service',
   },
-  tags: ['kinds'],
+  /**
+   * Лейблы на карточках. Появляются на шаге про виды контекста и дальше уже
+   * не исчезают: спускаясь внутрь биллинга, читатель должен видеть, что за
+   * блоки перед ним — core, supporting, generic или домен.
+   */
+  tags: ['kinds', 'language', 'domains', 'storage', 'bus', 'provider', 'overview', 'service'],
+  /**
+   * Итоговая картина идёт во всю ширину окна: кадр большой, и текста рядом ему
+   * не нужно. Остальные кадры стоят рядом со своим текстом.
+   */
+  wide: ['overview'],
 };
 
 /**
@@ -53,6 +73,12 @@ const deck: CodeDeck = [
   { id: 'kinds' },
   { id: 'language' },
   { id: 'glossary' },
+  { id: 'domains' },
+  { id: 'storage' },
+  { id: 'bus' },
+  { id: 'provider' },
+  { id: 'overview' },
+  { id: 'service' },
 ];
 
 export default deck;

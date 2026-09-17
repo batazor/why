@@ -11,6 +11,15 @@ order: 4
 deck: ddd-in-action
 draft: true
 terms:
+  C1: >-
+    The system as a whole, one block, and everything that talks to it: people
+    and neighbouring systems. What is inside it is not shown at this level.
+  C2: >-
+    Which parts the system is made of: services, databases, queues — and the
+    connections between them.
+  C3: >-
+    What is inside one part: its components. This is where aggregates, use
+    cases, ports and adapters appear.
   DDD: >-
     Domain-Driven Design. A way to describe a service in the words of its
     domain, and to agree on what each of its levels decides.
@@ -38,8 +47,10 @@ terms:
     system. No decision about the domain is made here.
 steps:
   - id: boundary
-    title: What a bounded context is
+    title: 'C1: what a bounded context is'
     narration: |-
+      The diagram on the right is [[C1]]: the system as a whole, one block.
+
       The three departments from the example are three contexts, and each has
       its own truth about the word "payment". Arguing which one is correct goes
       nowhere: all three are, in different places.
@@ -102,6 +113,89 @@ steps:
       lives its own life and six months later disagrees with what the service
       does. The rule is simple: a word that is not here is not in the code
       either. Name it first, write it after.
+  - id: domains
+    title: 'C2: domains inside the context'
+    narration: |-
+      Down to [[C2]].
+
+      A context is not one box. Inside it there are domains, each with its own
+      state and its own rules. Billing has three, and all three are named with
+      words from its glossary.
+
+      - **Invoice** — what the customer owes: the lines, the total, the state.
+      - **Payment** — the attempt to collect the money: authorization, capture,
+        decline.
+      - **Settlement** — whether the money reached our account and whether it
+        matches the statement.
+
+      Domains have kinds too: inside a core context not everything is core.
+      Invoice and payment are what billing exists for; settlement is needed but
+      wins nothing.
+
+      The catalogue and delivery have gone grey: from here on the walkthrough
+      is about billing, and relative to billing the neighbours are external
+      services. What is inside them, and where they keep it, is none of
+      billing's business.
+  - id: storage
+    title: A database per domain
+    narration: |-
+      A domain's state lives in a database of its own. Three domains, three
+      databases, and no shared one.
+
+      Which buys the thing that matters: "do not read somebody else's tables"
+      stops being an agreement people forget while on call. There are no other
+      tables next door — invoice physically cannot read payment's.
+
+      The price is just as clear: two domains can no longer be changed in one
+      transaction. So consistency between them is asynchronous, which is the
+      next step.
+  - id: bus
+    title: A bus for asynchronous interaction
+    narration: |-
+      Billing is back as one card here, without its domains: on the bus it is
+      services that talk.
+
+      The catalogue does not call billing — it publishes the fact that an order
+      was placed. Billing reads that fact and issues an invoice. A paid invoice
+      it publishes as a fact in turn, and delivery reads it and starts packing.
+
+      Who is subscribed is not the publisher's business. Which buys the thing
+      that matters: a second listener appears, and billing does not change.
+  - id: provider
+    title: Who moves the money
+    narration: |-
+      Billing does not move the money. It asks the provider and waits for the
+      answer — a synchronous call, and a decline is an answer too.
+
+      The provider is outside the boundary: it is not ours, its glossary is not
+      ours, and the conversation goes through a translation. Billing keeps its
+      own state regardless — what was asked and what came back is written down
+      here, not only at the provider.
+
+      That finishes the context diagram: what the context owns, where its state
+      is, who it calls and who it tells. Next, billing's own C2: the parts it
+      is built of inside.
+  - id: overview
+    title: 'C2: the whole picture'
+    narration: |-
+      [[C2]] in full: billing with its three domains and their databases, the
+      neighbours in the shop, the bus, and the external services —
+      authentication and the payments provider.
+  - id: service
+    title: 'C2: one domain and nothing else'
+    narration: |-
+      From here only billing is left, and inside billing only the invoice.
+
+      The shop with its neighbours has been shown and is no longer needed in the
+      frame. Payment and settlement were there to show that a context is not one
+      domain: several services live inside its boundary, each owning its own
+      front of work — issue the invoice, take the money, reconcile with the
+      statement. From here the story runs through the invoice, and the rest
+      would only distract.
+
+      What remains is one domain, its database, and the bus it tells that an
+      invoice was paid. From this frame on, it is code.
+
 ---
 
 import Levels from '../../../components/Levels.astro';

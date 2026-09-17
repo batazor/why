@@ -12,17 +12,75 @@ model {
   customer = actor 'Customer'
 
   shop = context 'Online shop' {
+
+    /**
+     * Ограниченные контексты магазина: границы проходят здесь, вокруг каждой
+     * области, а не вокруг магазина целиком — магазин это система.
+     *
+     * Подпись «bounded context» ставится в заголовке и только в тех view, где
+     * контекст раскрыт рамкой: на рамке LikeC4 показывает один заголовок, а
+     * описание не рисует вовсе; на карточке эта подпись не нужна.
+     */
     catalogue = service 'Catalogue' {
       #core
     }
 
+    /**
+     * Домены биллинга — слова из его же словаря. Других здесь не появится:
+     * контекст разговаривает только теми, что в словаре записаны.
+     */
     billing = service 'Billing' {
       #core
+
+      /**
+       * Виды есть и у доменов: внутри core-контекста не всё core. Счёт и
+       * платёж — то, ради чего биллинг существует; сверка нужна, но
+       * преимущества не даёт.
+       */
+      invoice = domain 'Invoice' {
+        #domain
+        #core
+      }
+
+      payment = domain 'Payment' {
+        #domain
+        #core
+      }
+
+      settlement = domain 'Settlement' {
+        #domain
+        #supporting
+      }
+
+      /**
+       * База у каждого домена своя и стоит здесь же, внутри границы биллинга.
+       * Вложить её в сам домен нельзя: LikeC4 запрещает связь от элемента к
+       * своему потомку, а связь нужна — она и говорит, чья это база.
+       */
+      invoice_db = store 'invoice-pg' {
+        technology 'postgres'
+      }
+
+      payment_db = store 'payment-pg' {
+        technology 'postgres'
+      }
+
+      settlement_db = store 'settlement-pg' {
+        technology 'postgres'
+      }
     }
 
     delivery = service 'Delivery' {
       #supporting
     }
+  }
+
+  /** Шина: место, где факт живёт между тем, кто его сказал, и кто услышал. */
+  bus = broker 'bus'
+
+  /** Деньги двигает провайдер, биллинг только просит и ждёт ответа. */
+  provider = external 'Payments provider' {
+    technology 'HTTP'
   }
 
   /**
@@ -43,4 +101,29 @@ model {
 
   // Платёж: он и есть то слово, из-за которого весь разбор.
   customer -[calls]-> shop.billing 'payment'
+
+  /**
+   * База у каждого домена своя и стоит внутри его границы. Общей базы у
+   * сервиса нет: «не лезь в чужие таблицы» перестаёт быть договорённостью,
+   * потому что чужих таблиц просто нет рядом.
+   */
+  shop.billing.invoice -[persists]-> shop.billing.invoice_db 'invoices, lines'
+  shop.billing.payment -[persists]-> shop.billing.payment_db 'payments, attempts'
+  shop.billing.settlement -[persists]-> shop.billing.settlement_db 'statements'
+
+  // Факты уходят на шину; кто подписан, автор факта не знает.
+  shop.catalogue -[publishes]-> bus 'order placed'
+  bus -[consumes]-> shop.billing 'order placed'
+  shop.billing -[publishes]-> bus 'invoice paid'
+
+  bus -[consumes]-> shop.delivery 'invoice paid'
+
+  shop.billing.payment -[calls]-> provider 'authorize, capture'
+
+  /**
+   * Та же связь, но от контекста целиком. Нужна итоговому кадру: стрелка из
+   * домена внутрь рамки держит провайдера в одном ряду с рамкой, а от самого
+   * биллинга он уходит в ряд под ней — туда, где ему и место.
+   */
+  shop.billing -[calls]-> provider 'authorize, capture'
 }

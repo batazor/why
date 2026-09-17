@@ -71,8 +71,43 @@ const stage = flow ?? likec4;
  */
 type Panel = 'diagram' | 'editor' | 'none';
 
+/**
+ * Разбор по модели LikeC4 держит кадры внутри шагов, а не в прилипшей панели.
+ *
+ * Панель была одна на весь разбор и меняла содержимое на смене шага: при
+ * быстрой прокрутке подмены шли пачкой, а на стыке с шагом, которому панель не
+ * нужна, она возвращалась прижатой к верху окна — отдельно от текста, которому
+ * принадлежит. Кадр внутри шага приезжает и уходит вместе со своим текстом:
+ * подменять нечего, и перебивать друг друга кадрам нечем.
+ *
+ * Схема, нарисованная руками (`flow`), остаётся на прилипшей сцене: она одна
+ * на весь разбор и по шагам не меняется, а переезжают по ней пометки.
+ */
+const inStep = Boolean(likec4);
+
+/** Шаги с кадром внутри. `wide` — во всю ширину окна, остальные — рядом с текстом. */
+const wideSteps = new Set(likec4?.wide ?? []);
+const inlineSteps = new Set(Object.keys(likec4?.views ?? {}));
+
+/**
+ * Шаг, внутри которого стоит редактор.
+ *
+ * Редактор в разметке один: дерево заполняется по шагам, и второй экземпляр
+ * показывал бы своё состояние. Поэтому он встаёт в первый шаг, который просит
+ * именно его, — у шага со своим кадром в колонке уже занято.
+ */
+const editorStep = inStep
+  ? steps.find((step) => tree?.steps[step.id] && !inlineSteps.has(step.id))?.id
+  : undefined;
+
 const panelOf = (id: string): Panel | undefined =>
-  likec4?.views[id] || flow ? 'diagram' : tree?.steps[id] ? 'editor' : undefined;
+  inStep
+    ? 'none'
+    : flow
+      ? 'diagram'
+      : tree?.steps[id]
+        ? 'editor'
+        : undefined;
 
 const panels = Object.fromEntries(
   steps.map((step) => [step.id, panelOf(step.id)]).filter(([, kind]) => kind),
@@ -92,8 +127,11 @@ if (!panels[steps[0].id]) panels[steps[0].id] = 'none';
 // половину, что и с ним, а не обе сразу.
 const firstPanel = panels[steps[0].id];
 
-/** Правая колонка нужна там, где есть редактор: коду нужна ширина. */
-const sideBySide = Boolean(tree);
+/**
+ * Правая колонка нужна там, где есть редактор — коду нужна ширина — и там, где
+ * кадры стоят внутри шагов: колонка под кадр берётся из этой же раскладки.
+ */
+const sideBySide = Boolean(tree || inStep);
 
 /**
  * Код в колоде общий для всех локалей, поэтому комментарии в нём — ключи.
@@ -187,31 +225,22 @@ const shikiOptions = {
     */}
     <div class:list={[sideBySide ? 'player__panel' : 'player__unwrapped']}>
       {
-        stage && (
-          <figure class="player__stage" style={`--flow-height: ${stage.height}px`}>
-            {flow ? (
-              <FlowDiagram
-                client:visible
-                spec={flow}
-                firstStep={merged[0].id}
-                notes={notes}
-                drags={drags}
-                labels={labels}
-              />
-            ) : (
-              <LikeC4Stage
+        flow && (
+          <figure class="player__stage" style={`--flow-height: ${flow.height}px`}>
+            <FlowDiagram
               client:visible
-              views={likec4!.views}
-              tagSteps={likec4!.tags}
+              spec={flow}
               firstStep={merged[0].id}
+              notes={notes}
+              drags={drags}
+              labels={labels}
             />
-            )}
           </figure>
         )
       }
 
       {
-        tree && (
+        tree && !inStep && (
           <aside class="player__editor">
             <FileEditor lang={lang} tree={tree} docs={docs} order={merged.map((step) => step.id)} />
           </aside>
@@ -280,6 +309,38 @@ const shikiOptions = {
             </div>
           );
 
+  /**
+   * Схема, которая стоит внутри шага, а не в прилипшей панели.
+   *
+   * Прямым ребёнком шага, а не внутри его текстового блока: у текста
+   * ограничена длина строки, и фигура внутри него это ограничение наследует.
+   *
+   * Коробка у кадра известного размера: ширину даёт раскладка, высоту —
+   * колода. Класс решает только ширину — во всю ширину окна под текстом или
+   * колонка рядом с текстом.
+   */
+  const inlineStage = (i: number) =>
+    inlineSteps.has(merged[i].id) && (
+      <figure
+        class={wideSteps.has(merged[i].id) ? 'step__wide' : 'step__aside'}
+        style={`--flow-height: ${likec4!.height}px`}
+      >
+        <LikeC4Stage
+          client:visible
+          view={likec4!.views[merged[i].id]}
+          tags={(likec4!.tags ?? []).includes(merged[i].id)}
+        />
+      </figure>
+    );
+
+  /** Редактор — в той же колонке, что кадры: на своём шаге он вместо кадра. */
+  const inlineEditor = (i: number) =>
+    merged[i].id === editorStep && (
+      <aside class="player__editor step__aside">
+        <FileEditor lang={lang} tree={tree!} docs={docs} order={merged.map((step) => step.id)} />
+      </aside>
+    );
+
           const panel = (i: number) =>
             !tree &&
             merged[i].panel?.code && (
@@ -299,13 +360,23 @@ const shikiOptions = {
             const i = group[0];
             return (
               <li
-                class:list={['step', !merged[i].panel?.code && 'step--text', i === 0 && 'is-active']}
+                class:list={[
+                  'step',
+                  !merged[i].panel?.code && 'step--text',
+                  wideSteps.has(merged[i].id) && 'step--wide',
+                  (inlineSteps.has(merged[i].id) || merged[i].id === editorStep) &&
+                    !wideSteps.has(merged[i].id) &&
+                    'step--aside',
+                  i === 0 && 'is-active',
+                ]}
                 data-step={i}
                 data-step-id={merged[i].id}
                 aria-current={i === 0 ? 'step' : undefined}
               >
                 {body(i)}
                 {panel(i)}
+                {inlineStage(i)}
+                {inlineEditor(i)}
               </li>
             );
           }
