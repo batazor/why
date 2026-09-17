@@ -27,9 +27,6 @@ terms:
   application: >-
     The level that holds one whole scenario: read, check, change, announce. The
     order of the steps and nothing beyond it.
-  DTO: >-
-    A structure of plain fields in which data crosses a boundary: a request
-    body, a table row, a message on the bus. It has no behaviour.
   transport: >-
     The edge of the service: how a request arrives and which code answers it.
     No decision about the domain is made here.
@@ -97,13 +94,7 @@ import Levels from '../../../components/Levels.astro';
       key: 'transport',
       name: 'Transport',
       decides: 'which code to answer with',
-      text: 'The edge where somebody called us. A request arrives over HTTP or off a queue and leaves as a response; no decision about the domain is made here. Transport translates: protobuf, JSON or Avro into the words of the domain and back. What came off the wire goes no further — what reaches application is a command in the words of the domain.',
-    },
-    {
-      key: 'dto',
-      name: 'DTO',
-      decides: 'which fields it travels in',
-      text: 'The shape in which the domain leaves its boundary, and in which the outside arrives: a request body, a table row, a message on the bus, a protobuf request to the service next door. Plain fields and not one rule. The knowledge runs one way: a DTO knows how to lay an aggregate out in fields, and the domain knows nothing about the DTO.',
+      text: 'The edge where somebody called us. A request arrives over HTTP or off a queue and leaves as a response; no decision about the domain is made here. Transport translates: protobuf, JSON or Avro into the words of the domain and back — through a DTO, a structure of plain fields, one per protocol. The DTO goes no further than this level: what reaches application is a command in the words of the domain rather than whatever came off the wire.',
     },
     {
       key: 'application',
@@ -116,6 +107,12 @@ import Levels from '../../../components/Levels.astro';
       name: 'Aggregate',
       decides: 'which states are possible',
       text: 'A piece of state that changes as a whole and by its own rules. Nothing outside can reach past it, which is also why it cannot be left in a state the domain does not allow.',
+    },
+    {
+      key: 'repository',
+      name: 'Repository',
+      decides: 'how the aggregate reaches storage and comes back',
+      text: 'The port is declared by the domain: take an aggregate by id, save it together with the facts it produced. The implementation is written by infrastructure — rows, indexes, one transaction; a table row here is the same kind of DTO, only for the database. Knowledge runs from the outside in: the database knows about the aggregate, the aggregate knows nothing about the database.',
     },
     {
       key: 'context',
