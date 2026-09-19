@@ -546,6 +546,18 @@ a.tag--link:hover {
   background: color-mix(in srgb, var(--bad-soft) 55%, var(--panel));
 }
 
+/* Акварельной обложке — тёплая бумага, а не розовый фон «проблемы»: краска
+   на ней прозрачная и берёт цвет подложки. */
+.card__poster--cover {
+  background: color-mix(in srgb, #efe6d6 55%, var(--panel));
+}
+
+.card__poster--cover img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
 /* ---------- problem callout ---------- */
 
 .callout {

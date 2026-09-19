@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import BackToTop from '../components/BackToTop.astro';
 import {
   locales,
   localeNames,
@@ -169,6 +170,8 @@ const canonical = new URL(localePath(lang, path), Astro.site);
         }
       });
     </script>
+
+    <BackToTop lang={lang} />
 
     <footer class="site-footer">
       <div class="wrap">{t('site.tagline')}</div>

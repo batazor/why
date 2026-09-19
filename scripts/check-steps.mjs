@@ -327,7 +327,11 @@ for (const [slug, perLocale] of bySlug) {
   }
 
   // Постер: схема из одного состояния, шаг у неё ровно один.
-  if (deckModule.poster) {
+  if (deckModule.cover) {
+    if (!existsSync(path.join(root, 'public', deckModule.cover))) {
+      errors.push(`колода "${deckName}": обложки public/${deckModule.cover} нет`);
+    }
+  } else if (deckModule.poster) {
     const fixed = deckModule.poster.fixedStep;
     if (!fixed) {
       errors.push(`постер колоды "${deckName}": нет fixedStep — постер рисуется вне плеера`);

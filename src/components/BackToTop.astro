@@ -1,0 +1,218 @@
+---
+import { useTranslations, type Locale } from '../i18n/ui';
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+const label = t('nav.top');
+---
+
+{/*
+  «Наверх» для длинных страниц. На коротких кнопки нет вовсе: вернуться к
+  началу там можно одним движением колеса, и лишний элемент в углу только
+  мешает.
+
+  Кольцо вокруг стрелки — сколько страницы прочитано: заодно видно, далеко ли
+  до конца. Буквы подписи разложены по span'ам, чтобы появляться по одной.
+*/}
+<button class="to-top" type="button" aria-label={label} hidden data-to-top>
+  <span class="to-top__ring" aria-hidden="true">
+    <svg viewBox="0 0 36 36" width="30" height="30">
+      <circle class="to-top__track" cx="18" cy="18" r="15" />
+      <circle class="to-top__progress" cx="18" cy="18" r="15" pathLength="1" />
+    </svg>
+    <svg class="to-top__arrow" viewBox="0 0 16 16" width="14" height="14">
+      <path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" />
+    </svg>
+  </span>
+  <span class="to-top__label" aria-hidden="true">
+    {[...label].map((char) => <span class="to-top__char">{char === ' ' ? ' ' : char}</span>)}
+  </span>
+</button>
+
+<script>
+  import { animate, stagger } from 'motion';
+
+  const button = document.querySelector<HTMLButtonElement>('[data-to-top]');
+  if (button) {
+    const progress = button.querySelector<SVGCircleElement>('.to-top__progress')!;
+    const arrow = button.querySelector<SVGElement>('.to-top__arrow')!;
+    const chars = button.querySelectorAll<HTMLElement>('.to-top__char');
+    const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    /** Длинная — больше трёх экранов: на меньшей странице кнопка не нужна. */
+    const long = () => document.documentElement.scrollHeight > innerHeight * 3;
+
+    let shown = false;
+    let leaving: ReturnType<typeof animate> | null = null;
+
+    function show() {
+      shown = true;
+      leaving?.stop();
+      button!.hidden = false;
+      if (calm()) return;
+      animate(
+        button!,
+        { opacity: [0, 1], y: [24, 0], scale: [0.9, 1] },
+        { type: 'spring', stiffness: 380, damping: 26 },
+      );
+      // Подпись собирается по буквам, снизу вверх, вслед за кнопкой.
+      animate(
+        chars,
+        { opacity: [0, 1], y: [10, 0], filter: ['blur(3px)', 'blur(0px)'] },
+        { delay: stagger(0.035, { startDelay: 0.08 }), type: 'spring', stiffness: 420, damping: 28 },
+      );
+    }
+
+    function hide() {
+      shown = false;
+      if (calm()) {
+        button!.hidden = true;
+        return;
+      }
+      leaving = animate(button!, { opacity: 0, y: 16, scale: 0.94 }, { duration: 0.18, ease: 'easeIn' });
+      leaving.finished.then(() => {
+        if (!shown) button!.hidden = true;
+      });
+    }
+
+    function update() {
+      const max = document.documentElement.scrollHeight - innerHeight;
+      const read = max > 0 ? scrollY / max : 0;
+      // pathLength="1": длина окружности — единица, пройденная доля — сама доля.
+      progress.style.strokeDashoffset = String(1 - read);
+
+      const want = long() && scrollY > innerHeight * 1.2;
+      if (want && !shown) show();
+      else if (!want && shown) hide();
+    }
+
+    let frame = 0;
+    const schedule = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(update);
+    };
+    addEventListener('scroll', schedule, { passive: true });
+    addEventListener('resize', schedule);
+    update();
+
+    // Стрелка подпрыгивает, пока на кнопку смотрят: зовёт наверх.
+    let bob: ReturnType<typeof animate> | null = null;
+    button.addEventListener('pointerenter', () => {
+      if (calm()) return;
+      bob = animate(arrow, { y: [0, -3, 0] }, { duration: 0.9, repeat: Infinity, ease: 'easeInOut' });
+    });
+    button.addEventListener('pointerleave', () => {
+      bob?.stop();
+      animate(arrow, { y: 0 }, { duration: 0.2 });
+    });
+
+    button.addEventListener('click', () => {
+      bob?.stop();
+      if (!calm()) {
+        // Стрелка улетает вверх и возвращается снизу — в ту же сторону,
+        // куда поехала страница.
+        animate(arrow, { y: [0, -16], opacity: [1, 0] }, { duration: 0.22, ease: 'easeIn' }).finished.then(() =>
+          animate(arrow, { y: [12, 0], opacity: [0, 1] }, { type: 'spring', stiffness: 400, damping: 24 }),
+        );
+      }
+      scrollTo({ top: 0, behavior: calm() ? 'auto' : 'smooth' });
+      // Фокус — к началу страницы, иначе клавиатура осталась бы внизу.
+      document.querySelector<HTMLElement>('.site-header__brand')?.focus({ preventScroll: true });
+    });
+  }
+</script>
+
+<style>
+  .to-top {
+    position: fixed;
+    right: 1rem;
+    bottom: 1.25rem;
+    z-index: 39;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.3rem 0.85rem 0.3rem 0.3rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--panel) 88%, transparent);
+    backdrop-filter: blur(8px);
+    color: var(--muted);
+    box-shadow: 0 4px 18px var(--shadow);
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+      color 0.15s ease,
+      border-color 0.15s ease;
+  }
+
+  .to-top[hidden] {
+    display: none;
+  }
+
+  .to-top:hover,
+  .to-top:focus-visible {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .to-top__ring {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+  }
+
+  .to-top__ring > svg:first-child {
+    position: absolute;
+    inset: 0;
+    transform: rotate(-90deg);
+  }
+
+  .to-top__track,
+  .to-top__progress {
+    fill: none;
+    stroke-width: 2.5;
+  }
+
+  .to-top__track {
+    stroke: var(--border);
+  }
+
+  .to-top__progress {
+    stroke: var(--accent);
+    stroke-linecap: round;
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+  }
+
+  .to-top__arrow {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .to-top__label {
+    display: inline-flex;
+  }
+
+  .to-top__char {
+    display: inline-block;
+  }
+
+  /* На узком экране правый угол занят столбиком кружков: кнопка — влево. */
+  @media (max-width: 40rem) {
+    .to-top {
+      right: auto;
+      left: 1rem;
+    }
+  }
+</style>

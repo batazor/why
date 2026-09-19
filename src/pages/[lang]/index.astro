@@ -3,7 +3,7 @@ import { getCollection } from 'astro:content';
 import Base from '../../layouts/Base.astro';
 import FlowDiagram from '../../components/FlowDiagram';
 import { getDeck } from '../../code/registry';
-import { locales, useTranslations, localePath, type Locale } from '../../i18n/ui';
+import { locales, useTranslations, localePath, assetPath, type Locale } from '../../i18n/ui';
 
 export function getStaticPaths() {
   return locales.map((lang) => ({ params: { lang } }));
@@ -22,6 +22,7 @@ const lessons = (
       slug,
       data: lesson.data,
       poster: getDeck(lesson.data.deck ?? slug).poster,
+      cover: getDeck(lesson.data.deck ?? slug).cover,
     };
   });
 
@@ -58,7 +59,13 @@ const tags = [...new Set(lessons.flatMap((lesson) => lesson.data.tags))].sort();
     {
       lessons.map((lesson) => (
         <li class="card" data-tags={lesson.data.tags.join(' ')}>
-          {lesson.poster && (
+          {lesson.cover && (
+            /* Обложка-иллюстрация: декоративная по той же причине, что и постер. */
+            <div class="card__poster card__poster--cover" aria-hidden="true">
+              <img src={assetPath(lesson.cover)} alt="" width="640" height="300" loading="lazy" />
+            </div>
+          )}
+          {!lesson.cover && lesson.poster && (
             /* Постер пересказывает тот же текст, что и «Проблема» ниже,
                поэтому для скринридера он декоративный. */
             <div class="card__poster" aria-hidden="true">
