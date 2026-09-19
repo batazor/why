@@ -842,3 +842,6 @@ const deck: CodeDeck = [
 ];
 
 export default deck;
+
+/** Обложка в каталоге: акварель, public/covers/why-aggregate-versioning.svg (scripts/covers/build.py). */
+export const cover = 'covers/why-aggregate-versioning.svg';

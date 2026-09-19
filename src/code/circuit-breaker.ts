@@ -77,3 +77,6 @@ recovery:    never — the retries are the outage now`,
 ];
 
 export default deck;
+
+/** Обложка в каталоге: акварель, public/covers/circuit-breaker.svg (scripts/covers/build.py). */
+export const cover = 'covers/circuit-breaker.svg';

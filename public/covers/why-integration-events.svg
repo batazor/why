@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 300" width="640" height="300">
+  <!--
+    Постер разбора «Why integration events»: наш сервис отправил доменный факт
+    на шину как есть, сосед построил на нём свою башню. Мы переименовали поле
+    у себя — деталь сменила форму, башня соседа треснула, у него звенит алерт.
+    Фильтры акварели те же, что у обложки скрейпинга.
+  -->
+  <defs>
+    <!-- Размытый, «мокрый» край заливки и зерно пигмента. -->
+    <filter id="wash" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="3" seed="7" result="warp" />
+      <feDisplacementMap in="SourceGraphic" in2="warp" scale="9" xChannelSelector="R" yChannelSelector="G" result="bled" />
+      <feGaussianBlur in="bled" stdDeviation="0.8" result="soft" />
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="3" result="grain" />
+      <feColorMatrix in="grain" type="matrix"
+        values="0 0 0 0 0.6  0 0 0 0 0.57  0 0 0 0 0.55  0 0 0 -0.45 0.5" result="grainTint" />
+      <feComposite in="grainTint" in2="soft" operator="in" result="grainIn" />
+      <feBlend in="soft" in2="grainIn" mode="multiply" result="granulated" />
+      <!-- Тёмная кайма по краю: разница между пятном и его сжатой копией. -->
+      <feMorphology in="bled" operator="erode" radius="2.2" result="inner" />
+      <feComposite in="bled" in2="inner" operator="out" result="rim" />
+      <feGaussianBlur in="rim" stdDeviation="0.9" result="rimSoft" />
+      <feColorMatrix in="rimSoft" type="matrix"
+        values="0.8 0 0 0 0  0 0.8 0 0 0  0 0 0.8 0 0  0 0 0 0.55 0" result="rimDark" />
+      <feMerge>
+        <feMergeNode in="granulated" />
+        <feMergeNode in="rimDark" />
+      </feMerge>
+    </filter>
+
+    <!-- Линия кистью: неровная, чуть рваная. -->
+    <filter id="brush" x="-5%" y="-20%" width="110%" height="140%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.06" numOctaves="2" seed="11" result="n" />
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="3.5" xChannelSelector="R" yChannelSelector="G" result="d" />
+      <feGaussianBlur in="d" stdDeviation="0.35" />
+    </filter>
+
+    <!-- Капли фона: самые мягкие пятна, почти без края. -->
+    <filter id="bloom" x="-30%" y="-30%" width="160%" height="160%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="21" result="w" />
+      <feDisplacementMap in="SourceGraphic" in2="w" scale="22" xChannelSelector="R" yChannelSelector="G" result="d" />
+      <feGaussianBlur in="d" stdDeviation="6" />
+    </filter>
+  </defs>
+
+  <!-- Фоновые размывы. -->
+  <g filter="url(#bloom)" opacity="0.5">
+    <ellipse cx="110" cy="160" rx="100" ry="80" fill="#d4e6dc" />
+    <ellipse cx="320" cy="150" rx="150" ry="55" fill="#d3e3ee" />
+    <ellipse cx="530" cy="150" rx="105" ry="90" fill="#e2d8ee" />
+    <ellipse cx="560" cy="60" rx="60" ry="40" fill="#f3d6d6" />
+  </g>
+
+  <!-- Наш сервис: дом с шестерёнкой внутри. -->
+  <g filter="url(#wash)">
+    <rect x="40" y="96" width="120" height="120" rx="10" fill="#bcd4b4" opacity="0.8" />
+    <circle cx="100" cy="150" r="24" fill="#a9c7a1" opacity="0.9" />
+    <circle cx="100" cy="150" r="9" fill="#e7efe3" opacity="0.95" />
+  </g>
+  <g filter="url(#brush)" stroke="#6f8a74" stroke-width="2.2" stroke-linecap="round" fill="none" opacity="0.75">
+    <path d="M100 118 v-6 M100 188 v-6 M68 150 h6 M132 150 h-6 M78 128 l4 4 M122 172 l-4 -4 M122 128 l-4 4 M78 172 l4 -4" />
+    <!-- Карандаш: внутри домена поле переименовали. -->
+    <path d="M58 238 l26 -26 l7 7 l-26 26 h-7 z" stroke="#9a8b7a" />
+    <path d="M80 216 l7 7" stroke="#9a8b7a" />
+  </g>
+
+  <!-- Шина: широкая полоса, по ней едет открытый конверт. -->
+  <g filter="url(#wash)">
+    <rect x="176" y="138" width="270" height="34" rx="17" fill="#b9d3e6" opacity="0.65" />
+    <path d="M262 124 h78 v52 h-78 z" fill="#f7eacb" opacity="0.95" />
+    <path d="M262 124 l39 -34 l39 34 z" fill="#f4dca8" opacity="0.75" />
+  </g>
+  <!-- Из конверта торчит деталь «как есть» — форма внутреннего поля. -->
+  <g filter="url(#wash)">
+    <path d="M276 116 h10 q0 -11 9 -11 q9 0 9 11 h10 v22 h-38 z" fill="#f2c9a9" opacity="0.95" />
+  </g>
+  <g filter="url(#brush)" stroke="#8792a3" stroke-width="2.4" stroke-linecap="round" fill="none" opacity="0.6">
+    <path d="M166 155 C176 154 182 155 190 155" />
+    <path d="M430 155 C444 154 452 155 460 156" />
+    <path d="M454 149 l8 7 l-8 6" />
+  </g>
+
+  <!-- Сосед: его сервис и башня, построенная прямо на нашей детали. -->
+  <g filter="url(#wash)">
+    <rect x="470" y="160" width="130" height="84" rx="10" fill="#cdbfe0" opacity="0.8" />
+    <!-- Деталь в основании — наша, но уже другой формы: выступ съехал вправо,
+         и башня над ним стоит криво. -->
+    <path d="M494 160 v-26 h40 q0 -11 10 -11 q10 0 10 11 h22 v26 z" fill="#e8b7b7" opacity="0.92" />
+    <rect x="500" y="96" width="32" height="26" rx="3" fill="#d9cde8" opacity="0.92" transform="rotate(-8 516 109)" />
+    <rect x="538" y="92" width="32" height="26" rx="3" fill="#cdbfe0" opacity="0.92" transform="rotate(7 554 105)" />
+    <rect x="516" y="62" width="32" height="26" rx="3" fill="#d9cde8" opacity="0.92" transform="rotate(-13 532 75)" />
+  </g>
+  <g filter="url(#brush)" stroke="#b77f7f" stroke-width="2.2" stroke-linecap="round" fill="none" opacity="0.8">
+    <!-- Трещина по башне. -->
+    <path d="M536 132 l-6 -10 l8 -9 l-5 -12 l6 -9" />
+    <!-- Колокольчик алерта и звон вокруг. -->
+    <path d="M578 44 q0 -14 12 -14 q12 0 12 14 v10 l4 6 h-32 l4 -6 z" />
+    <path d="M586 64 q4 5 8 0" />
+    <path d="M564 34 q-6 8 0 16 M616 34 q6 8 0 16 M556 28 q-10 14 0 28 M624 28 q10 14 0 28" />
+  </g>
+  <g filter="url(#wash)">
+    <path d="M578 44 q0 -14 12 -14 q12 0 12 14 v10 l4 6 h-32 l4 -6 z" fill="#f3d0c8" opacity="0.8" />
+  </g>
+  <g filter="url(#brush)" stroke="#8a7ea3" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.7">
+    <path d="M490 208 H580" />
+    <path d="M490 224 H556" />
+  </g>
+
+  <!-- Переименование доходит до соседа пунктиром: мы правим своё, ломается у них. -->
+  <g filter="url(#brush)" stroke="#b77f7f" stroke-width="2.2" stroke-linecap="round" fill="none" opacity="0.6" stroke-dasharray="7 9">
+    <path d="M96 244 C200 290 380 290 510 250" />
+  </g>
+  <g filter="url(#brush)" stroke="#b77f7f" stroke-width="2.2" stroke-linecap="round" fill="none" opacity="0.6">
+    <path d="M498 246 l14 4 l-8 12" />
+  </g>
+
+  <!-- Брызги. -->
+  <g filter="url(#wash)" opacity="0.5">
+    <circle cx="206" cy="92" r="4" fill="#f2c9a9" />
+    <circle cx="218" cy="84" r="2.5" fill="#f4dca8" />
+    <circle cx="420" cy="100" r="3" fill="#cdbfe0" />
+    <circle cx="624" cy="200" r="3" fill="#e8b7b7" />
+    <circle cx="30" cy="70" r="3" fill="#bcd4b4" />
+  </g>
+</svg>

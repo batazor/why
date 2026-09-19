@@ -314,3 +314,6 @@ theorem checkout_never_below_cost (i : Item) (ps : List Promo) :
 ];
 
 export default deck;
+
+/** Обложка в каталоге: акварель, public/covers/discount-floor.svg (scripts/covers/build.py). */
+export const cover = 'covers/discount-floor.svg';

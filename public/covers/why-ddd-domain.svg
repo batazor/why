@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 300" width="640" height="300">
+  <!--
+    Обложка «why-ddd-domain»: Открытые поля рассыпаются; агрегат держит правила под замком.
+    Сгенерировано scripts/covers/build.py.
+  -->
+  <defs>
+    <!-- «Мокрый» край, зерно пигмента и тёмная кайма высохшей капли. -->
+    <filter id="wash" filterUnits="userSpaceOnUse" x="-20" y="-20" width="680" height="340">
+      <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="3" seed="7" result="warp" />
+      <feDisplacementMap in="SourceGraphic" in2="warp" scale="9" xChannelSelector="R" yChannelSelector="G" result="bled" />
+      <feGaussianBlur in="bled" stdDeviation="0.8" result="soft" />
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="3" result="grain" />
+      <feColorMatrix in="grain" type="matrix"
+        values="0 0 0 0 0.6  0 0 0 0 0.57  0 0 0 0 0.55  0 0 0 -0.45 0.5" result="grainTint" />
+      <feComposite in="grainTint" in2="soft" operator="in" result="grainIn" />
+      <feBlend in="soft" in2="grainIn" mode="multiply" result="granulated" />
+      <feMorphology in="bled" operator="erode" radius="2.2" result="inner" />
+      <feComposite in="bled" in2="inner" operator="out" result="rim" />
+      <feGaussianBlur in="rim" stdDeviation="0.9" result="rimSoft" />
+      <feColorMatrix in="rimSoft" type="matrix"
+        values="0.8 0 0 0 0  0 0.8 0 0 0  0 0 0.8 0 0  0 0 0 0.55 0" result="rimDark" />
+      <feMerge>
+        <feMergeNode in="granulated" />
+        <feMergeNode in="rimDark" />
+      </feMerge>
+    </filter>
+
+    <!-- Линия кистью: неровная, чуть рваная. Область фильтра — весь холст:
+         у горизонтальной линии высота рамки нулевая, и фильтр по рамке
+         стирал её целиком. -->
+    <filter id="brush" filterUnits="userSpaceOnUse" x="-20" y="-20" width="680" height="340">
+      <feTurbulence type="fractalNoise" baseFrequency="0.06" numOctaves="2" seed="11" result="n" />
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="3.5" xChannelSelector="R" yChannelSelector="G" result="d" />
+      <feGaussianBlur in="d" stdDeviation="0.35" />
+    </filter>
+
+    <!-- Фоновые размывы: самые мягкие пятна, почти без края. -->
+    <filter id="bloom" filterUnits="userSpaceOnUse" x="-20" y="-20" width="680" height="340">
+      <feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="21" result="w" />
+      <feDisplacementMap in="SourceGraphic" in2="w" scale="22" xChannelSelector="R" yChannelSelector="G" result="d" />
+      <feGaussianBlur in="d" stdDeviation="6" />
+    </filter>
+  </defs>
+  <g filter="url(#bloom)" opacity="0.5">
+    <ellipse cx="170" cy="160" rx="150" ry="100" fill="#f3d6d6" />
+    <ellipse cx="470" cy="150" rx="130" ry="100" fill="#d4e6dc" />
+  </g>
+  <g filter="url(#wash)">
+    <path d="M70 130 h150 v100 h-150 z" fill="#f2c9a9" opacity="0.8" />
+    <path d="M70 130 l-28 -34 h150 l28 34 z" fill="#f4dca8" opacity="0.75" />
+  </g>
+  <g filter="url(#wash)">
+    <rect x="90" y="70" width="40" height="22" rx="4" fill="#f7eacb" opacity="0.95" transform="rotate(-18 110.0 81.0)" />
+    <rect x="150" y="60" width="44" height="22" rx="4" fill="#f7eacb" opacity="0.95" transform="rotate(12 172.0 71.0)" />
+    <rect x="110" y="32" width="40" height="22" rx="4" fill="#e8b7b7" opacity="0.9" transform="rotate(-6 130.0 43.0)" />
+  </g>
+  <g filter="url(#brush)" stroke="#9a8b7a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.65">
+    <path d="M96 80 h26" />
+    <path d="M156 70 h30" />
+    <path d="M116 42 h8 M130 42 h2 M136 42 h2 M142 42 h2" />
+  </g>
+  <g filter="url(#brush)" stroke="#b77f7f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.55">
+    <path d="M40 240 Q64.0 223.0 88 206" />
+    <path d="M79.1 207.1 L88 206 L84.0 214.0" />
+    <path d="M270 250 Q233.0 231.0 196 212" />
+    <path d="M201.1 219.4 L196 212 L205.0 211.9" />
+  </g>
+  <g filter="url(#wash)">
+    <rect x="400" y="90" width="170" height="140" rx="8" fill="#bcd4b4" opacity="0.85" />
+    <rect x="468" y="148" width="34" height="28" rx="4" fill="#a9c7a1" opacity="0.95" />
+  </g>
+  <g filter="url(#brush)" stroke="#6f8a74" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.8">
+    <path d="M474 148 v-10 q11 -16 22 0 v10" />
+  </g>
+  <g filter="url(#brush)" stroke="#6f8a74" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.55">
+    <path d="M420 200 h130" />
+    <path d="M420 214 h100" />
+  </g>
+  <g filter="url(#brush)" stroke="#8792a3" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.6">
+    <path d="M300 160 Q346.0 160.0 392 160" />
+    <path d="M384.1 155.8 L392 160 L384.1 164.2" />
+  </g>
+  <g filter="url(#wash)" opacity="0.5">
+    <circle cx="30" cy="60" r="3" fill="#f2c9a9" opacity="1" />
+    <circle cx="610" cy="70" r="4" fill="#bcd4b4" opacity="1" />
+    <circle cx="600" cy="260" r="3" fill="#cfe4de" opacity="1" />
+  </g>
+</svg>

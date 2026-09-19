@@ -17,6 +17,9 @@ import posterSpec from './why-integration-events.poster.ts';
 /** Постер каталога: суть проблемы одной схемой. */
 export const poster = posterSpec;
 
+/** Обложка в каталоге: акварель — факт как есть на шине и треснувшая башня соседа. */
+export const cover = 'covers/why-integration-events.svg';
+
 export const tree: FileTreeSpec = {
   root: 'billing',
   steps: {

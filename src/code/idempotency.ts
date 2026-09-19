@@ -116,3 +116,6 @@ bank: user u_42 charged 99.00 ONCE`,
 ];
 
 export default deck;
+
+/** Обложка в каталоге: акварель, public/covers/idempotency.svg (scripts/covers/build.py). */
+export const cover = 'covers/idempotency.svg';

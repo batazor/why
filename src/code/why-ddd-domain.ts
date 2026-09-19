@@ -363,3 +363,6 @@ const deck: CodeDeck = [
 ];
 
 export default deck;
+
+/** Обложка в каталоге: акварель, public/covers/why-ddd-domain.svg (scripts/covers/build.py). */
+export const cover = 'covers/why-ddd-domain.svg';
