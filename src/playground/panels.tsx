@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { STATEFUL_KINDS } from './catalog';
+import { bytesPerWrite, schemaSizes } from './sizing';
 import {
   BYTE_OUTPUTS,
   CALC_DEFAULTS,
@@ -211,7 +212,7 @@ const OUTPUTS: CalcOutputKey[] = [
 
 const KEY_OUTPUTS: ReadonlySet<CalcOutputKey> = new Set(['peakRps', 'storageTotal']);
 
-export function CalcPanel({ design, update, t, lang }: PanelProps) {
+function CalcTool({ design, update, t, lang }: PanelProps) {
   const values = { ...CALC_DEFAULTS, ...design.calc.values };
   const result = useMemo(() => calculate(values), [JSON.stringify(values)]);
   const num = (value: number) => formatNumber(lang, value);
@@ -227,7 +228,7 @@ export function CalcPanel({ design, update, t, lang }: PanelProps) {
     update((current) => ({ ...current, calc: { ...current.calc, values: { ...current.calc.values, [key]: value } } }));
 
   return (
-    <div className="pg-panel">
+    <>
       <div className="pg-calc__bar">
         <h3 className="pg-heading">{t('calc.inputs')}</h3>
         <button
@@ -304,6 +305,109 @@ export function CalcPanel({ design, update, t, lang }: PanelProps) {
           + {t('calc.toNfr')}: {t('nfr.durability')}
         </button>
       </div>
+
+      <SchemaSizing design={design} update={update} t={t} lang={lang} />
+    </>
+  );
+}
+
+/**
+ * Объём по таблицам схемы: то же «сколько места», но из полей, а не из
+ * одного ползунка «размер записи». Кнопка переносит посчитанный размер в
+ * калькулятор, и две оценки сходятся.
+ */
+function SchemaSizing({ design, update, t, lang }: PanelProps) {
+  const sizes = schemaSizes(design);
+  if (!sizes.length)
+    return (
+      <section className="pg-sizing">
+        <h3 className="pg-heading">{t('sizing.heading')}</h3>
+        <p className="pg-hint">{t('sizing.none')}</p>
+      </section>
+    );
+
+  const perWrite = bytesPerWrite(sizes);
+  const total = sizes.reduce((sum, item) => sum + item.total, 0);
+  const kb = Math.max(0.1, Math.round((perWrite / 1024) * 100) / 100);
+
+  return (
+    <section className="pg-sizing">
+      <h3 className="pg-heading">{t('sizing.heading')}</h3>
+      <p className="pg-hint">{t('sizing.hint')}</p>
+      {sizes.map(({ node, tables, total: nodeTotal }) => (
+        <div className="pg-sizing__node" key={node.id}>
+          <div className="pg-sizing__row pg-sizing__row--node">
+            <span>{node.label || t(`block.${node.kind}`)}</span>
+            <strong>{formatBytes(lang, nodeTotal)}</strong>
+          </div>
+          {tables.map(({ table, size }) => (
+            <div className="pg-sizing__row" key={table.id}>
+              <code>{table.name}</code>
+              <span className="pg-sizing__detail">
+                {t('sizing.row', {
+                  row: formatBytes(lang, size.row + size.index),
+                  days: formatNumber(lang, size.retentionDays),
+                })}
+              </span>
+              <span>{formatBytes(lang, size.total)}</span>
+            </div>
+          ))}
+        </div>
+      ))}
+      <div className="pg-sizing__row pg-sizing__row--total">
+        <span>{t('sizing.total')}</span>
+        <strong>{formatBytes(lang, total)}</strong>
+      </div>
+      <button
+        type="button"
+        className="pg-button pg-button--small"
+        onClick={() =>
+          update((current) => ({ ...current, calc: { ...current.calc, values: { ...current.calc.values, objectKb: kb } } }))
+        }
+      >
+        {t('sizing.apply', { kb: formatNumber(lang, kb) })}
+      </button>
+    </section>
+  );
+}
+
+/**
+ * Шаг оценок. Прикидка словами есть всегда: её пишут до калькулятора, а
+ * если калькулятор открыт — записывают выводы. Сам калькулятор — если
+ * автор его дал, или если интервьюер открыл его по ходу собеседования.
+ */
+export function CalcPanel({
+  design,
+  update,
+  t,
+  lang,
+  showCalc,
+  locked,
+  snapshot,
+}: PanelProps & { showCalc: boolean; locked: boolean; snapshot?: string }) {
+  return (
+    <div className="pg-panel">
+      <label className="pg-field">
+        <span className="pg-field__label">{t('estimate.label')}</span>
+        <textarea
+          className="pg-input pg-textarea pg-estimate"
+          rows={6}
+          placeholder={t('estimate.placeholder')}
+          value={design.estimate}
+          onChange={(event) => {
+            const estimate = event.currentTarget.value;
+            update((current) => ({ ...current, estimate }));
+          }}
+        />
+      </label>
+      {locked && <p className="pg-hint">{t('estimate.locked')}</p>}
+      {snapshot !== undefined && (
+        <section className="pg-guide">
+          <h3 className="pg-heading">{t('estimate.before')}</h3>
+          <p>{snapshot.trim() || t('estimate.beforeEmpty')}</p>
+        </section>
+      )}
+      {showCalc && <CalcTool design={design} update={update} t={t} lang={lang} />}
     </div>
   );
 }

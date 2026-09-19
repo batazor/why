@@ -94,6 +94,9 @@ const ROUTES: Array<[HttpMethod, string, number, Text, string[], string[], strin
 /** Поле схемы: имя, тип, ключи. Имена и типы — идентификаторы, не переводятся. */
 type Field = [string, string, KeyFlag[]?];
 
+/** Строк на одну запись пользователя, если не одна: на каждую ссылку ~100 кликов. */
+const ROWS_PER_WRITE: Record<string, number> = { link_clicked: 100 };
+
 const SCHEMAS: Record<string, Array<[string, Text, Field[]]>> = {
   db: [
     [
@@ -143,6 +146,15 @@ const SCHEMAS: Record<string, Array<[string, Text, Field[]]>> = {
   ],
 };
 
+const ESTIMATE: Text = {
+  en: `Writes: 10M users × 0.1 link/day = 1M links/day ≈ 12/s, peak ~35/s.
+Reads: 100 per write → ~1.2k/s, peak ~3.5k/s — the cache and CDN take most of it.
+Storage: ~150 B per link with the index × 1M/day × 5 years ≈ 270 GB, ×3 replicas ≈ 0.8 TB. Fits a small cluster; the key is the partition by code, not the volume.`,
+  ru: `Запись: 10 млн пользователей × 0,1 ссылки в день = 1 млн ссылок в сутки ≈ 12/с, пик ~35/с.
+Чтение: 100 на запись → ~1,2 тыс./с, пик ~3,5 тыс./с — основное берут кэш и CDN.
+Объём: ~150 Б на ссылку с индексом × 1 млн/сутки × 5 лет ≈ 270 ГБ, ×3 реплики ≈ 0,8 ТБ. Влезает в небольшой кластер; важен ключ партиции по коду, а не объём.`,
+};
+
 const GUIDE: Text = {
   en: 'Expect requirements first, then numbers (reads ≫ writes, ~100:1), then the design. Strong candidates separate the redirect path from click analytics and discuss how codes are generated without collisions.',
   ru: 'Ждём сначала требования, потом числа (чтений намного больше записей, ~100:1), потом схему. Сильный кандидат отделяет путь редиректа от аналитики кликов и обсуждает, как генерировать коды без коллизий.',
@@ -184,6 +196,7 @@ export function exampleDesign(lang: string): Design {
         name,
         note: pick(about),
         columns: fields.map(([field, type, keys]) => ({ id: uid('c'), name: field, type, keys: keys ?? [], nullable: false })),
+        ...(ROWS_PER_WRITE[name] ? { rowsPerWrite: ROWS_PER_WRITE[name] } : {}),
       }),
     );
     return { id, kind, label: pick(label), note: note ? pick(note) : '', x, y, ...(tech ? { tech } : {}), ...(schema ? { schema } : {}) };
@@ -220,7 +233,7 @@ export function exampleDesign(lang: string): Design {
    * иначе собеседовать не о чем.
    */
   design.scenario = {
-    reference: { nodes, edges, requirements, api },
+    reference: { nodes, edges, requirements, api, estimate: pick(ESTIMATE) },
     hints: HINTS.map((text) => ({ id: uid('h'), text: pick(text) })),
     rubric: RUBRIC.map(([text, weight]) => ({ id: uid('r'), text: pick(text), weight })),
     questions: QUESTIONS.map((text) => ({ id: uid('q'), text: pick(text) })),
@@ -230,7 +243,7 @@ export function exampleDesign(lang: string): Design {
   design.task = pick(TASK);
   design.taskSource = 'Product Owner';
   design.calc = {
-    enabled: true,
+    mode: 'calc',
     values: { dau: 10_000_000, writesPerUser: 0.1, readRatio: 100, peakFactor: 3, objectKb: 0.5, retentionDays: 1825, replication: 3, latencyMs: 20 },
   };
   return design;

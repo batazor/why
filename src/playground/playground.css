@@ -2351,3 +2351,112 @@ body:has(.pg) .site-footer {
   line-height: 1.5;
   overflow-x: auto;
 }
+
+/* ------------------------------------------------------ Объём по схеме */
+
+.pg-estimate {
+  min-height: 7rem;
+}
+
+.pg-sizing {
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--pg-border);
+}
+
+.pg-sizing__node {
+  margin: 0.5rem 0;
+}
+
+.pg-sizing__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 0.5rem;
+  align-items: baseline;
+  padding: 0.15rem 0 0.15rem 0.75rem;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pg-sizing__row code {
+  font-size: 0.74rem;
+  overflow-wrap: anywhere;
+}
+
+.pg-sizing__detail {
+  color: var(--pg-muted);
+  font-size: 0.72rem;
+}
+
+.pg-sizing__row--node {
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding-left: 0;
+  font-weight: 600;
+}
+
+.pg-sizing__row--total {
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin: 0.5rem 0;
+  padding: 0.4rem 0.5rem;
+  border-radius: 6px;
+  background: var(--pg-accent-soft);
+  color: var(--pg-accent);
+}
+
+.pg-col.is-editing.has-size {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr) 3.4rem auto auto;
+}
+
+.pg-col__size-input {
+  text-align: right;
+}
+
+.pg-schema__total {
+  margin-left: 0.6rem;
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  background: var(--pg-accent-soft);
+  color: var(--pg-accent);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pg-table__size {
+  padding: 0.4rem 0.6rem 0.5rem;
+  border-top: 1px solid var(--pg-border);
+  background: var(--pg-bg);
+  font-size: 0.74rem;
+  color: var(--pg-muted);
+}
+
+.pg-table__size-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.9rem;
+  margin-bottom: 0.3rem;
+}
+
+.pg-table__size-inputs label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.pg-table__num {
+  width: 4.5rem;
+  padding: 0.1rem 0.3rem;
+  text-align: right;
+}
+
+.pg-table__size-out {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.pg-table__size-out strong {
+  color: var(--pg-fg);
+}
+
+.pg-schema__grid {
+  grid-template-columns: repeat(auto-fill, minmax(24rem, 1fr));
+}

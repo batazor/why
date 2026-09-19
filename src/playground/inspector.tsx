@@ -18,6 +18,8 @@ interface Props {
   readOnly: boolean;
   /** Интервьюеру — вопросы на углубление по выбранному блоку. */
   showProbes: boolean;
+  /** Значения оценок для объёма таблиц; нет — объём не показывается (калькулятор кандидату закрыт). */
+  sizeValues?: Record<string, number>;
 }
 
 /**
@@ -219,7 +221,7 @@ function Competency({ node, patch, t, lang, readOnly, showProbes }: {
   );
 }
 
-export function InspectorPanel({ design, update, t, lang, selection, readOnly, showProbes }: Props) {
+export function InspectorPanel({ design, update, t, lang, selection, readOnly, showProbes, sizeValues }: Props) {
   const node = selection.node ? design.nodes.find((item) => item.id === selection.node) : undefined;
   const edge = selection.edge ? design.edges.find((item) => item.id === selection.edge) : undefined;
   const name = (id: string) => {
@@ -258,7 +260,7 @@ export function InspectorPanel({ design, update, t, lang, selection, readOnly, s
 
         <Competency node={node} patch={patch} t={t} lang={lang} readOnly={readOnly} showProbes={showProbes} />
 
-        <SchemaSummary node={node} patch={patch} readOnly={readOnly} t={t} />
+        <SchemaSummary node={node} patch={patch} readOnly={readOnly} t={t} lang={lang} values={sizeValues} />
 
         <BlockRequirements design={design} node={node} update={update} t={t} readOnly={readOnly} />
 

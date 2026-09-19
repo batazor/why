@@ -73,8 +73,16 @@ export function coverRequirement(requirements: Requirement[], id: string, node: 
   );
 }
 
+/**
+ * Что кандидат получает на шаге оценок — решает автор сценария:
+ * off — шага нет; text — только свободный текст, считать самому;
+ * calc — калькулятор с ползунками и объёмом по таблицам схемы.
+ */
+export const ESTIMATE_MODES = ['off', 'text', 'calc'] as const;
+export type EstimateMode = (typeof ESTIMATE_MODES)[number];
+
 export interface CalcState {
-  enabled: boolean;
+  mode: EstimateMode;
   values: Record<string, number>;
 }
 
@@ -108,6 +116,15 @@ export interface Board {
   edges: DesignEdge[];
   requirements: Requirement[];
   api: Endpoint[];
+  /** Оценки словами: прикидка кандидата или эталонная — у автора. */
+  estimate: string;
+}
+
+/** Поля доски: всё, что у кандидата своё, а у автора — эталон. */
+export const BOARD_KEYS = ['nodes', 'edges', 'requirements', 'api', 'estimate'] as const;
+
+export function pickBoard(source: Board): Board {
+  return { nodes: source.nodes, edges: source.edges, requirements: source.requirements, api: source.api, estimate: source.estimate };
 }
 
 export interface ScenarioItem {
@@ -173,6 +190,18 @@ export interface Session {
   finishedAt?: string;
   /** Сигналы честности, пока на экране роль кандидата. */
   signals: Signal[];
+  /**
+   * Калькулятор, открытый интервьюером по ходу собеседования (в режиме
+   * «сначала текст»), и прикидка кандидата в момент открытия: что человек
+   * сказал сам, до того как ему дали считать.
+   */
+  calcUnlockedAt?: string;
+  estimateSnapshot?: string;
+}
+
+/** Что из оценок кандидат видит сейчас: режим автора плюс то, что открыл интервьюер. */
+export function candidateEstimates(design: Design): EstimateMode {
+  return design.calc.mode === 'text' && design.session.calcUnlockedAt ? 'calc' : design.calc.mode;
 }
 
 /**
@@ -186,7 +215,7 @@ export interface Design extends Board {
   task: string;
   /** Кто поставил задачу — подпись карточки задания, как в разборе: «Product Owner». */
   taskSource: string;
-  /** calc.enabled — разрешён ли калькулятор кандидату. Автор видит его всегда. */
+  /** calc.mode — что из оценок доступно кандидату. Автор видит всё всегда. */
   calc: CalcState;
   scenario: Scenario;
   session: Session;
@@ -195,7 +224,7 @@ export interface Design extends Board {
 }
 
 export function emptyBoard(): Board {
-  return { nodes: [], edges: [], requirements: [], api: [] };
+  return { nodes: [], edges: [], requirements: [], api: [], estimate: '' };
 }
 
 export function emptyScenario(): Scenario {
@@ -230,7 +259,7 @@ export function emptyDesign(title: string): Design {
     task: '',
     taskSource: '',
     ...emptyBoard(),
-    calc: { enabled: false, values: {} },
+    calc: { mode: 'off', values: {} },
     scenario: emptyScenario(),
     session: emptySession(),
     createdAt: now,
@@ -291,6 +320,7 @@ function migrateBoard(data: Partial<Board> | undefined): Board {
           covers: item.covers ?? [],
         }))
       : [],
+    estimate: typeof data?.estimate === 'string' ? data.estimate : '',
   };
 }
 
@@ -324,9 +354,16 @@ export function migrate(raw: unknown): Design {
       startedAt: session.startedAt,
       finishedAt: session.finishedAt,
       signals: list(session.signals),
+      calcUnlockedAt: session.calcUnlockedAt,
+      estimateSnapshot: session.estimateSnapshot,
     },
     calc: {
-      enabled: Boolean(data.calc?.enabled),
+      // Первая версия хранила флаг enabled: включённый — это калькулятор.
+      mode: ESTIMATE_MODES.includes(data.calc?.mode as EstimateMode)
+        ? (data.calc!.mode as EstimateMode)
+        : (data.calc as { enabled?: boolean } | undefined)?.enabled
+          ? 'calc'
+          : 'off',
       values: { ...(data.calc?.values ?? {}) },
     },
     createdAt: data.createdAt ?? base.createdAt,

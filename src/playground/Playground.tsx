@@ -18,6 +18,8 @@ import {
   emptyBoard,
   emptyDesign,
   emptySession,
+  pickBoard,
+  candidateEstimates,
   uid,
   type Design,
   type DesignSummary,
@@ -121,14 +123,8 @@ export default function Playground({ lang, repository }: Props) {
         const next = fn({ ...current, ...current.scenario.reference });
         return {
           ...next,
-          nodes: current.nodes,
-          edges: current.edges,
-          requirements: current.requirements,
-          api: current.api,
-          scenario: {
-            ...next.scenario,
-            reference: { nodes: next.nodes, edges: next.edges, requirements: next.requirements, api: next.api },
-          },
+          ...pickBoard(current),
+          scenario: { ...next.scenario, reference: pickBoard(next) },
         };
       });
     },
@@ -227,7 +223,7 @@ export default function Playground({ lang, repository }: Props) {
   // Кандидату калькулятор и проверки — только если автор разрешил.
   const tabs = perms.tabs.filter((name) => {
     if (role === 'author') return true;
-    if (name === 'calc') return design.calc.enabled;
+    if (name === 'calc') return candidateEstimates(design) !== 'off';
     if (name === 'check') return role === 'interviewer' || design.scenario.allowChecks;
     return true;
   });
@@ -527,7 +523,13 @@ export default function Playground({ lang, repository }: Props) {
             {activeTab === 'api' && <ApiPanel design={view} update={updateView} t={t} readOnly={readOnly} />}
             {activeTab === 'calc' && (
               <fieldset className="pg-plain" disabled={readOnly}>
-                <CalcPanel {...panelProps} />
+                <CalcPanel
+                  {...panelProps}
+                  // Автор видит калькулятор всегда: ему по нему сверять эталон.
+                  showCalc={role === 'author' || candidateEstimates(design) === 'calc'}
+                  locked={role === 'candidate' && candidateEstimates(design) === 'text'}
+                  snapshot={role !== 'candidate' && board === 'answer' ? design.session.estimateSnapshot : undefined}
+                />
               </fieldset>
             )}
             {activeTab === 'inspect' && (
@@ -536,6 +538,7 @@ export default function Playground({ lang, repository }: Props) {
                 selection={selection}
                 readOnly={readOnly}
                 showProbes={role !== 'candidate'}
+                sizeValues={role === 'author' || candidateEstimates(design) === 'calc' ? design.calc.values : undefined}
               />
             )}
             {activeTab === 'check' && <ChecksPanel {...panelProps} extra={extraFindings} />}

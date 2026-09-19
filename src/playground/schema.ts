@@ -21,6 +21,8 @@ export interface DbColumn {
   nullable: boolean;
   /** FK: на какую колонку ссылается — `tableId.columnId` в этом же хранилище. */
   ref?: string;
+  /** Средний размер значения в байтах, если прикидка по типу не подходит. */
+  size?: number;
 }
 
 export interface DbTable {
@@ -28,6 +30,10 @@ export interface DbTable {
   name: string;
   note: string;
   columns: DbColumn[];
+  /** Сколько строк ложится в таблицу на одну запись пользователя. По умолчанию 1. */
+  rowsPerWrite?: number;
+  /** Свой срок хранения, дней. По умолчанию — из оценок (у очередей — неделя). */
+  retentionDays?: number;
 }
 
 export type SchemaFamily = 'relational' | 'partitioned';

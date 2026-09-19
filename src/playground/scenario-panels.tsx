@@ -1,4 +1,4 @@
-import { uid, totalScore, type Design, type Scenario, type ScenarioItem, type Session } from './model';
+import { ESTIMATE_MODES, uid, totalScore, type Design, type EstimateMode, type Scenario, type ScenarioItem, type Session } from './model';
 import type { T } from './i18n';
 
 type Update = (fn: (design: Design) => Design) => void;
@@ -95,17 +95,24 @@ export function ScenarioPanel({ design, update, t }: Props) {
       <p className="pg-note">{t('scenario.intro')}</p>
       <div className="pg-field">
         <span className="pg-field__label">{t('scenario.candidateSees')}</span>
-        <label className="pg-toggle pg-toggle--block">
-          <input
-            type="checkbox"
-            checked={design.calc.enabled}
+        <label className="pg-api__field">
+          <span>{t('scenario.estimates')}</span>
+          <select
+            className="pg-input pg-select"
+            value={design.calc.mode}
             onChange={(event) => {
-              const enabled = event.currentTarget.checked;
-              update((current) => ({ ...current, calc: { ...current.calc, enabled } }));
+              const mode = event.currentTarget.value as EstimateMode;
+              update((current) => ({ ...current, calc: { ...current.calc, mode } }));
             }}
-          />
-          {t('scenario.allowCalc')}
+          >
+            {ESTIMATE_MODES.map((mode) => (
+              <option key={mode} value={mode}>
+                {t(`estimate.mode.${mode}`)}
+              </option>
+            ))}
+          </select>
         </label>
+        <p className="pg-hint">{t(`estimate.mode.${design.calc.mode}.hint`)}</p>
         <label className="pg-toggle pg-toggle--block">
           <input
             type="checkbox"
@@ -138,10 +145,49 @@ function toggle(list: string[], id: string) {
   return list.includes(id) ? list.filter((other) => other !== id) : [...list, id];
 }
 
+/**
+ * Оценки в режиме «сначала текст»: интервьюер видит прикидку кандидата и
+ * может открыть ему калькулятор. В момент открытия прикидка фиксируется —
+ * потом видно, что человек сказал сам, а что посчитал.
+ */
+function EstimateControl({ design, update, t }: Props) {
+  if (design.calc.mode !== 'text') return null;
+  const unlocked = Boolean(design.session.calcUnlockedAt);
+  return (
+    <section className="pg-req">
+      <h3 className="pg-heading">{t('tab.calc')}</h3>
+      <p className="pg-hint">{t(unlocked ? 'conduct.calcOpen' : 'conduct.calcHint')}</p>
+      <div className="pg-guide">
+        <p>{design.estimate.trim() || t('estimate.beforeEmpty')}</p>
+      </div>
+      <button
+        type="button"
+        className={`pg-button pg-button--small ${unlocked ? 'is-on' : ''}`}
+        onClick={() =>
+          patchSession(update, () =>
+            unlocked
+              ? { calcUnlockedAt: undefined }
+              : {
+                  calcUnlockedAt: new Date().toISOString(),
+                  // Снимок — только при первом открытии: закрыть и открыть
+                  // снова не должно подменить сказанное до калькулятора.
+                  estimateSnapshot: design.session.estimateSnapshot ?? design.estimate,
+                },
+          )
+        }
+      >
+        <i className={`codicon codicon-${unlocked ? 'lock' : 'unlock'}`} aria-hidden="true" />{' '}
+        {t(unlocked ? 'conduct.calcClose' : 'conduct.calcUnlock')}
+      </button>
+    </section>
+  );
+}
+
 export function ConductPanel({ design, update, t }: Props) {
   const { scenario, session } = design;
   return (
     <div className="pg-panel">
+      <EstimateControl design={design} update={update} t={t} />
       {scenario.guide.trim() && (
         <section className="pg-guide">
           <h3 className="pg-heading">{t('scenario.guide')}</h3>

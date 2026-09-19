@@ -14,6 +14,8 @@ import {
   type SchemaFamily,
 } from './schema';
 import type { DesignNode } from './model';
+import { defaultRetention, tableSize, typeBytes } from './sizing';
+import { formatBytes, formatNumber, CALC_DEFAULTS } from './calc';
 import type { T } from './i18n';
 
 /**
@@ -36,13 +38,15 @@ function KeyBadge({ flag, t }: { flag: KeyFlag; t: T }) {
 /** Подпись схемы у очереди — «сообщения», у остальных — «таблицы». */
 const noun = (node: DesignNode) => (isMessaging(node.kind) ? 'msg' : 'table');
 
-function ColumnRow({ column, table, tables, family, readOnly, t, onChange, onRemove }: {
+function ColumnRow({ column, table, tables, family, readOnly, t, sizing, onChange, onRemove }: {
   column: DbColumn;
   table: DbTable;
   tables: DbTable[];
   family: SchemaFamily;
   readOnly: boolean;
   t: T;
+  /** Показывать размер поля: только когда оценки открыты. */
+  sizing: boolean;
   onChange: (value: Partial<DbColumn>) => void;
   onRemove: () => void;
 }) {
@@ -76,7 +80,7 @@ function ColumnRow({ column, table, tables, family, readOnly, t, onChange, onRem
   const targets = tables.filter((other) => other.id !== table.id);
 
   return (
-    <li className="pg-col is-editing">
+    <li className={`pg-col is-editing ${sizing ? 'has-size' : ''}`}>
       <input
         className="pg-input pg-col__name-input"
         aria-label={t('schema.column')}
@@ -92,6 +96,22 @@ function ColumnRow({ column, table, tables, family, readOnly, t, onChange, onRem
         value={column.type}
         onChange={(event) => onChange({ type: event.currentTarget.value })}
       />
+      {sizing && (
+        // Пусто — берётся прикидка по типу, она и стоит подсказкой.
+        <input
+          className="pg-input pg-col__size-input"
+          type="number"
+          min={1}
+          aria-label={t('schema.size')}
+          title={t('schema.size')}
+          placeholder={`${typeBytes(column.type)}`}
+          value={column.size ?? ''}
+          onChange={(event) => {
+            const size = Number(event.currentTarget.value);
+            onChange({ size: size > 0 ? size : undefined });
+          }}
+        />
+      )}
       <span className="pg-col__keys">
         {KEY_FLAGS[family].map((flag) => (
           <button
@@ -141,13 +161,16 @@ function ColumnRow({ column, table, tables, family, readOnly, t, onChange, onRem
   );
 }
 
-function TableCard({ table, tables, family, readOnly, t, node, onChange, onRemove }: {
+function TableCard({ table, tables, family, readOnly, t, lang, node, values, onChange, onRemove }: {
   table: DbTable;
   tables: DbTable[];
   family: SchemaFamily;
   readOnly: boolean;
   t: T;
+  lang: string;
   node: DesignNode;
+  /** Значения оценок; без них размер не считается и не показывается. */
+  values?: Record<string, number>;
   onChange: (value: Partial<DbTable>) => void;
   onRemove: () => void;
 }) {
@@ -190,6 +213,7 @@ function TableCard({ table, tables, family, readOnly, t, node, onChange, onRemov
             family={family}
             readOnly={readOnly}
             t={t}
+            sizing={Boolean(values) && !readOnly}
             onChange={(value) => setColumn(column.id, value)}
             onRemove={() => onChange({ columns: table.columns.filter((item) => item.id !== column.id) })}
           />
@@ -215,15 +239,75 @@ function TableCard({ table, tables, family, readOnly, t, node, onChange, onRemov
           onChange={(event) => onChange({ note: event.currentTarget.value })}
         />
       )}
+      {values && <TableSizing table={table} family={family} node={node} values={values} readOnly={readOnly} t={t} lang={lang} onChange={onChange} />}
     </section>
   );
 }
 
-function SchemaDialog({ node, patch, readOnly, t, onClose }: {
+/**
+ * Объём таблицы: сколько строк ложится на одну запись пользователя, сколько
+ * их хранить и что из этого выходит. Строк на запись бывает и больше одной:
+ * заказ — одна строка, его позиции — пять.
+ */
+function TableSizing({ table, family, node, values, readOnly, t, lang, onChange }: {
+  table: DbTable;
+  family: SchemaFamily;
+  node: DesignNode;
+  values: Record<string, number>;
+  readOnly: boolean;
+  t: T;
+  lang: string;
+  onChange: (value: Partial<DbTable>) => void;
+}) {
+  const messaging = isMessaging(node.kind);
+  const size = tableSize(table, family, values, node.kind);
+  const retention = defaultRetention(node.kind, { ...CALC_DEFAULTS, ...values }.retentionDays);
+  const number = (key: 'rowsPerWrite' | 'retentionDays', placeholder: number) => (
+    <input
+      className="pg-input pg-table__num"
+      type="number"
+      min={0}
+      step="any"
+      placeholder={formatNumber(lang, placeholder)}
+      value={table[key] ?? ''}
+      onChange={(event) => {
+        const value = Number(event.currentTarget.value);
+        onChange({ [key]: event.currentTarget.value === '' || !(value >= 0) ? undefined : value });
+      }}
+    />
+  );
+
+  return (
+    <footer className="pg-table__size">
+      {!readOnly && (
+        <div className="pg-table__size-inputs">
+          <label>
+            {t(messaging ? 'sizing.perWriteMsg' : 'sizing.perWrite')} {number('rowsPerWrite', 1)}
+          </label>
+          <label>
+            {t('sizing.keep')} {number('retentionDays', retention)} {t('sizing.days')}
+          </label>
+        </div>
+      )}
+      <p className="pg-table__size-out">
+        {t('sizing.card', {
+          row: formatBytes(lang, size.row),
+          index: formatBytes(lang, size.index),
+          rows: formatNumber(lang, size.rows),
+        })}
+        <strong>{formatBytes(lang, size.total)}</strong>
+      </p>
+    </footer>
+  );
+}
+
+function SchemaDialog({ node, patch, readOnly, t, lang, values, onClose }: {
   node: DesignNode;
   patch: Patch;
   readOnly: boolean;
   t: T;
+  lang: string;
+  values?: Record<string, number>;
   onClose: () => void;
 }) {
   const family = schemaFamily(node.kind)!;
@@ -267,7 +351,17 @@ function SchemaDialog({ node, patch, readOnly, t, onClose }: {
     <div className="pg-dialog" role="dialog" aria-modal="true" aria-label={title} onClick={onClose}>
       <div className="pg-dialog__box pg-schema" onClick={(event) => event.stopPropagation()}>
         <header className="pg-dialog__head">
-          <h3>{t(`schema.title.${noun(node)}`, { block: title })}</h3>
+          <h3>
+            {t(`schema.title.${noun(node)}`, { block: title })}
+            {values && tables.length > 0 && (
+              <span className="pg-schema__total">
+                {formatBytes(
+                  lang,
+                  tables.reduce((sum, table) => sum + tableSize(table, family, values, node.kind).total, 0),
+                )}
+              </span>
+            )}
+          </h3>
           <span className="pg-schema__actions">
             <button type="button" className="pg-doc__action" onClick={() => setShowDdl(!showDdl)}>
               <i className="codicon codicon-code" aria-hidden="true" /> {t(showDdl ? 'schema.hideDdl' : 'schema.showDdl')}
@@ -297,7 +391,9 @@ function SchemaDialog({ node, patch, readOnly, t, onClose }: {
                 family={family}
                 readOnly={readOnly}
                 t={t}
+                lang={lang}
                 node={node}
+                values={values}
                 onChange={(value) => setTable(table.id, value)}
                 onRemove={() => removeTable(table.id)}
               />
@@ -321,7 +417,14 @@ function SchemaDialog({ node, patch, readOnly, t, onClose }: {
 }
 
 /** Сводка схемы в инспекторе: имена таблиц и их ключи, кнопка — открыть редактор. */
-export function SchemaSummary({ node, patch, readOnly, t }: { node: DesignNode; patch: Patch; readOnly: boolean; t: T }) {
+export function SchemaSummary({ node, patch, readOnly, t, lang, values }: {
+  node: DesignNode;
+  patch: Patch;
+  readOnly: boolean;
+  t: T;
+  lang: string;
+  values?: Record<string, number>;
+}) {
   const [open, setOpen] = useState(false);
   const family = schemaFamily(node.kind);
   if (!family) return null;
@@ -354,7 +457,9 @@ export function SchemaSummary({ node, patch, readOnly, t }: { node: DesignNode; 
           );
         })}
       </ul>
-      {open && <SchemaDialog node={node} patch={patch} readOnly={readOnly} t={t} onClose={() => setOpen(false)} />}
+      {open && (
+        <SchemaDialog node={node} patch={patch} readOnly={readOnly} t={t} lang={lang} values={values} onClose={() => setOpen(false)} />
+      )}
     </section>
   );
 }
