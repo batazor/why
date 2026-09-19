@@ -18,7 +18,8 @@ export type WidgetName =
   | 'noisy-neighbour'
   | 'requirements'
   | 'transaction-flow'
-  | 'job-lifecycle';
+  | 'job-lifecycle'
+  | 'requirement-match';
 
 /** Один ползунок калькулятора. Диапазон и шаг — часть конструкции, не перевод. */
 export type LoadInput = {
@@ -143,13 +144,29 @@ export type JobLifecycleData = {
   initial: string;
 };
 
+/**
+ * Итог разбора: решения против требований.
+ *
+ * Карточка — решение из разбора, `fits` — какие строки таблицы оно закрывает.
+ * Строк у карточки может быть несколько: outbox отвечает и за «не теряется»,
+ * и за то, что приём не ждёт шину. Строки берутся из документа требований,
+ * тексты у них те же, что в таблице по ходу разбора.
+ */
+export type MatchCard = { key: string; fits: string[] };
+
+export type RequirementMatchData = {
+  requirements: RequirementsData;
+  cards: MatchCard[];
+};
+
 export type WidgetStep =
   | { widget: 'load-calculator'; wide?: boolean; data: LoadCalculatorData }
   | { widget: 'requirement-sort'; wide?: boolean; data: RequirementSortData }
   | { widget: 'noisy-neighbour'; wide?: boolean; data: NoisyNeighbourData }
   | { widget: 'requirements'; wide?: boolean; data: RequirementsData }
   | { widget: 'transaction-flow'; wide?: boolean; data: TransactionFlowData }
-  | { widget: 'job-lifecycle'; wide?: boolean; data: JobLifecycleData };
+  | { widget: 'job-lifecycle'; wide?: boolean; data: JobLifecycleData }
+  | { widget: 'requirement-match'; wide?: boolean; data: RequirementMatchData };
 
 /** Шаг разбора → врезка, которая на нём стоит. */
 export type WidgetSpec = Record<string, WidgetStep>;
@@ -231,6 +248,27 @@ export function widgetLabelKeys(step: WidgetStep): string[] {
         'tx.sent',
         'tx.unsent',
         ...step.data.scenarios.flatMap((key) => [`tx.scenario.${key}`, `tx.verdict.${key}`]),
+      ];
+    case 'requirement-match':
+      return [
+        'match.cards',
+        'match.hint',
+        'match.progress',
+        'match.done',
+        'match.wrong',
+        'match.miss',
+        'match.goesTo',
+        'match.right',
+        'match.reset',
+        'match.open',
+        'req.fr',
+        'req.nfr',
+        ...step.data.requirements.rows.map((row) => `req.text.${row.id}`),
+        ...step.data.cards.flatMap((card) => [
+          `match.card.${card.key}`,
+          `match.card.${card.key}.text`,
+          `match.why.${card.key}`,
+        ]),
       ];
     case 'job-lifecycle':
       return [

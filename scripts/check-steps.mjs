@@ -402,6 +402,23 @@ for (const [slug, perLocale] of bySlug) {
         errors.push(`колода "${deckName}": врезка на несуществующем шаге "${step}"`);
       }
       for (const key of widgetLabelKeys(widget)) neededLabels.add(key);
+
+      // Итог «решения против требований»: у каждой строки есть ответ, и
+      // карточка указывает только на строки, которые есть в документе.
+      if (widget.widget === 'requirement-match') {
+        const rows = widget.data.requirements.rows.map((row) => row.id);
+        const covered = new Set(widget.data.cards.flatMap((card) => card.fits));
+        const open = rows.filter((id) => !covered.has(id));
+        if (open.length) {
+          errors.push(`колода "${deckName}", шаг "${step}": требования без решения — ${open.join(', ')}`);
+        }
+        for (const card of widget.data.cards) {
+          const stray = card.fits.filter((id) => !rows.includes(id));
+          if (stray.length) {
+            errors.push(`колода "${deckName}", шаг "${step}": карточка "${card.key}" закрывает несуществующие ${stray.join(', ')}`);
+          }
+        }
+      }
     }
   }
 

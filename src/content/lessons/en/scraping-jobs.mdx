@@ -185,6 +185,58 @@ labels:
   lc.tr.exhausted: 'attempts exhausted'
   lc.tr.cancelQueued: 'cancel'
   lc.tr.cancelRunning: 'cancel, worker interrupted'
+  match.cards: 'Decisions'
+  match.hint: 'Drag a card onto the requirement it covers. Or click a card, then a row.'
+  match.progress: '{n} of {total} covered'
+  match.done: 'Every requirement is covered by a decision from the write-up. No row is left without an answer.'
+  match.right: 'Yes.'
+  match.wrong: 'Not here.'
+  match.miss: '“{card}” does not answer {row}.'
+  match.goesTo: 'It belongs to'
+  match.reset: 'Start over'
+  match.open: 'Show the answer'
+  match.card.intake: 'Intake without waiting'
+  match.card.intake.text: 'job-command writes a row to jobs-pg and answers 202 with the id right away'
+  match.why.intake: 'Intake depends on neither the bus, the workers nor the targets: the answer costs one insert. So it is fast and does not fall over with the targets.'
+  match.card.idempotency: 'Idempotency key'
+  match.card.idempotency.text: 'A repeated POST /jobs with the same key returns the same job'
+  match.why.idempotency: 'This guards against client retries: a network glitch does not turn one job into two.'
+  match.card.outbox: 'jobs as the outbox'
+  match.card.outbox.text: 'job-publisher sends rows with an empty published_at to MQ'
+  match.why.outbox: 'Writing the job and its future send are one transaction. A job intake has confirmed is not lost between the database and the bus.'
+  match.card.lease: 'Lease and stuck-sweeper'
+  match.card.lease.text: 'The worker renews its lease; the sweeper returns expired jobs to the queue'
+  match.why.lease: 'This is about jobs of crashed workers: without a lease they would stay in running forever.'
+  match.card.query: 'job-query'
+  match.card.query.text: 'A separate read side: state by id and a filtered list'
+  match.why.query: 'Reading state and lists. It scales apart from writes because reads outnumber them.'
+  match.card.results: 'Result in S3'
+  match.card.results.text: 'Data in object storage, the client gets a signed link, files expire by rule'
+  match.why.results: 'About serving and keeping the result: large volumes bypass the API, retention is a storage rule.'
+  match.card.cancel: 'The cancelled state'
+  match.card.cancel.text: 'Cancelling changes the state; the worker sees it and stops'
+  match.why.cancel: 'This is the cancel feature, not protection from failures.'
+  match.card.rerun: 'Rerun as a new job'
+  match.card.rerun.text: 'POST /jobs with a link to the previous job; its result is left alone'
+  match.why.rerun: 'This is a manual rerun the user asks for. Automatic retries after a failure are the scheduler’s job.'
+  match.card.webhook: 'Webhook'
+  match.card.webhook.text: 'On “job finished” the service calls the client’s address'
+  match.why.webhook: 'A completion notice. It complements polling, it does not replace it.'
+  match.card.attempts: 'Attempt history'
+  match.card.attempts.text: 'Every attempt is stored with the target’s response; the oldest job’s age is on the dashboard'
+  match.why.attempts: 'This is visibility: what happened to the job and what is happening to the queue.'
+  match.card.backoff: 'retry-planner'
+  match.card.backoff.text: 'Up to five attempts with exponential backoff and jitter; permanent errors are not retried'
+  match.why.backoff: 'About transient target failures. Jitter keeps a thousand failed jobs from retrying in the same second.'
+  match.card.domainLimit: 'Per-domain limit'
+  match.card.domainLimit.text: 'A token bucket of requests and connections per host; Retry-After is honoured'
+  match.why.domainLimit: 'This is politeness to targets, not fairness between our own users.'
+  match.card.fairQueue: 'Per-tenant queues'
+  match.card.fairQueue.text: 'The scheduler takes jobs evenly across tenants, later with weights'
+  match.why.fairQueue: 'This is tenant isolation: one tenant’s burst does not take the whole pool.'
+  match.card.autoscale: 'Pool by queue depth'
+  match.card.autoscale.text: 'Worker count grows with queue depth and the oldest job’s age'
+  match.why.autoscale: 'About throughput and time to start: the peak gets drained, jobs do not wait.'
   seq.intake: 'intake transaction'
   seq.publisher: 'publisher loop'
   seq.worker: 'worker processing'
@@ -852,6 +904,19 @@ steps:
       immediately (fast targets would need a separate synchronous path), or if the
       flow grows so much that one queue can no longer cope and has to be split by
       domain physically.
+  - id: answer
+    title: 'The answer: decisions against requirements'
+    narration: |-
+      At the start we wrote down the requirements, and numbers joined them along
+      the way. What is left is to check that each one has an answer.
+
+      On the left are the decisions made during the write-up, on the right the
+      whole requirements table. Put each card on the row it covers. Some
+      decisions cover several rows, some rows need several decisions.
+
+      If a card lands in the wrong place, the note under the cards says what it
+      actually answers. A requirement left without a card means the design did
+      not answer it and the diagram needs more work.
 ---
 
 From here the format changes: instead of one pattern, a whole task. The brief

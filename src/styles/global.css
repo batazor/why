@@ -2236,7 +2236,8 @@ a.chapters__link:hover {
 }
 
 /* Кадр под текстом: колонки у шага нет, и длину строки держит сам текст. */
-.step--wide > div {
+/* Только текст: врезка во всю ширину — тоже div прямым ребёнком шага. */
+.step--wide > div:not(.step__wide) {
   max-width: var(--measure);
 }
 
@@ -3639,7 +3640,7 @@ vscode-tree-item.is-new {
 
 /* Текст над кадром во всю ширину — той же длины строки, что и шаги без кадра:
    иначе абзацы на этих шагах переверстываются и текст прыгает по ширине. */
-.player--prose .step--wide > div {
+.player--prose .step--wide > div:not(.step__wide) {
   max-width: min(46rem, 100%);
 }
 
@@ -4355,6 +4356,310 @@ vscode-tree-item.is-new {
   font-size: 0.68rem;
   font-weight: 400;
   color: var(--muted);
+}
+
+/* ---------- итог: решения против требований ---------- */
+
+/* Карточки слева, таблица справа. Колонка карточок уже: карточка короче
+   строки требования, а строке нужно место под положенные на неё ответы. */
+.match {
+  display: grid;
+  grid-template-columns: minmax(0, 20rem) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+/* Колонка карточек держится на экране, пока читатель идёт по длинной
+   таблице: тащить карточку на строку внизу иначе пришлось бы с прокруткой. */
+.match__left {
+  position: sticky;
+  top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  /* Снизу полоса навигации разбора: колонка кончается над ней. */
+  max-height: calc(100vh - 6.5rem);
+}
+
+.match__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.match__label,
+.match__kind {
+  margin: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.match__progress {
+  margin: 0;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.match__progress.is-done {
+  color: var(--ok);
+  font-weight: 600;
+}
+
+.match__cards {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0 0.2rem 0 0;
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  min-height: 8rem;
+}
+
+.match__card {
+  display: grid;
+  gap: 0.15rem;
+  width: 100%;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: grab;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.match__card:hover {
+  box-shadow: 0 2px 8px var(--shadow);
+}
+
+.match__card:active {
+  cursor: grabbing;
+}
+
+.match__card.is-picked {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.match__card.is-used {
+  border-left-color: color-mix(in srgb, var(--ok) 60%, var(--accent));
+}
+
+/* Карточка легла на все свои строки: своё дело сделала, отходит на второй план. */
+.match__card.is-full {
+  border-left-color: var(--ok);
+  opacity: 0.55;
+}
+
+.match__card-title {
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.match__card-text {
+  font-size: 0.76rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.match__card-rows {
+  margin-top: 0.15rem;
+  font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.68rem;
+  color: var(--ok);
+}
+
+.match__feedback {
+  flex: none;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.match__feedback p {
+  margin: 0;
+}
+
+.match__feedback p + p {
+  margin-top: 0.35rem;
+}
+
+.match__feedback.is-ok {
+  border-color: color-mix(in srgb, var(--ok) 45%, var(--border));
+  background: color-mix(in srgb, var(--ok) 7%, var(--panel));
+}
+
+.match__feedback.is-bad {
+  border-color: color-mix(in srgb, var(--bad) 45%, var(--border));
+  background: var(--bad-soft);
+}
+
+.match__feedback.is-bad strong {
+  color: var(--bad);
+}
+
+.match__feedback.is-ok strong {
+  color: var(--ok);
+}
+
+.match__hint {
+  color: var(--muted);
+}
+
+.match__goes-row {
+  display: block;
+  margin-top: 0.2rem;
+}
+
+.match__goes-row code {
+  font-size: 0.72rem;
+}
+
+.match__actions {
+  display: flex;
+  gap: 1rem;
+}
+
+.match__link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.76rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.match__section + .match__section {
+  margin-top: 1.1rem;
+}
+
+.match__kind {
+  margin-bottom: 0.35rem;
+}
+
+.match__rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Строка — цель для карточки: номер, требование и место под ответы. */
+.match__row {
+  display: grid;
+  grid-template-columns: 3.4rem minmax(0, 1fr) minmax(0, 13rem);
+  gap: 0.6rem;
+  align-items: start;
+  padding: 0.5rem 0.55rem;
+  border-bottom: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.match__row.is-target {
+  cursor: pointer;
+}
+
+.match__row.is-target:hover,
+.match__row.is-over {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+/* NFR — фиолетовым, как в таблице требований по ходу разбора. */
+.match__section--nfr .match__id {
+  color: #7a5cc4;
+}
+
+.match__row.is-miss {
+  background: var(--bad-soft);
+  animation: match-miss 0.4s ease;
+}
+
+@keyframes match-miss {
+  20%,
+  60% {
+    transform: translateX(-4px);
+  }
+  40%,
+  80% {
+    transform: translateX(4px);
+  }
+}
+
+.match__id {
+  font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  color: var(--accent);
+}
+
+.match__answers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  justify-content: flex-end;
+}
+
+/* Пустое место под ответ — пунктир, как у свободной строки в таблице
+   требований: сюда ещё что-то ляжет. */
+.match__row:not(.is-answered) .match__answers {
+  min-height: 1.4rem;
+  border: 1px dashed var(--border);
+  border-radius: 5px;
+}
+
+.match__chip {
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ok) 12%, var(--panel));
+  color: var(--ok);
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+@media (max-width: 52rem) {
+  .match {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .match__left {
+    position: static;
+    max-height: none;
+  }
+
+  .match__cards {
+    max-height: 22rem;
+  }
+
+  .match__row {
+    grid-template-columns: 3.2rem minmax(0, 1fr);
+  }
+
+  .match__answers {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
 }
 
 /* ---------- жизненный цикл джобы ---------- */

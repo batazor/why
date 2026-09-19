@@ -21,6 +21,7 @@ import RequirementsRecall from './widgets/RequirementsRecall';
 import RequirementChips from './widgets/RequirementChips';
 import TransactionFlow from './widgets/TransactionFlow';
 import JobLifecycle from './widgets/JobLifecycle';
+import RequirementMatch from './widgets/RequirementMatch';
 import { likec4model } from '../likec4/generated';
 
 interface NarrationStep {
@@ -497,6 +498,9 @@ const shikiOptions = {
         )}
         {widget.widget === 'job-lifecycle' && (
           <JobLifecycle client:visible data={widget.data} labels={labels} />
+        )}
+        {widget.widget === 'requirement-match' && (
+          <RequirementMatch client:visible data={widget.data} labels={labels} />
         )}
         {widget.widget === 'requirements' && (
           <RequirementsBoard

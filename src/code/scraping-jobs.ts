@@ -156,6 +156,35 @@ export const widgets: WidgetSpec = {
       ],
     },
   },
+
+  /**
+   * Итог: решения разбора против требований. Каждая строка таблицы закрыта
+   * хотя бы одной карточкой — это проверяет check-steps, иначе итог обещал бы
+   * ответ, которого нет.
+   */
+  answer: {
+    widget: 'requirement-match',
+    wide: true,
+    data: {
+      requirements,
+      cards: [
+        { key: 'intake', fits: ['FR-1', 'NFR-1', 'NFR-2'] },
+        { key: 'idempotency', fits: ['NFR-5'] },
+        { key: 'outbox', fits: ['NFR-3'] },
+        { key: 'lease', fits: ['NFR-3'] },
+        { key: 'query', fits: ['FR-2', 'FR-3'] },
+        { key: 'results', fits: ['FR-4', 'NFR-10'] },
+        { key: 'cancel', fits: ['FR-5'] },
+        { key: 'rerun', fits: ['FR-6'] },
+        { key: 'webhook', fits: ['FR-7'] },
+        { key: 'attempts', fits: ['FR-8', 'NFR-7'] },
+        { key: 'backoff', fits: ['NFR-11'] },
+        { key: 'domainLimit', fits: ['NFR-6'] },
+        { key: 'fairQueue', fits: ['NFR-4'] },
+        { key: 'autoscale', fits: ['NFR-8', 'NFR-9'] },
+      ],
+    },
+  },
   fr: board,
   nfr: board,
   slo: board,
@@ -302,6 +331,7 @@ const deck: CodeDeck = [
   { id: 'results' },
   { id: 'observability' },
   { id: 'tradeoffs' },
+  { id: 'answer' },
 ];
 
 export default deck;
