@@ -9,7 +9,7 @@ import Comments from '../../../components/Comments.astro';
 import Chapters from '../../../components/Chapters';
 import FlowDiagram from '../../../components/FlowDiagram';
 import { getDeck } from '../../../code/registry';
-import { useTranslations, isLocale, localePath, type Locale } from '../../../i18n/ui';
+import { useTranslations, isLocale, localePath, assetPath, type Locale } from '../../../i18n/ui';
 
 export async function getStaticPaths() {
   const lessons = await getCollection('lessons');
@@ -69,6 +69,7 @@ const t = useTranslations(lang);
 
 const deck = getDeck(lesson.data.deck ?? slug!);
 const poster = deck.poster;
+const cover = deck.cover;
 
 // Тексты пометок — проза, поэтому берутся из локализованного урока, а не из
 // спеки схемы. Номер совпадает с номером шага в плеере.
@@ -143,12 +144,18 @@ const siblingHref = (entry: CollectionEntry<'lessons'>) =>
           text={lesson.data.brief.text}
         />
       ) : (
-        <div class:list={['callout', poster && 'callout--illustrated']}>
+        <div class:list={['callout', (cover || poster) && 'callout--illustrated']}>
           <div class="callout__body">
             <span class="callout__label">{t('catalog.problem')}</span>
             {lesson.data.problem}
           </div>
-          {poster && (
+          {cover ? (
+            /* Та же акварель, что на карточке в каталоге: читатель узнаёт
+               разбор, в который пришёл. Декоративная, как и постер. */
+            <figure class="callout__figure callout__figure--cover" aria-hidden="true">
+              <img src={assetPath(cover)} alt="" width="640" height="300" />
+            </figure>
+          ) : poster && (
             /* Постер дублирует текст рядом, поэтому для скринридера он декоративный. */
             <figure class="callout__figure" aria-hidden="true">
               <FlowDiagram client:visible spec={poster} labels={lesson.data.labels} />

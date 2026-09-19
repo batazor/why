@@ -587,6 +587,20 @@ a.tag--link:hover {
   margin: 0;
 }
 
+/* Акварель в «Проблеме» — на тёплой бумаге, как в каталоге: прозрачная
+   краска на розовом фоне блока потеряла бы цвет. */
+.callout__figure--cover {
+  border-radius: 8px;
+  overflow: hidden;
+  background: color-mix(in srgb, #efe6d6 55%, var(--panel));
+}
+
+.callout__figure--cover img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
 .callout__label {
   display: block;
   font-size: 0.72rem;
