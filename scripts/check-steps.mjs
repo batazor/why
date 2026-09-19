@@ -398,10 +398,16 @@ for (const [slug, perLocale] of bySlug) {
     for (const group of groups) neededLabels.add(group.label);
   }
 
-  if (deckModule.widgets) {
+  if (deckModule.widgets || deckModule.inlineWidgets) {
     const { widgetLabelKeys } = await import(path.join(codeDir, 'widgets.ts'));
 
-    for (const [step, widget] of Object.entries(deckModule.widgets)) {
+    // Врезки в колонке и внутри текста проверяются одинаково: шаг есть,
+    // подписи есть в каждой локали.
+    const all = [
+      ...Object.entries(deckModule.widgets ?? {}),
+      ...Object.entries(deckModule.inlineWidgets ?? {}),
+    ];
+    for (const [step, widget] of all) {
       if (!deckIds.includes(step)) {
         errors.push(`колода "${deckName}": врезка на несуществующем шаге "${step}"`);
       }

@@ -149,6 +149,11 @@ labels:
   req.text.NFR-11: 'Temporary target failures do not fail the job'
   req.note.NFR-11: 'a job fails because of a one-second 503'
   req.goal.NFR-11: 'up to 5 attempts, exponential backoff with jitter'
+  req.text.FR-9: 'Set a job priority: high, normal or low'
+  req.note.FR-9: 'person, script'
+  req.text.NFR-12: 'Urgent jobs go faster, low priority does not starve'
+  req.note.NFR-12: 'an urgent job waits behind a nightly export, or low never starts'
+  req.goal.NFR-12: 'queue weights 6 : 3 : 1; an empty queue gives its share to the rest'
   tx.scenario: 'Scenario'
   tx.scenario.ok: 'Everything succeeds'
   tx.scenario.crash: 'Crash before COMMIT'
@@ -236,6 +241,9 @@ labels:
   match.card.autoscale: 'Pool by queue depth'
   match.card.autoscale.text: 'Worker count grows with queue depth and the oldest job’s age'
   match.why.autoscale: 'About throughput and time to start: the peak gets drained, jobs do not wait.'
+  match.card.priorityQueues: 'Three weighted queues'
+  match.card.priorityQueues.text: 'The publisher routes to jobs.high, jobs.normal and jobs.low, the worker takes 6 : 3 : 1'
+  match.why.priorityQueues: 'This is about priority: urgent jobs go faster, and the weights keep low from starving.'
   seq.intake: 'intake transaction'
   seq.publisher: 'publisher loop'
   seq.worker: 'worker processing'
@@ -243,6 +251,63 @@ labels:
   noisy.policy.fifo: One shared queue
   noisy.policy.fair: Equal share
   noisy.policy.weighted: Weighted
+  noisy.priority: 'Priority'
+  noisy.policy.strict: 'Strict priority'
+  noisy.policy.weights: 'Weights 6 : 3 : 1'
+  api.request: 'request'
+  api.response: 'response'
+  api.outbound: 'outbound'
+  api.submit: 'Submit a job. The answer is immediate and carries no data: just a receipt and where to track it.'
+  api.status: 'Job state, number of attempts and the last target error.'
+  api.list: 'Your jobs filtered by state: a script with a thousand jobs needs one request.'
+  api.result: 'Not the data but a signed storage link with an expiry.'
+  api.webhook: 'We call the client when the job is finished. It may not arrive, so polling stays.'
+  bm.criterion: 'What we need'
+  bm.choice: 'our pick'
+  bm.score.yes: 'out of the box'
+  bm.score.partial: 'possible, by hand'
+  bm.score.no: 'no'
+  bm.total: 'Total'
+  bm.row.ack: 'Acknowledge each message'
+  bm.cell.ack.kafka: 'only an offset per partition: a slow message holds the rest'
+  bm.cell.ack.rabbitmq: 'ack and nack per message, redelivery on disconnect'
+  bm.cell.ack.nats: 'ack per message, redelivery after AckWait'
+  bm.cell.ack.sqs: 'visibility timeout: not deleted means it comes back'
+  bm.row.backoff: 'Delayed retry (backoff)'
+  bm.cell.backoff.kafka: 'no: retry topics are built by hand'
+  bm.cell.backoff.rabbitmq: 'TTL plus dead-letter, or the delay plugin'
+  bm.cell.backoff.nats: 'NakWithDelay and BackOff in the consumer config'
+  bm.cell.backoff.sqs: 'ChangeMessageVisibility, up to 15 minutes'
+  bm.row.priority: 'Queues per priority'
+  bm.cell.priority.kafka: 'a topic per priority, weights in your own code'
+  bm.cell.priority.rabbitmq: 'a queue per priority or x-max-priority'
+  bm.cell.priority.nats: 'a subject per priority, weights in your own code'
+  bm.cell.priority.sqs: 'a queue per priority, weights in your own code'
+  bm.row.dlq: 'Dead-letter queue (DLQ)'
+  bm.cell.dlq.kafka: 'no: the consumer writes the DLQ topic itself'
+  bm.cell.dlq.rabbitmq: 'dead-letter exchange out of the box'
+  bm.cell.dlq.nats: 'MaxDeliver and an advisory, the queue is yours'
+  bm.cell.dlq.sqs: 'redrive policy out of the box'
+  bm.row.fanout: 'One event, several consumers'
+  bm.cell.fanout.kafka: 'consumer groups read one topic'
+  bm.cell.fanout.rabbitmq: 'fanout exchange'
+  bm.cell.fanout.nats: 'several consumers on one stream'
+  bm.cell.fanout.sqs: 'no: needs SNS in front of the queues'
+  bm.row.throughput: 'Peak of 28 jobs/s'
+  bm.cell.throughput.kafka: 'orders of magnitude to spare'
+  bm.cell.throughput.rabbitmq: 'tens of thousands per second'
+  bm.cell.throughput.nats: 'tens of thousands per second'
+  bm.cell.throughput.sqs: 'practically unlimited'
+  bm.row.ops: 'Cost to operate'
+  bm.cell.ops.kafka: 'cluster, partitions, rebalances'
+  bm.cell.ops.rabbitmq: 'cluster and quorum queues'
+  bm.cell.ops.nats: 'a single binary, clustering is simple'
+  bm.cell.ops.sqs: 'run by AWS'
+  bm.row.lockin: 'No cloud lock-in'
+  bm.cell.lockin.kafka: 'open source, offered by every cloud'
+  bm.cell.lockin.rabbitmq: 'open source'
+  bm.cell.lockin.nats: 'open source'
+  bm.cell.lockin.sqs: 'AWS only'
   noisy.start: Run
   noisy.pause: Pause
   noisy.reset: Reset
@@ -263,6 +328,24 @@ labels:
   noisy.tenant.analyst: Analyst
   noisy.tenant.crawler: Crawler with a burst
 terms:
+  Kafka:
+    text: 'A distributed event log. Messages sit in partitions, a consumer remembers an offset. Good for event streams, worse for handing out work.'
+    url: 'https://kafka.apache.org/'
+  RabbitMQ:
+    text: 'A queue broker: per-message acknowledgement, priorities, dead-lettering, routing through exchanges.'
+    url: 'https://www.rabbitmq.com/'
+  NATS:
+    text: 'A lightweight message broker; JetStream adds persistence, acknowledgements and delayed redelivery.'
+    url: 'https://nats.io/'
+  SQS:
+    text: 'A message queue from AWS: no servers of your own, a visibility timeout and a redrive policy for the DLQ.'
+    url: 'https://aws.amazon.com/sqs/'
+  SNS:
+    text: 'Fan-out from AWS: one event to several subscribers, for example several SQS queues.'
+    url: 'https://aws.amazon.com/sns/'
+  Postgres:
+    text: 'A relational database with transactions. Ours holds jobs and attempts; the jobs row serves as the outbox.'
+    url: 'https://www.postgresql.org/'
   C1: >-
     The whole system as one block, and everything that talks to it: people and
     neighbouring systems. What is inside is not shown at this level.
@@ -735,24 +818,16 @@ steps:
   - id: api
     title: 'The contract: a receipt instead of a result'
     narration: |-
-      `POST /jobs` answers `202 Accepted`. The body contains the id, the state
-      `queued`, and an address to follow the job. A `200` with data does not fit:
-      there is no data yet, and if the connection is held open, the load balancer's
-      timeout decides what happens to the job.
+      `POST /jobs` answers `202 Accepted`, not `200` with data: there is no
+      data yet, and an open connection would be cut by the load balancer's
+      timeout. The answer is a receipt: the id and where to track the job.
 
-      The request carries an idempotency key. A client that got no answer will
-      retry, and with the same key it gets the same job, not a new one. Without the
-      key, any network glitch doubles the work and the cost of calls to the target.
+      Idempotency key: a client that did not get the answer retries and gets
+      the same job, not a second one.
 
-      `GET /jobs/{id}` returns the state, attempts, and the last error. `GET /jobs`
-      returns a filtered list, so a script with a thousand jobs needs one request.
-      `GET /jobs/{id}/result` does not return the data itself; it returns a
-      time-limited link to object storage, which serves large volumes more cheaply
-      than our API.
-
-      A webhook works in the other direction: the service tells the client that the
-      job is done. It complements polling but does not replace it. A webhook can
-      fail to arrive, and the client must be able to ask on its own.
+      The result is served not by the API but by storage, through a signed
+      link: it serves large volumes more cheaply. The webhook complements
+      polling but does not replace it: it may not arrive.
   - id: lifecycle
     title: The life of a job
     narration: |-
@@ -877,6 +952,78 @@ steps:
       `running`, and normal metrics treat them as fine. They can only be found by
       time in state: a job running longer than its lease should appear in a
       report.
+  - id: priority
+    title: 'A new requirement: priorities'
+    narration: |-
+      Six months later product comes back with a new ask: some jobs are urgent.
+      The shop needs a competitor's price before the sale ends, while the
+      analyst's nightly export can wait.
+
+      `POST /jobs` gets a `priority` field: `high`, `normal` or `low`, `normal` by
+      default. It is written to the `jobs` row with the rest of the job.
+
+      One queue cannot give priority: the broker hands out messages in order. So
+      there are now three work queues: `jobs.high`, `jobs.normal` and `jobs.low`.
+      The publisher reads the priority from the row and puts the event into the
+      right one. The outbox does not change, only the route does. A retry after
+      a failure goes back into the same queue.
+
+      The key part is how the worker picks a queue. If it always takes `high`
+      first, a steady stream of urgent jobs means `low` never starts. So the
+      worker takes by weight: out of ten jobs, six from `high`, three from
+      `normal` and one from `low`. An empty queue gives its share to the rest.
+
+      Tenant fairness stays inside each queue: priority decides which queue to
+      take from, fairness decides whose job to take from it.
+    added:
+      - element: scraper.mq.high
+        role: 'Urgent jobs. The worker takes six out of ten from here.'
+      - element: scraper.mq.normal
+        role: 'The default priority. Three out of ten.'
+      - element: scraper.mq.low
+        role: 'What can wait. One out of ten, but never zero.'
+  - id: priority-sim
+    title: Priorities in the simulator
+    narration: |-
+      The same pool of eight workers and the same crawler with a burst of 400
+      jobs. Now each tenant has a priority: the shop is `high`, the crawler is
+      `normal`, the analyst is `low`.
+
+      Run it with strict priority. The shop gets a slot right away, the crawler
+      works through its burst, and the analyst never starts while the crawler
+      has work. Nobody made a mistake: `low` is simply always last.
+
+      Switch to weights. The crawler and the shop are still ahead, but the
+      analyst gets its share, one job out of ten, and its queue moves.
+
+      Change the priorities above the diagram: give the crawler `high`. The burst
+      still does not take the whole pool: `high` gets six takes out of ten, the
+      rest goes to the other queues.
+  - id: broker
+    title: Which MQ to pick
+    narration: |-
+      Until this step MQ was a box without a name. That is how it should be
+      while it is unclear what it has to do. Now the requirements are written
+      down, and the choice can follow them rather than habit.
+
+      We need a work queue: acknowledgement of each job, delayed retry, three
+      queues by priority and a queue for what could not be processed. Plus a
+      "job finished" stream that the webhook and analytics read. The flow is
+      small: any broker handles 28 jobs per second at peak.
+
+      [[Kafka]] drops out first. It is a log, not a queue: it remembers an offset in
+      a partition, not the fate of each message. A slow job holds the whole
+      partition, and delayed retry and a DLQ have to be built by hand. Kafka is
+      good for an event stream, not for handing out work.
+
+      [[SQS]] covers the work queue entirely but ties us to AWS, and delivering one
+      event to several consumers needs [[SNS]] on top. If the service already lives
+      in AWS, it is a sensible choice.
+
+      [[RabbitMQ]] and [[NATS|NATS JetStream]] score the same. We take RabbitMQ: priorities
+      and dead-lettering come out of the box, and delayed retry is built from TTL
+      and dead-lettering. NATS is simpler to operate and delays retries on its
+      own. If the team already knows it, the choice can go the other way.
   - id: tradeoffs
     title: What it cost
     narration: |-
@@ -928,7 +1075,7 @@ The diagram will come, but at the end.
 A queue on a diagram says nothing by itself. It starts to mean something
 together with numbers: how many jobs a second it accepts, how many wait in it
 at peak, how long a job sits there before a worker takes it. Without numbers,
-choosing between Kafka and Postgres is a guess.
+choosing between <span data-term="Kafka">Kafka</span> and <span data-term="Postgres">Postgres</span> is a guess.
 
 So the order is:
 

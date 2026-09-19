@@ -53,6 +53,12 @@ function BlockNode({ data, selected }: NodeProps) {
       <span className="pg-block__text">
         <span className="pg-block__label">{node.label || t(`block.${node.kind}`)}</span>
         <span className="pg-block__kind">{techName(node.kind, node.tech) ?? t(`block.${node.kind}`)}</span>
+        {node.schema && node.schema.length > 0 && (
+          <span className="pg-block__schema" title={node.schema.map((table) => table.name).join(', ')}>
+            <i className="codicon codicon-table" aria-hidden="true" />
+            {node.schema.map((table) => table.name).join(', ')}
+          </span>
+        )}
         {/* Требования видны прямо на блоке: на схеме сразу понятно, что
             какой блок обещает, без щелчка по каждому. */}
         {reqs.length > 0 && (

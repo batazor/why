@@ -196,6 +196,15 @@ pre {
   text-align: left;
 }
 
+/* Ссылка на первоисточник у технологии: отдельной строкой под определением. */
+.term__link {
+  display: block;
+  margin-top: 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
 .term__tip[data-placement='below'] {
   bottom: auto;
   top: calc(100% + 0.5rem);
@@ -4392,6 +4401,335 @@ vscode-tree-item.is-new {
   margin-top: 0.15rem;
   font-size: 0.68rem;
   font-weight: 400;
+  color: var(--muted);
+}
+
+/* Приоритеты арендаторов над схемой шумного соседа: имя в цвете арендатора
+   и три кнопки уровня. */
+.noisy__priorities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  margin: 0 0 0.7rem;
+}
+
+.noisy__prio {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.noisy__prio-name {
+  margin-right: 0.2rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.noisy__prio--t0 .noisy__prio-name {
+  color: var(--tenant-0);
+}
+
+.noisy__prio--t1 .noisy__prio-name {
+  color: var(--tenant-1);
+}
+
+.noisy__prio--t2 .noisy__prio-name {
+  color: var(--tenant-2);
+}
+
+.noisy__prio-level {
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.noisy__prio-level.is-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ---------- HTTP-контракт ---------- */
+
+/* Карточки стоят в колонке текста, поэтому компактные: шапка в строку,
+   смысл и поля — мелким под ней. */
+.api-cards {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.9rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Список маршрутов, карточки «новое на схеме» и требования шага выходят в
+   левое поле: колонка текста узкая, а путь с кодом ответа, имя с ролью или
+   требование с целью хочется видеть в одну строку. Выход — не больше свободного поля слева от
+   страницы и не больше 10rem; на узком окне поля нет, и карточки остаются
+   в колонке. */
+.step .api-cards,
+.step .added,
+.step .req-chips {
+  --bleed: min(10rem, max(0px, (100vw - var(--page-max)) / 2));
+  margin-left: calc(-1 * var(--bleed));
+}
+
+/* Цвет метода — полоска слева и плашка: GET читает, POST пишет. Те же
+   голубой и янтарный, что у чтения и записи на схемах разбора. */
+.api-card {
+  --method: #3b82c4;
+  /* Мягкий тон — из цвета метода и фона панели: подходит обеим темам. */
+  --method-soft: color-mix(in srgb, var(--method) 14%, var(--panel));
+  padding: 0.4rem 0.6rem 0.45rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--method);
+  border-radius: 6px;
+  background: var(--panel);
+}
+
+.api-card--post {
+  --method: #c27c1e;
+}
+
+/* Исходящий вызов — наш запрос клиенту: другой цвет и пунктир. */
+.api-card--out {
+  --method: #7a5cc4;
+  border-left-style: dashed;
+}
+
+.api-card__head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.api-card__method {
+  flex: none;
+  padding: 0 0.3rem;
+  border-radius: 4px;
+  background: var(--method-soft);
+  color: var(--method);
+  font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.64rem;
+  font-weight: 700;
+}
+
+.api-card__path {
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  background: none;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--fg);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.api-card__param {
+  color: var(--method);
+}
+
+.api-card__status {
+  flex: none;
+  margin-left: auto;
+  font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.api-card__status--2xx {
+  color: var(--ok);
+}
+
+.api-card__status--4xx,
+.api-card__status--5xx {
+  color: var(--bad);
+}
+
+.api-card__about {
+  margin: 0.15rem 0 0;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.api-card__out {
+  margin-right: 0.3rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--method);
+}
+
+/* Поля — одной строкой: «запрос» и «ответ» подряд, без таблицы. */
+.api-card__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.1rem 0.8rem;
+  margin: 0.2rem 0 0;
+}
+
+.api-card__fields > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem;
+}
+
+.api-card__fields dt {
+  font-size: 0.6rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.api-card__fields dd {
+  display: contents;
+}
+
+.api-card__fields code {
+  padding: 0 0.25rem;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--border) 55%, transparent);
+  font-size: 0.64rem;
+}
+
+/* ---------- матрица брокеров ---------- */
+
+.bm {
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+/* На узком экране таблица едет вбок внутри рамки, а не ломает страницу. */
+.bm__scroll {
+  overflow-x: auto;
+}
+
+.bm__table {
+  width: 100%;
+  min-width: 46rem;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.bm__table th,
+.bm__table td {
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+  transition: background-color 0.15s ease;
+}
+
+.bm__corner {
+  width: 22%;
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.bm__broker {
+  font-size: 0.86rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.bm__badge {
+  margin-left: 0.45rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--panel);
+  font-size: 0.66rem;
+  font-weight: 600;
+  vertical-align: 0.1em;
+}
+
+.bm__criterion {
+  font-weight: 600;
+}
+
+.bm__req {
+  display: block;
+  margin-bottom: 0.1rem;
+  font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--accent);
+}
+
+/* NFR — фиолетовым, как в таблице требований. */
+.bm__req--nfr {
+  color: #7a5cc4;
+}
+
+/* Выбранная колонка — полосой: её сравнивают со всеми остальными. */
+.bm__table .is-choice {
+  background: color-mix(in srgb, var(--accent-soft) 70%, transparent);
+}
+
+.bm__table thead .is-choice {
+  border-top: 2px solid var(--accent);
+  border-radius: 8px 8px 0 0;
+}
+
+.bm__table .is-hover:not(.is-choice) {
+  background: color-mix(in srgb, var(--border) 45%, transparent);
+}
+
+.bm__mark {
+  display: inline-block;
+  width: 1.1rem;
+  font-weight: 700;
+}
+
+.bm__cell--yes .bm__mark {
+  color: var(--ok);
+}
+
+.bm__cell--partial .bm__mark {
+  color: #b7832f;
+}
+
+.bm__cell--no .bm__mark {
+  color: var(--bad);
+}
+
+.bm__note {
+  color: var(--muted);
+}
+
+.bm__total {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.bm__table tfoot th,
+.bm__table tfoot td {
+  border-bottom: 0;
+}
+
+.bm__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.2rem;
+  margin: 0.7rem 0 0;
+  font-size: 0.74rem;
   color: var(--muted);
 }
 

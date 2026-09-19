@@ -389,6 +389,9 @@ views {
     // Кадр про запись: от пользователя — только линия записи.
     exclude scrapeUser -> * where kind is read
 
+    // Маршрут по приоритетам — только на своём кадре (см. spec: enqueue/dequeue).
+    exclude * -> * where kind is enqueue or kind is dequeue
+
     autoLayout LeftRight
   }
 
@@ -407,6 +410,9 @@ views {
       scraper.mq,
       scraper.worker,
       targets
+
+    // Маршрут по приоритетам — только на своём кадре (см. spec: enqueue/dequeue).
+    exclude * -> * where kind is enqueue or kind is dequeue
 
     autoLayout LeftRight
   }
@@ -427,6 +433,9 @@ views {
       scraper.worker,
       targets,
       scraper.scheduler
+
+    // Маршрут по приоритетам — только на своём кадре (см. spec: enqueue/dequeue).
+    exclude * -> * where kind is enqueue or kind is dequeue
 
     autoLayout LeftRight
   }
@@ -451,6 +460,9 @@ views {
 
     // Кадр про чтение: от пользователя — только линия чтения.
     exclude scrapeUser -> * where kind is write
+
+    // Маршрут по приоритетам — только на своём кадре (см. spec: enqueue/dequeue).
+    exclude * -> * where kind is enqueue or kind is dequeue
 
     autoLayout LeftRight
   }
@@ -531,6 +543,9 @@ views {
       scraper.publisher,
       scraper.mq
 
+    // Маршрут по приоритетам — только на своём кадре (см. spec: enqueue/dequeue).
+    exclude * -> * where kind is enqueue or kind is dequeue
+
     autoLayout TopBottom 40 60
   }
 
@@ -580,6 +595,41 @@ view scrape_full {
       scraper.jobs_db -> scraper.publisher,
       scraper.jobs_db -> scraper.scheduler
 
+    // Маршрут по приоритетам — только на своём кадре (см. spec: enqueue/dequeue).
+    exclude * -> * where kind is enqueue or kind is dequeue
+
     autoLayout TopBottom 20 90
   }
+
+  /**
+   * Экран `priority`: новое требование — приоритет джобы. MQ раскрыта на три
+   * очереди, публикатор раскладывает по ним, воркер берёт с весами.
+   */
+  view scrape_priority {
+    title 'Priorities'
+
+    include
+      scraper,
+      scraper.jobs_db,
+      scraper.publisher,
+      scraper.mq,
+      // Порядок здесь задаёт порядок на кадре: последняя встаёт наверх,
+      // поэтому high включена последней.
+      scraper.mq.low,
+      scraper.mq.normal,
+      scraper.mq.high,
+      scraper.worker
+
+    // Прямые линии к MQ целиком здесь не нужны: вместо них три очереди.
+    // Исключение — по виду связи: `publisher -> mq` без него задело бы и
+    // связи с очередями внутри MQ.
+    exclude
+      scraper.publisher -> scraper.mq where kind is write,
+      scraper.mq -> scraper.worker where kind is read,
+      scraper.worker -> scraper.jobs_db,
+      scraper.publisher -> scraper.jobs_db
+
+    autoLayout LeftRight 40 90
+  }
+
 }

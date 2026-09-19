@@ -19,7 +19,9 @@ export type WidgetName =
   | 'requirements'
   | 'transaction-flow'
   | 'job-lifecycle'
-  | 'requirement-match';
+  | 'requirement-match'
+  | 'broker-matrix'
+  | 'api-cards';
 
 /** Один ползунок калькулятора. Диапазон и шаг — часть конструкции, не перевод. */
 export type LoadInput = {
@@ -65,7 +67,14 @@ export type NoisyTenant = {
   burst: number;
   /** Вес в режиме взвешенной очереди. */
   weight: number;
+  /** Приоритет джоб арендатора — только в режиме приоритетов; читатель его меняет. */
+  priority?: Priority;
 };
+
+export type Priority = 'high' | 'normal' | 'low';
+
+/** Порядок приоритетов: от срочного к тому, что подождёт. */
+export const PRIORITIES: Priority[] = ['high', 'normal', 'low'];
 
 export type NoisyNeighbourData = {
   tenants: NoisyTenant[];
@@ -74,6 +83,12 @@ export type NoisyNeighbourData = {
   /** Сколько секунд занимает одна джоба. */
   jobSeconds: number;
   policies: string[];
+  /**
+   * Режим приоритетов: джоба идёт в очередь своего приоритета, а политики —
+   * `strict` (сначала high, пока она не пуста) и `weights` (доли очередей по
+   * весам). Внутри одного приоритета арендаторы делят пул поровну.
+   */
+  priorities?: { weights: Record<Priority, number> };
 };
 
 /**
@@ -159,6 +174,38 @@ export type RequirementMatchData = {
   cards: MatchCard[];
 };
 
+/**
+ * Матрица сравнения брокеров. Строка — критерий, привязанный к требованию из
+ * документа; ячейка — оценка и короткое пояснение в `labels`. Названия
+ * брокеров — имена продуктов, они не переводятся.
+ */
+export type BrokerScore = 'yes' | 'partial' | 'no';
+
+export type BrokerMatrixData = {
+  brokers: { key: string; name: string }[];
+  rows: { key: string; req?: string; scores: Record<string, BrokerScore> }[];
+  /** Что выбрали: колонка подсвечена. */
+  choice: string;
+};
+
+/**
+ * Карточки HTTP-контракта. Метод, путь, код и поля — идентификаторы протокола,
+ * они не переводятся; описание карточки живёт в `labels` (`api.<key>`).
+ * `outbound` — запрос идёт от нас к клиенту: вебхук.
+ */
+export type ApiEndpoint = {
+  key: string;
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  path: string;
+  status: number;
+  statusText: string;
+  request?: string[];
+  response?: string[];
+  outbound?: boolean;
+};
+
+export type ApiCardsData = { endpoints: ApiEndpoint[] };
+
 export type WidgetStep =
   | { widget: 'load-calculator'; wide?: boolean; data: LoadCalculatorData }
   | { widget: 'requirement-sort'; wide?: boolean; data: RequirementSortData }
@@ -166,7 +213,9 @@ export type WidgetStep =
   | { widget: 'requirements'; wide?: boolean; data: RequirementsData }
   | { widget: 'transaction-flow'; wide?: boolean; data: TransactionFlowData }
   | { widget: 'job-lifecycle'; wide?: boolean; data: JobLifecycleData }
-  | { widget: 'requirement-match'; wide?: boolean; data: RequirementMatchData };
+  | { widget: 'requirement-match'; wide?: boolean; data: RequirementMatchData }
+  | { widget: 'broker-matrix'; wide?: boolean; data: BrokerMatrixData }
+  | { widget: 'api-cards'; wide?: boolean; data: ApiCardsData };
 
 /** Шаг разбора → врезка, которая на нём стоит. */
 export type WidgetSpec = Record<string, WidgetStep>;
@@ -234,6 +283,7 @@ export function widgetLabelKeys(step: WidgetStep): string[] {
         'noisy.even',
         'noisy.idle',
         ...step.data.policies.map((policy) => `noisy.policy.${policy}`),
+        ...(step.data.priorities ? ['noisy.priority'] : []),
         ...step.data.tenants.map((tenant) => `noisy.tenant.${tenant.key}`),
       ];
     case 'transaction-flow':
@@ -248,6 +298,26 @@ export function widgetLabelKeys(step: WidgetStep): string[] {
         'tx.sent',
         'tx.unsent',
         ...step.data.scenarios.flatMap((key) => [`tx.scenario.${key}`, `tx.verdict.${key}`]),
+      ];
+    case 'api-cards':
+      return [
+        'api.request',
+        'api.response',
+        ...(step.data.endpoints.some((item) => item.outbound) ? ['api.outbound'] : []),
+        ...step.data.endpoints.map((item) => `api.${item.key}`),
+      ];
+    case 'broker-matrix':
+      return [
+        'bm.criterion',
+        'bm.choice',
+        'bm.score.yes',
+        'bm.score.partial',
+        'bm.score.no',
+        'bm.total',
+        ...step.data.rows.flatMap((row) => [
+          `bm.row.${row.key}`,
+          ...step.data.brokers.map((broker) => `bm.cell.${row.key}.${broker.key}`),
+        ]),
       ];
     case 'requirement-match':
       return [

@@ -140,6 +140,20 @@ specification {
     color amber
     line solid
   }
+  /**
+   * Маршрут по приоритету: публикатор кладёт в одну из трёх очередей, воркер
+   * берёт из них с весами. Отдельные виды, а не read/write: связи к очередям
+   * внутри MQ на остальных схемах поднимаются до самой MQ и слились бы с её
+   * линиями в одну серую со счётчиком. Своим видом их там легко исключить.
+   */
+  relationship enqueue {
+    color amber
+    line solid
+  }
+  relationship dequeue {
+    color sky
+    line solid
+  }
   relationship publishes
   relationship persists
   relationship owns

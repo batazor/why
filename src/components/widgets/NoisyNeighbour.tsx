@@ -19,7 +19,7 @@ import {
   type ReactFlowInstance,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import type { NoisyNeighbourData } from '../../code/widgets';
+import { PRIORITIES, type NoisyNeighbourData, type Priority } from '../../code/widgets';
 
 /**
  * Шумный сосед: три пользователя, один пул воркеров и выбор порядка.
@@ -53,6 +53,8 @@ type Sim = {
   done: Record<string, number>;
   waitTotal: Record<string, number>;
   credits: Record<string, number>;
+  /** Счета очередей приоритетов — та же механика, что у арендаторов. */
+  classCredits: Record<Priority, number>;
 };
 
 type Shot = {
@@ -182,6 +184,17 @@ export default function NoisyNeighbour({ data, labels }: Props) {
   const sim = useRef<Sim>(start(data));
 
   /**
+   * Приоритет каждого арендатора — в режиме приоритетов его меняет читатель.
+   * Симуляция читает его из ref: смена приоритета на ходу не должна
+   * перезапускать интервал.
+   */
+  const [prio, setPrio] = useState<Record<string, Priority>>(() =>
+    Object.fromEntries(data.tenants.map((tenant) => [tenant.key, tenant.priority ?? 'normal'])),
+  );
+  const prioRef = useRef(prio);
+  prioRef.current = prio;
+
+  /**
    * Подгонка схемы под полотно — не разовая.
    *
    * `fitView` у React Flow срабатывает один раз, при первом замере узлов. Всё,
@@ -227,7 +240,7 @@ export default function NoisyNeighbour({ data, labels }: Props) {
     if (!running) return;
 
     const id = setInterval(() => {
-      tick(sim.current, data, policy);
+      tick(sim.current, data, policy, prioRef.current);
       setShot(snapshot(sim.current, data));
     }, TICK_MS);
 
@@ -308,6 +321,9 @@ export default function NoisyNeighbour({ data, labels }: Props) {
           tenant: i,
           fill: shot.waiting[tenant.key] / longest,
           rows: [
+            ...(data.priorities
+              ? ([[text('noisy.priority'), prio[tenant.key]]] as [string, string][])
+              : []),
             [text('noisy.waiting'), String(shot.waiting[tenant.key])],
             [text('noisy.done'), String(shot.done[tenant.key])],
             [text('noisy.wait'), `${shot.wait[tenant.key].toFixed(1)} s`],
@@ -337,7 +353,7 @@ export default function NoisyNeighbour({ data, labels }: Props) {
         ],
       },
     };
-  }, [shot, policy, data, labels, index]);
+  }, [shot, policy, data, labels, index, prio]);
 
   /**
    * Узлы — только раскладка, и она не меняется за всю жизнь врезки. Всё живое
@@ -475,6 +491,29 @@ export default function NoisyNeighbour({ data, labels }: Props) {
         </button>
       </div>
 
+      {data.priorities && (
+        /* Приоритет арендатора — рядом с порядком: оба меняют одно и то же,
+           кто поедет следующим, и переключать их хочется вместе. */
+        <div className="noisy__priorities">
+          {data.tenants.map((tenant, i) => (
+            <div className={`noisy__prio noisy__prio--t${i}`} key={tenant.key}>
+              <span className="noisy__prio-name">{text(`noisy.tenant.${tenant.key}`)}</span>
+              {PRIORITIES.map((level) => (
+                <button
+                  type="button"
+                  key={level}
+                  className={`noisy__prio-level ${prio[tenant.key] === level ? 'is-on' : ''}`}
+                  aria-pressed={prio[tenant.key] === level}
+                  onClick={() => setPrio((current) => ({ ...current, [tenant.key]: level }))}
+                >
+                  {level}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+
       <div
         className="noisy__stage"
         ref={stage}
@@ -527,6 +566,7 @@ function start(data: NoisyNeighbourData): Sim {
     done: by(() => 0),
     waitTotal: by(() => 0),
     credits: by(() => 0),
+    classCredits: { high: 0, normal: 0, low: 0 },
   };
 }
 
@@ -566,7 +606,7 @@ function snapshot(sim: Sim, data: NoisyNeighbourData): Shot {
  * значит держать пул недогруженным на целый тик — и симуляция начнёт врать в
  * пользу любой политики одинаково, но заметно.
  */
-function tick(sim: Sim, data: NoisyNeighbourData, policy: string) {
+function tick(sim: Sim, data: NoisyNeighbourData, policy: string, prio: Record<string, Priority>) {
   sim.now += STEP;
 
   for (const tenant of data.tenants) {
@@ -584,7 +624,7 @@ function tick(sim: Sim, data: NoisyNeighbourData, policy: string) {
   });
 
   while (sim.running.length < data.workers) {
-    const job = take(sim, data, policy);
+    const job = take(sim, data, policy, prio);
     if (!job) break;
     sim.waitTotal[job.tenant] += sim.now - job.at;
     sim.running.push({ tenant: job.tenant, until: sim.now + data.jobSeconds });
@@ -602,9 +642,16 @@ function tick(sim: Sim, data: NoisyNeighbourData, policy: string) {
  * у кого, счета пополняются на вес. Так очередь делится между арендаторами, а
  * не между джобами.
  */
-function take(sim: Sim, data: NoisyNeighbourData, policy: string): Job | undefined {
+function take(
+  sim: Sim,
+  data: NoisyNeighbourData,
+  policy: string,
+  prio: Record<string, Priority>,
+): Job | undefined {
   const ready = data.tenants.filter((tenant) => sim.queues[tenant.key].length);
   if (!ready.length) return undefined;
+
+  if (data.priorities) return takeByPriority(sim, data, policy, prio, ready);
 
   if (policy === 'fifo') {
     const first = ready.reduce((best, tenant) =>
@@ -621,6 +668,51 @@ function take(sim: Sim, data: NoisyNeighbourData, policy: string): Job | undefin
   }
 
   const next = ready.reduce((best, tenant) =>
+    sim.credits[tenant.key] > sim.credits[best.key] ? tenant : best,
+  );
+  sim.credits[next.key] -= 1;
+  return sim.queues[next.key].shift();
+}
+
+/**
+ * Режим приоритетов: сначала — из какой очереди, потом — чью джобу из неё.
+ *
+ * `strict` берёт из high, пока она не пуста: при постоянном потоке срочных
+ * low не стартует никогда. `weights` делит взятия между очередями по весам
+ * (6 : 3 : 1) той же механикой счетов, что и справедливость по арендаторам;
+ * пустая очередь в раздаче не участвует и свою долю отдаёт остальным.
+ *
+ * Внутри очереди арендаторы делят её поровну: приоритет решает, из какой
+ * очереди брать, а справедливость — чью джобу.
+ */
+function takeByPriority(
+  sim: Sim,
+  data: NoisyNeighbourData,
+  policy: string,
+  prio: Record<string, Priority>,
+  ready: NoisyNeighbourData['tenants'],
+): Job | undefined {
+  const levels = PRIORITIES.filter((level) => ready.some((tenant) => prio[tenant.key] === level));
+
+  let level: Priority;
+  if (policy === 'strict') {
+    level = levels[0];
+  } else {
+    const weights = data.priorities!.weights;
+    if (levels.every((item) => sim.classCredits[item] <= 0)) {
+      for (const item of levels) sim.classCredits[item] += weights[item];
+    }
+    level = levels.reduce((best, item) =>
+      sim.classCredits[item] > sim.classCredits[best] ? item : best,
+    );
+    sim.classCredits[level] -= 1;
+  }
+
+  const inLevel = ready.filter((tenant) => prio[tenant.key] === level);
+  if (inLevel.every((tenant) => sim.credits[tenant.key] <= 0)) {
+    for (const tenant of inLevel) sim.credits[tenant.key] += 1;
+  }
+  const next = inLevel.reduce((best, tenant) =>
     sim.credits[tenant.key] > sim.credits[best.key] ? tenant : best,
   );
   sim.credits[next.key] -= 1;

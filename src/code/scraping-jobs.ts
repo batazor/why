@@ -43,6 +43,7 @@ export const likec4: LikeC4Spec = {
     'seq-submit': 'scrape_submit_seq',
     'seq-read': 'scrape_read_seq',
     'c3-scheduler': 'scrape_scheduler',
+    priority: 'scrape_priority',
   },
   // Итоговая схема и последовательности — во всю ширину: в половине экрана их
   // подписи не прочитать.
@@ -110,6 +111,9 @@ const requirements: RequirementsData = {
     { id: 'NFR-9', kind: 'nfr', step: 'concurrency', goal: 'concurrency' },
     { id: 'NFR-10', kind: 'nfr', step: 'storage', goal: 'storage' },
     { id: 'NFR-11', kind: 'nfr', step: 'retries', goal: 'retries' },
+    // Требование, пришедшее после основного разбора: приоритет джобы.
+    { id: 'FR-9', kind: 'fr', step: 'priority' },
+    { id: 'NFR-12', kind: 'nfr', step: 'priority', goal: 'priority' },
   ],
 };
 
@@ -185,6 +189,7 @@ export const widgets: WidgetSpec = {
         { key: 'domainLimit', fits: ['NFR-6'] },
         { key: 'fairQueue', fits: ['NFR-4'] },
         { key: 'autoscale', fits: ['NFR-8', 'NFR-9'] },
+        { key: 'priorityQueues', fits: ['FR-9', 'NFR-12'] },
       ],
     },
   },
@@ -265,6 +270,54 @@ export const widgets: WidgetSpec = {
    * при общей очереди занимает пул на три минуты, и всё это время остальные
    * стоят за ним.
    */
+  /**
+   * Какую MQ взять: матрица сравнения под наши требования. Оценки — часть
+   * конструкции, пояснения в ячейках — проза локали.
+   */
+  broker: {
+    widget: 'broker-matrix',
+    wide: true,
+    data: {
+      choice: 'rabbitmq',
+      brokers: [
+        { key: 'kafka', name: 'Kafka' },
+        { key: 'rabbitmq', name: 'RabbitMQ' },
+        { key: 'nats', name: 'NATS JetStream' },
+        { key: 'sqs', name: 'SQS' },
+      ],
+      rows: [
+        { key: 'ack', req: 'NFR-3', scores: { kafka: 'no', rabbitmq: 'yes', nats: 'yes', sqs: 'yes' } },
+        { key: 'backoff', req: 'NFR-11', scores: { kafka: 'no', rabbitmq: 'partial', nats: 'yes', sqs: 'yes' } },
+        { key: 'priority', req: 'NFR-12', scores: { kafka: 'partial', rabbitmq: 'yes', nats: 'partial', sqs: 'partial' } },
+        { key: 'dlq', req: 'NFR-3', scores: { kafka: 'no', rabbitmq: 'yes', nats: 'partial', sqs: 'yes' } },
+        { key: 'fanout', req: 'FR-7', scores: { kafka: 'yes', rabbitmq: 'yes', nats: 'yes', sqs: 'no' } },
+        { key: 'throughput', req: 'NFR-9', scores: { kafka: 'yes', rabbitmq: 'yes', nats: 'yes', sqs: 'yes' } },
+        { key: 'ops', scores: { kafka: 'no', rabbitmq: 'partial', nats: 'yes', sqs: 'yes' } },
+        { key: 'lockin', scores: { kafka: 'yes', rabbitmq: 'yes', nats: 'yes', sqs: 'no' } },
+      ],
+    },
+  },
+
+  /**
+   * Тот же шумный сосед, но с приоритетами. Краулер со своим залпом — normal,
+   * магазин — high, аналитик — low: на «строго» аналитик не стартует, пока у
+   * краулера есть работа, на весах получает свою десятую долю.
+   */
+  'priority-sim': {
+    widget: 'noisy-neighbour',
+    wide: false,
+    data: {
+      tenants: [
+        { key: 'shop', rate: 0.5, burst: 0, weight: 1, priority: 'high' },
+        { key: 'analyst', rate: 0.5, burst: 0, weight: 1, priority: 'low' },
+        { key: 'crawler', rate: 1, burst: 400, weight: 1, priority: 'normal' },
+      ],
+      workers: 8,
+      jobSeconds: 4,
+      policies: ['strict', 'weights'],
+      priorities: { weights: { high: 6, normal: 3, low: 1 } },
+    },
+  },
   fairness: {
     widget: 'noisy-neighbour',
     // В колонке рядом с текстом: читатель переключает политику и тут же
@@ -333,8 +386,69 @@ const deck: CodeDeck = [
   { id: 'fairness' },
   { id: 'results' },
   { id: 'observability' },
+  { id: 'priority' },
+  { id: 'priority-sim' },
+  { id: 'broker' },
   { id: 'tradeoffs' },
   { id: 'answer' },
 ];
 
 export default deck;
+
+/** Врезки внутри текста шага: колонка рядом у этих шагов занята. */
+export const inlineWidgets: WidgetSpec = {
+  /**
+   * Контракт карточками: метод, путь, код ответа и поля. Стоят в тексте
+   * шага: колонку рядом занимает таблица требований, куда на этом шаге
+   * приходит цель NFR-5.
+   */
+  api: {
+    widget: 'api-cards',
+    data: {
+      endpoints: [
+        {
+          key: 'submit',
+          method: 'POST',
+          path: '/jobs',
+          status: 202,
+          statusText: 'Accepted',
+          request: ['Idempotency-Key', 'url', 'params', 'priority'],
+          response: ['id', 'status: queued', 'links.self'],
+        },
+        {
+          key: 'status',
+          method: 'GET',
+          path: '/jobs/{id}',
+          status: 200,
+          statusText: 'OK',
+          response: ['status', 'attempts', 'last_error'],
+        },
+        {
+          key: 'list',
+          method: 'GET',
+          path: '/jobs?status=',
+          status: 200,
+          statusText: 'OK',
+          response: ['items[]', 'next_cursor'],
+        },
+        {
+          key: 'result',
+          method: 'GET',
+          path: '/jobs/{id}/result',
+          status: 200,
+          statusText: 'OK',
+          response: ['url', 'expires_at'],
+        },
+        {
+          key: 'webhook',
+          method: 'POST',
+          path: '{callback_url}',
+          status: 200,
+          statusText: 'OK',
+          request: ['id', 'status', 'finished_at'],
+          outbound: true,
+        },
+      ],
+    },
+  },
+};

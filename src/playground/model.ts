@@ -7,6 +7,8 @@
  * документ до текущей версии, а не падает на нём.
  */
 
+import type { DbTable } from './schema';
+
 export const SCHEMA_VERSION = 1;
 
 export type BlockKind = string;
@@ -18,6 +20,8 @@ export interface DesignNode {
   note: string;
   /** Выбранная технология из карты компетенций: kafka, postgres… */
   tech?: string;
+  /** Схема данных хранилища: таблицы, коллекции, ключи кэша, сообщения очереди. */
+  schema?: DbTable[];
   x: number;
   y: number;
 }
@@ -258,7 +262,18 @@ export function nextRequirementId(design: Design, kind: RequirementKind): string
 function migrateBoard(data: Partial<Board> | undefined): Board {
   return {
     nodes: Array.isArray(data?.nodes)
-      ? data.nodes.map((node) => ({ ...node, note: node.note ?? '', label: node.label ?? '' }))
+      ? data.nodes.map((node) => ({
+          ...node,
+          note: node.note ?? '',
+          label: node.label ?? '',
+          schema: Array.isArray(node.schema)
+            ? node.schema.map((table) => ({
+                ...table,
+                note: table.note ?? '',
+                columns: (table.columns ?? []).map((column) => ({ ...column, keys: column.keys ?? [], nullable: Boolean(column.nullable) })),
+              }))
+            : undefined,
+        }))
       : [],
     edges: Array.isArray(data?.edges)
       ? data.edges.map((edge) => ({ ...edge, label: edge.label ?? '', mode: edge.mode ?? 'sync' }))

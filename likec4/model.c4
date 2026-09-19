@@ -209,7 +209,15 @@ model {
      * настраиваем и чиним. Снаружи стоит то, чем мы не управляем, и шине там
      * не место.
      */
-    mq = broker 'MQ'
+    mq = broker 'MQ' {
+      /*
+       * Три очереди работы вместо одной — по приоритету джобы. Появляются на
+       * шаге про приоритеты; на остальных кадрах MQ остаётся одной коробкой.
+       */
+      high = broker 'jobs.high'
+      normal = broker 'jobs.normal'
+      low = broker 'jobs.low'
+    }
 
     /** Результаты: терабайты, которым нечего делать в базе состояний. */
     results = store 'results-s3' {
@@ -262,6 +270,18 @@ model {
    * LikeC4 сам поднимает их до сервиса: отдельная связь от сервиса дала бы на
    * C3 вторую стрелку в базу прямо от рамки.
    */
+  /*
+   * Приоритеты: публикатор кладёт джобу в очередь её приоритета, воркер берёт
+   * из трёх очередей с весами 6 : 3 : 1. Пустая очередь отдаёт свою долю
+   * остальным, поэтому low не голодает, а high всё равно идёт быстрее.
+   */
+  scraper.publisher -[enqueue]-> scraper.mq.high 'priority = high'
+  scraper.publisher -[enqueue]-> scraper.mq.normal 'priority = normal'
+  scraper.publisher -[enqueue]-> scraper.mq.low 'priority = low'
+  scraper.mq.high -[dequeue]-> scraper.worker 'weight 6'
+  scraper.mq.normal -[dequeue]-> scraper.worker 'weight 3'
+  scraper.mq.low -[dequeue]-> scraper.worker 'weight 1'
+
   scraper.scheduler.sweeper -[calls]-> scraper.scheduler.repo 'expired leases'
   scraper.scheduler.retries -[calls]-> scraper.scheduler.repo 'failed attempts'
   scraper.jobs_db -[read]-> scraper.scheduler.repo 'expired leases, failed attempts'

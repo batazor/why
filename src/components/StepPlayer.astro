@@ -12,7 +12,7 @@ import type { CodeDeck } from '../code/types';
 import type { FlowSpec } from '../code/flow';
 import type { LikeC4Spec } from '../code/likec4';
 import type { FileTreeSpec } from '../code/tree';
-import type { WidgetSpec } from '../code/widgets';
+import { requirementsAt, type WidgetSpec } from '../code/widgets';
 import LoadCalculator from './widgets/LoadCalculator';
 import RequirementSort from './widgets/RequirementSort';
 import NoisyNeighbour from './widgets/NoisyNeighbour';
@@ -22,6 +22,8 @@ import RequirementChips from './widgets/RequirementChips';
 import TransactionFlow from './widgets/TransactionFlow';
 import JobLifecycle from './widgets/JobLifecycle';
 import RequirementMatch from './widgets/RequirementMatch';
+import BrokerMatrix from './widgets/BrokerMatrix';
+import ApiCards from './widgets/ApiCards';
 import { likec4model } from '../likec4/generated';
 
 interface NarrationStep {
@@ -69,9 +71,11 @@ interface Props {
    * названы, но проверить их нечем.
    */
   widgets?: WidgetSpec;
+  /** Врезки внутри текста шага (колонка рядом занята своим кадром). */
+  inlineWidgets?: WidgetSpec;
 }
 
-const { lang, steps, deck, flow, likec4, tree, docs = [], notes = [], comments = {}, drags = [], labels = {}, widgets } = Astro.props;
+const { lang, steps, deck, flow, likec4, tree, docs = [], notes = [], comments = {}, drags = [], labels = {}, widgets, inlineWidgets } = Astro.props;
 
 if (flow && likec4) {
   throw new Error('StepPlayer: flow и likec4 вместе — схему рисует что-то одно');
@@ -368,15 +372,34 @@ const shikiOptions = {
               )}
 
               {
+                /* Врезка внутри текста: карточки контракта дополняют прозу, а
+                   колонка рядом занята таблицей требований. */
+                (() => {
+                  const inline = inlineWidgets?.[merged[i].id];
+                  return inline?.widget === 'api-cards' ? (
+                    <ApiCards data={inline.data} labels={labels} />
+                  ) : null;
+                })()
+              }
+
+              {
                 /* Требования шага — под его текстом: их тащат в таблицу,
                    которая стоит в колонке рядом. */
                 (() => {
                   const widget = widgets?.[merged[i].id];
-                  return widget?.widget === 'requirements' ? (
+                  /* Шаг может принести требование и без таблицы рядом, если его
+                     кадр — схема: тогда строку тащат в таблицу на правом краю. */
+                  const data =
+                    widget?.widget === 'requirements'
+                      ? widget.data
+                      : requirementsData && requirementsAt(requirementsData, merged[i].id).length
+                        ? requirementsData
+                        : null;
+                  return data ? (
                     <RequirementChips
                       client:visible
                       step={merged[i].id}
-                      data={widget.data}
+                      data={data}
                       labels={labels}
                     />
                   ) : null;
@@ -502,6 +525,11 @@ const shikiOptions = {
         {widget.widget === 'requirement-match' && (
           <RequirementMatch client:visible data={widget.data} labels={labels} />
         )}
+        {widget.widget === 'broker-matrix' && (
+          <BrokerMatrix client:visible data={widget.data} labels={labels} />
+        )}
+        {/* Без client: — карточки контракта статичные и рисуются при сборке. */}
+        {widget.widget === 'api-cards' && <ApiCards data={widget.data} labels={labels} />}
         {widget.widget === 'requirements' && (
           <RequirementsBoard
             client:visible

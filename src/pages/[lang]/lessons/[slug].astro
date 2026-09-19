@@ -167,7 +167,11 @@ const siblingHref = (entry: CollectionEntry<'lessons'>) =>
 
     <Incidents lang={lang} items={lesson.data.incidents} />
 
-    <div class="prose" data-terms={JSON.stringify(lesson.data.terms)}>
+    <div
+      class="prose"
+      data-terms={JSON.stringify(lesson.data.terms)}
+      data-terms-site={t('lesson.officialSite')}
+    >
       <Content />
     </div>
 
@@ -187,6 +191,7 @@ const siblingHref = (entry: CollectionEntry<'lessons'>) =>
       drags={drags}
       labels={lesson.data.labels}
       widgets={deck.widgets}
+      inlineWidgets={deck.inlineWidgets}
     />
 
     <Quiz lang={lang} slug={slug!} items={lesson.data.quiz} />
@@ -238,7 +243,10 @@ const siblingHref = (entry: CollectionEntry<'lessons'>) =>
   const scope = document.querySelector<HTMLElement>('article');
 
   if (prose && scope) {
-    const glossary: Record<string, string> = JSON.parse(prose.dataset.terms || '{}');
+    const glossary: Record<string, string | { text: string; url: string }> = JSON.parse(
+      prose.dataset.terms || '{}',
+    );
+    const siteLabel = prose.dataset.termsSite ?? '';
     let open: HTMLElement | null = null;
 
     const hide = () => {
@@ -247,10 +255,11 @@ const siblingHref = (entry: CollectionEntry<'lessons'>) =>
     };
 
     scope.querySelectorAll<HTMLElement>('[data-term]').forEach((el, i) => {
-      const definition = glossary[el.dataset.term!];
+      const entry = glossary[el.dataset.term!];
       // Слова без определения остаются обычным текстом: пунктир обещает
       // расшифровку, и пустой тултип это обещание нарушал бы.
-      if (!definition) return;
+      if (!entry) return;
+      const definition = typeof entry === 'string' ? { text: entry, url: '' } : entry;
 
       el.classList.add('term');
       el.tabIndex = 0;
@@ -259,7 +268,20 @@ const siblingHref = (entry: CollectionEntry<'lessons'>) =>
       tip.className = 'term__tip';
       tip.id = `term-${i}`;
       tip.setAttribute('role', 'tooltip');
-      tip.textContent = definition;
+      tip.textContent = definition.text;
+      /* Технология — со ссылкой на официальный сайт. Подсказка лежит внутри
+         термина, поэтому курсор, переехавший на ссылку, её не закрывает. */
+      if (definition.url) {
+        const link = document.createElement('a');
+        link.className = 'term__link';
+        link.href = definition.url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = `${siteLabel} ↗`;
+        // Щелчок по ссылке не должен закрывать подсказку тапом по термину.
+        link.addEventListener('click', (event) => event.stopPropagation());
+        tip.append(link);
+      }
       el.append(tip);
       el.setAttribute('aria-describedby', tip.id);
 

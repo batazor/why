@@ -1,3 +1,4 @@
+import type { DbTable, KeyFlag } from './schema';
 import { emptyDesign, uid, type Design, type DesignEdge, type DesignNode, type Endpoint, type HttpMethod, type Requirement } from './model';
 
 /**
@@ -90,6 +91,58 @@ const ROUTES: Array<[HttpMethod, string, number, Text, string[], string[], strin
   ],
 ];
 
+/** Поле схемы: имя, тип, ключи. Имена и типы — идентификаторы, не переводятся. */
+type Field = [string, string, KeyFlag[]?];
+
+const SCHEMAS: Record<string, Array<[string, Text, Field[]]>> = {
+  db: [
+    [
+      'links',
+      { en: 'One item per code. Redirect reads by code only.', ru: 'Одна запись на код. Редирект читает только по коду.' },
+      [
+        ['code', 'string', ['partition']],
+        ['url', 'string'],
+        ['owner_id', 'string', ['index']],
+        ['created_at', 'timestamp'],
+        ['expires_at', 'timestamp'],
+      ],
+    ],
+  ],
+  cache: [
+    [
+      'link:{code}',
+      { en: 'Value is the URL, TTL 24 h; LRU evicts cold links.', ru: 'Значение — URL, TTL 24 ч; холодные ссылки вытесняет LRU.' },
+      [
+        ['code', 'string', ['partition']],
+        ['url', 'string'],
+      ],
+    ],
+  ],
+  queue: [
+    [
+      'link_clicked',
+      { en: 'Keyed by code: clicks of one link stay in order.', ru: 'Ключ — код: клики одной ссылки идут по порядку.' },
+      [
+        ['code', 'string', ['partition']],
+        ['clicked_at', 'timestamp'],
+        ['referrer', 'string'],
+        ['country', 'string'],
+      ],
+    ],
+  ],
+  stats: [
+    [
+      'clicks_daily',
+      { en: 'Aggregates per link per day; stats page reads one partition.', ru: 'Агрегаты на ссылку за день; страница статистики читает одну партицию.' },
+      [
+        ['code', 'string', ['partition']],
+        ['day', 'date', ['sort']],
+        ['clicks', 'counter'],
+      ],
+    ],
+  ],
+};
+
 const GUIDE: Text = {
   en: 'Expect requirements first, then numbers (reads ≫ writes, ~100:1), then the design. Strong candidates separate the redirect path from click analytics and discuss how codes are generated without collisions.',
   ru: 'Ждём сначала требования, потом числа (чтений намного больше записей, ~100:1), потом схему. Сильный кандидат отделяет путь редиректа от аналитики кликов и обсуждает, как генерировать коды без коллизий.',
@@ -125,7 +178,15 @@ export function exampleDesign(lang: string): Design {
   const nodes = NODES.map(([key, kind, label, x, y, note, tech]): DesignNode => {
     const id = `${design.id}_${key}`;
     ids.set(key, id);
-    return { id, kind, label: pick(label), note: note ? pick(note) : '', x, y, ...(tech ? { tech } : {}) };
+    const schema = SCHEMAS[key]?.map(
+      ([name, about, fields]): DbTable => ({
+        id: uid('t'),
+        name,
+        note: pick(about),
+        columns: fields.map(([field, type, keys]) => ({ id: uid('c'), name: field, type, keys: keys ?? [], nullable: false })),
+      }),
+    );
+    return { id, kind, label: pick(label), note: note ? pick(note) : '', x, y, ...(tech ? { tech } : {}), ...(schema ? { schema } : {}) };
   });
   const edges = EDGES.map(([from, to, label, mode], index): DesignEdge => ({
     id: `${design.id}_e${index}`,

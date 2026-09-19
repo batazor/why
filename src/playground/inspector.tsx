@@ -3,6 +3,7 @@ import { BLOCKS, EDGE_PRESETS } from './catalog';
 import { competencyFor, localized, type CompetencyGroup } from './competency';
 import { patchRequirement } from './panels';
 import { BlockRoutes } from './api-panel';
+import { SchemaSummary } from './schema-editor';
 import type { Design, DesignNode, Requirement } from './model';
 import type { T } from './i18n';
 
@@ -256,6 +257,8 @@ export function InspectorPanel({ design, update, t, lang, selection, readOnly, s
         </label>
 
         <Competency node={node} patch={patch} t={t} lang={lang} readOnly={readOnly} showProbes={showProbes} />
+
+        <SchemaSummary node={node} patch={patch} readOnly={readOnly} t={t} />
 
         <BlockRequirements design={design} node={node} update={update} t={t} readOnly={readOnly} />
 

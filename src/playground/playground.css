@@ -2103,3 +2103,251 @@ body:has(.pg) .site-footer {
   color: var(--pg-muted);
   background: none;
 }
+
+/* ------------------------------------------------------- Схема данных */
+
+.pg-block__schema {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-top: 2px;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.62rem;
+  color: var(--pg-muted);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pg-block__schema .codicon {
+  font-size: 11px;
+}
+
+.pg-schema-summary__list {
+  list-style: none;
+  margin: 0.2rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.8rem;
+}
+
+.pg-schema-summary__list strong {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.76rem;
+}
+
+.pg-schema-summary__cols {
+  margin-left: 0.4rem;
+  color: var(--pg-muted);
+  font-size: 0.74rem;
+}
+
+.pg-schema {
+  width: min(76rem, 100%);
+}
+
+.pg-schema__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.9rem;
+  font-size: 0.8rem;
+}
+
+.pg-schema__body {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.75rem 1rem 1.25rem;
+}
+
+/* Таблицы — карточками ER-диаграммы, сколько влезет в ряд. */
+.pg-schema__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(21rem, 1fr));
+  gap: 0.9rem;
+  align-items: start;
+}
+
+.pg-table {
+  border: 1px solid var(--pg-border);
+  border-top: 3px solid var(--pg-storage);
+  border-radius: 8px;
+  background: var(--pg-panel);
+  box-shadow: 0 1px 3px var(--shadow, rgba(16, 18, 22, 0.12));
+  overflow: hidden;
+}
+
+.pg-table__head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid var(--pg-border);
+  background: var(--pg-bg);
+}
+
+.pg-table__head .codicon {
+  color: var(--pg-storage);
+}
+
+.pg-table__name,
+.pg-table__name-input {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.85rem;
+  font-weight: 650;
+}
+
+.pg-table__cols {
+  list-style: none;
+  margin: 0;
+  padding: 0.2rem 0;
+}
+
+.pg-col {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr) auto;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.22rem 0.6rem;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.76rem;
+}
+
+.pg-col + .pg-col {
+  border-top: 1px dashed color-mix(in srgb, var(--pg-border) 70%, transparent);
+}
+
+.pg-col.is-editing {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr) auto auto;
+}
+
+.pg-col__name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.pg-col__type {
+  color: var(--pg-muted);
+}
+
+.pg-col__keys {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+.pg-col__ref {
+  font-size: 0.68rem;
+  color: var(--pg-accent);
+  white-space: nowrap;
+}
+
+.pg-col__ref-select {
+  grid-column: 1 / -1;
+  width: 100%;
+  font-size: 0.74rem;
+}
+
+.pg-col .pg-input {
+  padding: 0.18rem 0.35rem;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+/* Ключ — плашкой в своём цвете: PK и PART одного смысла, одного цвета. */
+.pg-key {
+  --key: var(--pg-muted);
+  padding: 0 0.3rem;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--key) 14%, transparent);
+  color: var(--key);
+  font: 700 0.6rem/1.5 ui-monospace, 'SF Mono', Menlo, monospace;
+  letter-spacing: 0.03em;
+}
+
+.pg-key--pk,
+.pg-key--partition { --key: #b7861b; }
+.pg-key--sort { --key: #0e8a8a; }
+.pg-key--fk { --key: var(--pg-accent); }
+.pg-key--unique { --key: #8b4fc9; }
+.pg-key--index { --key: #3f7d3a; }
+.pg-key--null { --key: var(--pg-muted); }
+
+.pg-key--toggle {
+  cursor: pointer;
+  background: none;
+  border-color: var(--pg-border);
+  color: var(--pg-muted);
+  opacity: 0.75;
+}
+
+.pg-key--toggle.is-on {
+  background: color-mix(in srgb, var(--key) 14%, transparent);
+  border-color: var(--key);
+  color: var(--key);
+  opacity: 1;
+}
+
+.pg-table__add {
+  display: block;
+  width: 100%;
+  padding: 0.3rem 0.6rem;
+  border: 0;
+  border-top: 1px solid var(--pg-border);
+  background: none;
+  color: var(--pg-muted);
+  font: inherit;
+  font-size: 0.76rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pg-table__add:hover {
+  color: var(--pg-accent);
+  background: var(--pg-accent-soft);
+}
+
+.pg-table__note,
+.pg-table__note-input {
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--pg-border);
+  border-radius: 0;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.76rem;
+  color: var(--pg-muted);
+  background: none;
+}
+
+.pg-table--new {
+  display: grid;
+  place-items: center;
+  min-height: 8rem;
+  border: 1px dashed var(--pg-border);
+  border-top: 1px dashed var(--pg-border);
+  box-shadow: none;
+  background: none;
+  color: var(--pg-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.pg-table--new:hover {
+  border-color: var(--pg-accent);
+  color: var(--pg-accent);
+}
+
+.pg-schema__ddl {
+  margin: 1rem 0 0;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--pg-border);
+  border-radius: 8px;
+  background: var(--pg-bg);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  overflow-x: auto;
+}
