@@ -18,12 +18,40 @@ export interface DesignNode {
   kind: BlockKind;
   label: string;
   note: string;
-  /** Выбранная технология из карты компетенций: kafka, postgres… */
+  /** Выбранная технология: id из каталога (kafka, postgres…) или своё название. */
   tech?: string;
+  /**
+   * Своя матрица выбора: какие технологии сравнивали и почему каждая подходит
+   * или нет под требования проекта. Заполняет пользователь — готовых
+   * значений нет: смысл в том, что обоснование даёт он, а не песочница.
+   */
+  matrix?: TechMatrix;
   /** Схема данных хранилища: таблицы, коллекции, ключи кэша, сообщения очереди. */
   schema?: DbTable[];
   x: number;
   y: number;
+}
+
+/** Оценка технологии под одно требование: подходит, частично или нет. */
+export type MatrixScore = 'yes' | 'partial' | 'no';
+
+export interface MatrixCell {
+  score?: MatrixScore;
+  /** Почему — своими словами. */
+  note: string;
+}
+
+export interface TechMatrix {
+  /** Сравниваемые технологии: названия, как их написал пользователь. */
+  options: string[];
+  /**
+   * Строки матрицы — id требований, которые пользователь счёл важными для
+   * этого выбора: не каждое ФТ/НФТ касается базы или очереди. Пока не задано —
+   * берутся требования, которые закрывает сам блок.
+   */
+  rows?: string[];
+  /** Требование → технология → оценка. Ключи — id требования и название технологии. */
+  cells: Record<string, Record<string, MatrixCell>>;
 }
 
 /** Синхронный вызов ждёт ответа, асинхронный — оставляет сообщение и уходит. */
@@ -301,6 +329,13 @@ function migrateBoard(data: Partial<Board> | undefined): Board {
                 note: table.note ?? '',
                 columns: (table.columns ?? []).map((column) => ({ ...column, keys: column.keys ?? [], nullable: Boolean(column.nullable) })),
               }))
+            : undefined,
+          matrix: node.matrix
+            ? {
+                options: Array.isArray(node.matrix.options) ? node.matrix.options : [],
+                rows: Array.isArray(node.matrix.rows) ? node.matrix.rows : undefined,
+                cells: node.matrix.cells ?? {},
+              }
             : undefined,
         }))
       : [],

@@ -4,7 +4,7 @@ import { competencyFor, localized, type CompetencyGroup } from './competency';
 import { patchRequirement } from './panels';
 import { BlockRoutes } from './api-panel';
 import { SchemaSummary } from './schema-editor';
-import type { Design, DesignNode, Requirement } from './model';
+import type { Design, DesignNode, MatrixCell, MatrixScore, Requirement, TechMatrix } from './model';
 import type { T } from './i18n';
 
 type Update = (fn: (design: Design) => Design) => void;
@@ -73,89 +73,282 @@ function BlockRequirements({ design, node, update, t, readOnly }: Pick<Props, 'd
   );
 }
 
-/** Таблица сравнения технологий во весь экран: в боковой панели четыре колонки не читаются. */
-function CompareDialog({ group, chosen, onPick, onClose, t, lang, readOnly }: {
-  group: CompetencyGroup;
-  chosen?: string;
-  onPick: (id: string) => void;
+const MARK: Record<MatrixScore, string> = { yes: '✓', partial: '~', no: '✗' };
+
+const emptyMatrix = (): TechMatrix => ({ options: [], cells: {} });
+
+/**
+ * Матрица выбора технологии во весь экран: в боковой панели колонки не
+ * читаются.
+ *
+ * Строки — требования проекта, которые завёл сам пользователь: ФТ и НФТ.
+ * Колонки — технологии, которые он решил сравнить. Готовых значений нет ни в
+ * одной ячейке: отметку и «почему» пишет пользователь. На собеседовании это и
+ * есть сигнал — умеет ли кандидат обосновать выбор своими требованиями, а не
+ * пересказать справочник. Названия из каталога — только подсказки, чтобы не
+ * печатать «PostgreSQL» руками.
+ */
+function MatrixDialog({ node, group, requirements, patch, onClose, t, readOnly }: {
+  node: DesignNode;
+  group?: CompetencyGroup;
+  requirements: Requirement[];
+  patch: (value: Partial<DesignNode>) => void;
   onClose: () => void;
   t: T;
-  lang: string;
   readOnly: boolean;
 }) {
+  const [draft, setDraft] = useState('');
+  const matrix = node.matrix ?? emptyMatrix();
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => event.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  const save = (next: TechMatrix) => patch({ matrix: next });
+
+  const addOption = (name: string) => {
+    const clean = name.trim();
+    if (!clean || matrix.options.some((option) => option.toLowerCase() === clean.toLowerCase())) return;
+    save({ ...matrix, options: [...matrix.options, clean] });
+    setDraft('');
+  };
+
+  const removeOption = (name: string) => {
+    const cells = Object.fromEntries(
+      Object.entries(matrix.cells).map(([req, row]) => {
+        const { [name]: _, ...rest } = row;
+        return [req, rest];
+      }),
+    );
+    save({ options: matrix.options.filter((option) => option !== name), cells });
+    if (node.tech === name) patch({ tech: undefined });
+  };
+
+  const cell = (req: string, option: string): MatrixCell => matrix.cells[req]?.[option] ?? { note: '' };
+
+  const setCell = (req: string, option: string, value: Partial<MatrixCell>) =>
+    save({
+      ...matrix,
+      cells: { ...matrix.cells, [req]: { ...matrix.cells[req], [option]: { ...cell(req, option), ...value } } },
+    });
+
+  // Строки выбирает пользователь: не каждое ФТ/НФТ касается базы или очереди.
+  // Пока он не выбирал — требования, которые закрывает сам блок. Удалённые
+  // из документа требования отсюда пропадают сами.
+  const picked = matrix.rows ?? requirements.filter((item) => item.covers.includes(node.id)).map((item) => item.id);
+  const setRows = (next: string[]) => save({ ...matrix, rows: next });
+
+  // Сначала требования, которые закрывает этот блок: выбор технологии прежде
+  // всего про них. Внутри — ФТ, потом НФТ, как в документе требований.
+  const byRelevance = (a: Requirement, b: Requirement) => {
+    const here = Number(b.covers.includes(node.id)) - Number(a.covers.includes(node.id));
+    if (here) return here;
+    if (a.kind !== b.kind) return a.kind === 'fr' ? -1 : 1;
+    return 0;
+  };
+  const rows = requirements.filter((item) => picked.includes(item.id)).sort(byRelevance);
+  const spare = requirements.filter((item) => !picked.includes(item.id)).sort(byRelevance);
+
+  const fits = (option: string) => rows.filter((row) => cell(row.id, option).score === 'yes').length;
+
+  // Подсказки — названия из каталога, которых ещё нет в колонках.
+  const suggestions = (group?.options ?? [])
+    .map((option) => option.name)
+    .filter((name) => !matrix.options.some((option) => option.toLowerCase() === name.toLowerCase()));
+
   return (
-    <div className="pg-dialog" role="dialog" aria-modal="true" aria-label={t(`comp.${group.id}`)} onClick={onClose}>
+    <div className="pg-dialog" role="dialog" aria-modal="true" aria-label={t('comp.compare')} onClick={onClose}>
       <div className="pg-dialog__box" onClick={(event) => event.stopPropagation()}>
         <header className="pg-dialog__head">
-          <h3>{t('comp.title', { group: t(`comp.${group.id}`) })}</h3>
+          <h3>{group ? t('comp.title', { group: t(`comp.${group.id}`) }) : t('comp.compare')}</h3>
           <button type="button" className="pg-icon-button" aria-label={t('comp.close')} onClick={onClose}>
             <i className="codicon codicon-close" aria-hidden="true" />
           </button>
         </header>
-        <div className="pg-compare__scroll">
-          <table className="pg-compare">
-            <thead>
-              <tr>
-                <th />
-                {group.options.map((option) => (
-                  <th key={option.id} className={option.id === chosen ? 'is-chosen' : ''}>
-                    {option.name}
-                    {!readOnly && (
-                      <button
-                        type="button"
-                        className={`pg-button pg-button--small ${option.id === chosen ? 'is-on' : ''}`}
-                        onClick={() => onPick(option.id)}
-                      >
-                        {option.id === chosen ? t('comp.chosen') : t('comp.choose')}
-                      </button>
-                    )}
-                  </th>
+
+        <p className="pg-matrix__hint">{t('comp.matrixHint')}</p>
+
+        {!readOnly && (
+          <div className="pg-matrix__add">
+            <form
+              className="pg-matrix__form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                addOption(draft);
+              }}
+            >
+              <input
+                className="pg-input"
+                value={draft}
+                placeholder={t('comp.optionPlaceholder')}
+                onChange={(event) => setDraft(event.currentTarget.value)}
+              />
+              <button type="submit" className="pg-button pg-button--small">
+                <i className="codicon codicon-add" aria-hidden="true" /> {t('comp.addOption')}
+              </button>
+            </form>
+            {spare.length > 0 && (
+              <div className="pg-matrix__suggest">
+                <span className="pg-field__label">{t('comp.addRow')}</span>
+                {spare.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className="pg-chip pg-matrix__pick"
+                    title={item.target ? `${item.text} · ${item.target}` : item.text}
+                    onClick={() => setRows([...picked, item.id])}
+                  >
+                    + <span className={`pg-matrix__req pg-matrix__req--${item.kind}`}>{item.id}</span>
+                    <span className="pg-matrix__pick-text">{item.text}</span>
+                  </button>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              {group.dimensions.map((dimension) => (
-                <tr key={dimension}>
-                  <th scope="row">{t(`dim.${dimension}`)}</th>
-                  {group.options.map((option) => (
-                    <td key={option.id} className={option.id === chosen ? 'is-chosen' : ''}>
-                      {option.values[dimension]}
+              </div>
+            )}
+            {suggestions.length > 0 && (
+              <div className="pg-matrix__suggest">
+                <span className="pg-field__label">{t('comp.suggest')}</span>
+                {suggestions.map((name) => (
+                  <button key={name} type="button" className="pg-chip" onClick={() => addOption(name)}>
+                    + {name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {requirements.length === 0 ? (
+          <p className="pg-matrix__empty">{t('comp.noReqs')}</p>
+        ) : rows.length === 0 ? (
+          <p className="pg-matrix__empty">{t('comp.noRows')}</p>
+        ) : matrix.options.length === 0 ? (
+          <p className="pg-matrix__empty">{t('comp.noOptions')}</p>
+        ) : (
+          <div className="pg-compare__scroll">
+            <table className="pg-compare pg-matrix">
+              <thead>
+                <tr>
+                  <th />
+                  {matrix.options.map((option) => (
+                    <th key={option} className={option === node.tech ? 'is-chosen' : ''}>
+                      <span className="pg-matrix__option">
+                        {option}
+                        {!readOnly && (
+                          <button
+                            type="button"
+                            className="pg-icon-button pg-matrix__remove"
+                            aria-label={t('comp.removeOption')}
+                            title={t('comp.removeOption')}
+                            onClick={() => removeOption(option)}
+                          >
+                            <i className="codicon codicon-close" aria-hidden="true" />
+                          </button>
+                        )}
+                      </span>
+                      {readOnly ? (
+                        option === node.tech && <span className="pg-matrix__badge">{t('comp.chosen')}</span>
+                      ) : (
+                        <button
+                          type="button"
+                          className={`pg-matrix__pick ${option === node.tech ? 'is-on' : ''}`}
+                          onClick={() => patch({ tech: option === node.tech ? undefined : option })}
+                        >
+                          {option === node.tech ? `✓ ${t('comp.chosen')}` : t('comp.choose')}
+                        </button>
+                      )}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={row.id}>
+                    <th scope="row">
+                      <span className={`pg-matrix__req pg-matrix__req--${row.kind}`}>{row.id}</span>
+                      {row.covers.includes(node.id) && <span className="pg-matrix__here">{t('comp.coversHere')}</span>}
+                      {!readOnly && (
+                        <button
+                          type="button"
+                          className="pg-icon-button pg-matrix__remove pg-matrix__remove-row"
+                          aria-label={t('comp.removeRow')}
+                          title={t('comp.removeRow')}
+                          onClick={() => setRows(picked.filter((id) => id !== row.id))}
+                        >
+                          <i className="codicon codicon-close" aria-hidden="true" />
+                        </button>
+                      )}
+                      <span className="pg-matrix__text">{row.text}</span>
+                      {row.kind === 'nfr' && row.target && <span className="pg-matrix__target">{row.target}</span>}
+                    </th>
+                    {matrix.options.map((option) => {
+                      const value = cell(row.id, option);
+                      return (
+                        <td key={option} className={option === node.tech ? 'is-chosen' : ''}>
+                          <div className={`pg-matrix__cell pg-matrix__cell--${value.score ?? 'none'}`}>
+                            {/* Три отметки рядом, а не одна по кругу: видно, из чего
+                                выбирают, и нужная ставится одним щелчком. Повторный
+                                щелчок по выбранной снимает её. */}
+                            <div className="pg-matrix__marks" role="radiogroup" aria-label={row.id}>
+                              {(['yes', 'partial', 'no'] as MatrixScore[]).map((score) => (
+                                <button
+                                  key={score}
+                                  type="button"
+                                  role="radio"
+                                  aria-checked={value.score === score}
+                                  className={`pg-matrix__mark pg-matrix__mark--${score} ${value.score === score ? 'is-on' : ''}`}
+                                  disabled={readOnly}
+                                  title={t(`comp.score.${score}`)}
+                                  onClick={() => setCell(row.id, option, { score: value.score === score ? undefined : score })}
+                                >
+                                  {MARK[score]}
+                                </button>
+                              ))}
+                            </div>
+                            <textarea
+                              className="pg-matrix__note"
+                              rows={1}
+                              value={value.note}
+                              placeholder={t('comp.why')}
+                              readOnly={readOnly}
+                              onChange={(event) => setCell(row.id, option, { note: event.currentTarget.value })}
+                            />
+                          </div>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <th scope="row">{t('comp.total')}</th>
+                  {matrix.options.map((option) => (
+                    <td key={option} className={option === node.tech ? 'is-chosen' : ''}>
+                      <div className="pg-matrix__total">
+                        <span className="pg-matrix__bar">
+                          <span style={{ width: `${rows.length ? (fits(option) / rows.length) * 100 : 0}%` }} />
+                        </span>
+                        <b>
+                          {fits(option)} / {rows.length}
+                        </b>
+                      </div>
                     </td>
                   ))}
                 </tr>
-              ))}
-              <tr className="pg-compare__prose">
-                <th scope="row">{t('comp.pick')}</th>
-                {group.options.map((option) => (
-                  <td key={option.id} className={option.id === chosen ? 'is-chosen' : ''}>
-                    {localized(option.pick, lang)}
-                  </td>
-                ))}
-              </tr>
-              <tr className="pg-compare__prose">
-                <th scope="row">{t('comp.avoid')}</th>
-                {group.options.map((option) => (
-                  <td key={option.id} className={option.id === chosen ? 'is-chosen' : ''}>
-                    {localized(option.avoid, lang)}
-                  </td>
-                ))}
-              </tr>
-            </tbody>
-          </table>
-        </div>
+              </tfoot>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function Competency({ node, patch, t, lang, readOnly, showProbes }: {
+function Competency({ node, requirements, patch, t, lang, readOnly, showProbes }: {
   node: DesignNode;
+  requirements: Requirement[];
   patch: (value: Partial<DesignNode>) => void;
   t: T;
   lang: string;
@@ -165,7 +358,7 @@ function Competency({ node, patch, t, lang, readOnly, showProbes }: {
   const [open, setOpen] = useState(false);
   const group = competencyFor(node.kind);
   if (!group) return null;
-  const chosen = group.options.find((option) => option.id === node.tech);
+  const options = node.matrix?.options ?? [];
 
   return (
     <section className="pg-competency">
@@ -175,27 +368,22 @@ function Competency({ node, patch, t, lang, readOnly, showProbes }: {
           <i className="codicon codicon-table" aria-hidden="true" /> {t('comp.compare')}
         </button>
       </header>
+      {/* Выбор — из того, что пользователь сам сравнил, а не из каталога:
+          технология без обоснования в матрице выбирается вслепую. */}
       <select
         className="pg-input pg-select pg-competency__select"
-        disabled={readOnly}
+        disabled={readOnly || options.length === 0}
         value={node.tech ?? ''}
         onChange={(event) => patch({ tech: event.currentTarget.value || undefined })}
       >
         <option value="">{t('comp.none')}</option>
-        {group.options.map((option) => (
-          <option key={option.id} value={option.id}>
-            {option.name}
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
           </option>
         ))}
+        {node.tech && !options.includes(node.tech) && <option value={node.tech}>{node.tech}</option>}
       </select>
-      {chosen && (
-        <dl className="pg-competency__why">
-          <dt>{t('comp.pick')}</dt>
-          <dd>{localized(chosen.pick, lang)}</dd>
-          <dt>{t('comp.avoid')}</dt>
-          <dd>{localized(chosen.avoid, lang)}</dd>
-        </dl>
-      )}
       {showProbes && (
         <>
           <span className="pg-field__label">{t('comp.probes')}</span>
@@ -207,13 +395,13 @@ function Competency({ node, patch, t, lang, readOnly, showProbes }: {
         </>
       )}
       {open && (
-        <CompareDialog
+        <MatrixDialog
+          node={node}
           group={group}
-          chosen={node.tech}
-          onPick={(tech) => patch({ tech: tech === node.tech ? undefined : tech })}
+          requirements={requirements}
+          patch={patch}
           onClose={() => setOpen(false)}
           t={t}
-          lang={lang}
           readOnly={readOnly}
         />
       )}
@@ -258,7 +446,15 @@ export function InspectorPanel({ design, update, t, lang, selection, readOnly, s
           </select>
         </label>
 
-        <Competency node={node} patch={patch} t={t} lang={lang} readOnly={readOnly} showProbes={showProbes} />
+        <Competency
+          node={node}
+          requirements={design.requirements}
+          patch={patch}
+          t={t}
+          lang={lang}
+          readOnly={readOnly}
+          showProbes={showProbes}
+        />
 
         <SchemaSummary node={node} patch={patch} readOnly={readOnly} t={t} lang={lang} values={sizeValues} />
 

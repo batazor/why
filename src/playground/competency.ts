@@ -551,7 +551,8 @@ export function competencyFor(kind: string): CompetencyGroup | undefined {
 }
 
 export function techName(kind: string, tech?: string): string | undefined {
-  return tech ? competencyFor(kind)?.options.find((option) => option.id === tech)?.name : undefined;
+  // Своё название — не id из каталога: показываем как есть.
+  return tech ? (competencyFor(kind)?.options.find((option) => option.id === tech)?.name ?? tech) : undefined;
 }
 
 export function localized(text: Text, lang: string): string {
