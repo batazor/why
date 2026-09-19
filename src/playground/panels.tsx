@@ -118,9 +118,13 @@ export function RequirementsPanel({ design, update, t }: PanelProps) {
           {items.map((item) => (
             <li className="pg-req__item" key={item.id}>
               <div className="pg-req__row">
-                {/* Номер — ручка: его тащат на блок схемы, и блок закрывает требование. */}
-                <span
+                {/*
+                  Номер — ручка и подпись поля: щелчок ставит курсор в текст,
+                  перетаскивание на блок схемы связывает требование с блоком.
+                */}
+                <label
                   className="pg-req__id pg-req__grip"
+                  htmlFor={`pg-req-${item.id}`}
                   draggable
                   title={t('req.dragHint')}
                   onDragStart={(event) => {
@@ -130,8 +134,9 @@ export function RequirementsPanel({ design, update, t }: PanelProps) {
                 >
                   <i className="codicon codicon-gripper" aria-hidden="true" />
                   {item.id}
-                </span>
+                </label>
                 <textarea
+                  id={`pg-req-${item.id}`}
                   className="pg-input pg-textarea pg-req__text"
                   rows={2}
                   placeholder={t('req.text')}
