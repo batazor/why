@@ -274,6 +274,31 @@ def ddd_transport():
     )
 
 
+def interview():
+    """Одна доска на троих: задание, схема кандидата, рубрика интервьюера."""
+    return (
+        bloom((110, 150, 90, 100, '#f3e8cc'), (330, 150, 150, 110, '#e8eef3'), (550, 150, 90, 100, '#e2d8ee'))
+        # Задание — карточка слева.
+        + wash(rect(34, 70, 120, 150, CREAM, op=0.95), rect(34, 70, 120, 24, BUTTER, op=0.9))
+        + brush(*lines(50, 116, [86, 70, 80, 56, 76], 18), color=INK_WARM, width=1.8, opacity=0.6)
+        # Доска: блоки и связи, как на полотне песочницы.
+        + wash(rect(196, 60, 270, 190, '#ffffff', r=12, op=0.55))
+        + wash(rect(214, 96, 58, 38, SKY, op=0.85), rect(310, 76, 64, 38, SAGE, op=0.85), rect(310, 150, 64, 38, SAGE, op=0.85),
+               *cylinder(404, 110, 46, 44, SKY_D, '#d3e3ee'), rect(214, 196, 58, 32, PEACH, op=0.85))
+        + brush(*arrow(274, 112, 306, 96), *arrow(274, 118, 306, 164), *arrow(378, 96, 402, 118), *arrow(378, 168, 402, 142),
+                *arrow(340, 190, 276, 210, bend=10), color=INK, width=2, opacity=0.55)
+        # Требования, приколотые к блокам.
+        + wash(circle(376, 72, 7, ROSE, 0.95), circle(376, 146, 7, LAVENDER, 0.95))
+        # Рубрика — лист справа с точками оценок.
+        + wash(rect(496, 70, 110, 150, LILAC, op=0.85))
+        + brush(*lines(510, 100, [44, 36, 50, 40], 26), color=INK_LAV, width=1.8, opacity=0.6)
+        + wash(*[circle(570 + k * 9, 100 + r * 26, 3.4, SAGE_D if k <= r % 3 else '#e7e1ef', 1) for r in range(4) for k in range(3)])
+        # Три роли — кружки над доской.
+        + wash(circle(260, 34, 11, BUTTER, 0.95), circle(330, 30, 11, SKY, 0.95), circle(400, 34, 11, LAVENDER, 0.95))
+        + splashes((180, 260, 3, PEACH), (620, 60, 3, SAGE), (470, 270, 3, SKY))
+    )
+
+
 COVERS = {
     'circuit-breaker': (circuit_breaker, 'Ретраи долбят упавший сервис, рубильник между ними разомкнут.'),
     'discount-floor': (discount_floor, 'Две акции тянут цену ниже пола, доказательство держит её.'),
@@ -286,6 +311,7 @@ COVERS = {
     'why-ddd-services': (ddd_services, 'Календарь и ставка сходятся в доменном сервисе.'),
     'why-ddd-specification': (ddd_specification, 'Одно правило вместо трёх копий.'),
     'why-ddd-transport': (ddd_transport, 'JSON через адаптер в домен, cmd/ собирает процесс.'),
+    'system-design-interview': (interview, 'Задание, доска кандидата и рубрика интервьюера.'),
 }
 
 if __name__ == '__main__':

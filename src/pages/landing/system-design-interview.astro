@@ -1,0 +1,21 @@
+---
+// Адрес без языка ведёт на лендинг в языке по умолчанию — так же, как корень
+// сайта. Ссылку вида /landing/system-design-interview/ удобно раздавать.
+import { defaultLocale, localePath } from '../../i18n/ui';
+
+const target = localePath(defaultLocale, 'landing/system-design-interview');
+---
+
+<!doctype html>
+<html lang={defaultLocale}>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="refresh" content={`0; url=${target}`} />
+    <link rel="canonical" href={target} />
+    <meta name="robots" content="noindex" />
+    <title>Why</title>
+  </head>
+  <body>
+    <a href={target}>Continue →</a>
+  </body>
+</html>

@@ -1,0 +1,788 @@
+---
+import Base from '../../../layouts/Base.astro';
+import { locales, localePath, assetPath, type Locale } from '../../../i18n/ui';
+
+export function getStaticPaths() {
+  return locales.map((lang) => ({ params: { lang } }));
+}
+
+const lang = Astro.params.lang as Locale;
+
+/**
+ * Лендинг песочницы для собеседований по системному дизайну.
+ *
+ * Тексты живут здесь, а не в общем словаре: они нужны одной странице, и
+ * словарь интерфейса от них только распух бы. Каждое утверждение — про то,
+ * что песочница уже умеет: числа (27 блоков, оценка 0–3, веса ×2 и ×3) взяты
+ * из её кода, и если там поменяются, менять и здесь.
+ */
+const copy = {
+  ru: {
+    title: 'Песочница для собеседований по системному дизайну',
+    description:
+      'Собеседование по системному дизайну на одной доске: кандидат рисует, интервьюер видит эталон, подсказки и рубрику и ставит оценку по ходу разговора.',
+    eyebrow: 'Для тех, кто проводит собеседования',
+    heading: 'Собеседование по системному дизайну на одной доске',
+    lead: 'Кандидат видит задание и пустое полотно. Интервьюер видит то же полотно, а рядом — эталон, подсказки и рубрику. Оценка ставится по ходу разговора, а не по памяти после звонка. Бесплатно и без регистрации.',
+    open: 'Открыть песочницу',
+    how: 'Как проходит собеседование',
+    painTitle: 'Четыре вкладки на одно собеседование',
+    pain: [
+      'доска, где рисует кандидат;',
+      'документ с заданием и подсказками;',
+      'таблица с критериями;',
+      'заметки интервьюера.',
+    ],
+    painAfter:
+      'Интервьюер переключается между тремя из них, пока кандидат говорит, и половину сказанного пропускает. Оценку дописывают после звонка, и два интервьюера оценивают одного кандидата по-разному. Здесь задание, доска, подсказки и рубрика — части одной страницы.',
+    rolesTitle: 'Три роли',
+    roles: [
+      {
+        key: 'author',
+        name: 'Автор сценария',
+        points: [
+          'Пишет задание: у всех оно висит карточкой над полотном.',
+          'Рисует эталон — с ним потом сравнивают ответ.',
+          'Раскладывает подсказки в порядке, в каком их стоит открывать.',
+          'Составляет рубрику: каждый критерий от 0 до 3, главным — вес ×2 или ×3.',
+          'Готовит вопросы на углубление и решает, дать ли кандидату калькулятор и проверки.',
+        ],
+      },
+      {
+        key: 'candidate',
+        name: 'Кандидат',
+        points: [
+          'Видит только задание и пустое полотно — эталона и рубрики у него нет.',
+          'Собирает систему из блоков: клиенты, вход, вычисления, хранилища, очереди.',
+          'Записывает требования, HTTP API и оценки нагрузки.',
+          'Открытая подсказка появляется у него под заданием.',
+        ],
+      },
+      {
+        key: 'interviewer',
+        name: 'Интервьюер',
+        points: [
+          'Смотрит на доску кандидата, ничего на ней не меняя.',
+          'Открывает подсказку, когда кандидат застрял, — и она учитывается в оценке.',
+          'Ставит баллы по рубрике прямо во время разговора.',
+          'В конце видит, чего в ответе нет по сравнению с эталоном и что в нём лишнее.',
+        ],
+      },
+    ],
+    featuresTitle: 'Что есть на доске',
+    features: [
+      {
+        icon: 'board', tone: 'sky', wide: true, demo: ['клиенты', 'вход', 'вычисления', 'хранилища', 'очереди', 'платформа'],
+        name: 'Полотно',
+        text: '27 блоков в шести группах, синхронные и асинхронные связи, отмена и повтор действий.',
+      },
+      {
+        icon: 'req', tone: 'lavender', demo: ['FR-1', 'NFR-2 · p99 ≤ 200 мс'],
+        name: 'Требования',
+        text: 'Функциональные и нефункциональные, у каждого свойства — число для проверки. Строку перетаскивают на блок, который её выполняет. Таблица выгружается в Markdown.',
+      },
+      {
+        icon: 'api', tone: 'butter', demo: ['POST /jobs · 202', 'GET /jobs/{id} · 200'],
+        name: 'HTTP API',
+        text: 'Маршруты по шаблонам: CRUD, асинхронная задача, загрузка файла, список, вебхук. Метод, путь, код ответа и поля.',
+      },
+      {
+        icon: 'calc', tone: 'peach', demo: ['28 зап/с', '556 в работе', '2,3 ТБ'],
+        name: 'Оценки на салфетке',
+        text: 'Из пользователей, записей и пика — запросы в секунду, одновременность по закону Литтла и объём данных с репликами. Подсказки про кэш, шардинг и CDN; результат одной кнопкой становится нефункциональным требованием.',
+      },
+      {
+        icon: 'compare', tone: 'sage', demo: ['Kafka ↔ SQS', 'Postgres ↔ Cassandra'],
+        name: 'Сравнение технологий',
+        text: 'Для очередей, баз, кэшей, хранилищ и поиска: когда брать, когда не стоит и о чём спросить дальше. Kafka против SQS — в одной таблице.',
+      },
+      {
+        icon: 'schema', tone: 'mint', demo: ['PK', 'FK', 'PART', 'SORT', 'SQL · CQL'],
+        name: 'Схемы данных',
+        text: 'Таблицы и типы сообщений у блока, ключи PK, FK, PART и SORT, готовый DDL для SQL и CQL.',
+      },
+      {
+        icon: 'check', tone: 'rose', wide: true, demo: ['блок без связей', 'FR-3 без блока', 'NFR-4 без числа', 'единая точка отказа'],
+        name: 'Проверки',
+        text: 'Блок без связей, требование без блока, свойство без числа, единая точка отказа. Для интервьюера — отличия ответа от эталона.',
+      },
+    ],
+    flowTitle: 'Как проходит собеседование',
+    flow: [
+      ['Подготовьте сценарий', 'В роли автора: задание, эталон, подсказки и рубрика. Один раз на задачу.'],
+      ['Откройте собеседование', 'Кандидату — ссылка с ?role=candidate, себе — роль интервьюера.'],
+      ['Кандидат рисует', 'По ходу вы открываете подсказки; каждая отмечается и учитывается в оценке.'],
+      ['Оцените', 'От 0 до 3 по каждому пункту рубрики с весами, заметки и итог.'],
+      ['Сравните с эталоном', 'Какие блоки кандидат не нарисовал и какие добавил сверх эталона.'],
+    ],
+    privacyTitle: 'Без аккаунтов и сервера',
+    privacy:
+      'Проекты лежат в хранилище браузера и никуда не отправляются. Собеседование идёт в одном браузере, например с общего экрана. Сценарий и ответ кандидата передаются файлом JSON.',
+    exampleTitle: 'Как выглядит разобранная задача',
+    example:
+      'Разбор сервиса скрейпинг-джоб проходит весь путь: задание, вопросы, требования, расчёты, C1 → C2 → C3 и сверку решений с требованиями.',
+    exampleLink: 'Открыть разбор',
+    finalTitle: 'Начните с готового сценария',
+    finalText: 'В песочнице есть пример — сокращатель ссылок с эталоном, подсказками и рубрикой. Переключайте роли и посмотрите на собеседование с каждой стороны.',
+  },
+  en: {
+    title: 'A playground for system design interviews',
+    description:
+      'A system design interview on one board: the candidate draws, the interviewer sees the reference, hints and rubric and scores during the conversation.',
+    eyebrow: 'For people who run interviews',
+    heading: 'A system design interview on one board',
+    lead: 'The candidate sees the task and an empty canvas. The interviewer sees the same canvas plus the reference, the hints and the rubric. Scores go in during the conversation, not from memory after the call. Free, no sign-up.',
+    open: 'Open the playground',
+    how: 'How an interview goes',
+    painTitle: 'Four tabs for one interview',
+    pain: [
+      'a board the candidate draws on;',
+      'a document with the task and hints;',
+      'a sheet with the criteria;',
+      'the interviewer’s notes.',
+    ],
+    painAfter:
+      'The interviewer switches between three of them while the candidate talks and misses half of what is said. The score is written after the call, and two interviewers grade the same candidate differently. Here the task, the board, the hints and the rubric are parts of one page.',
+    rolesTitle: 'Three roles',
+    roles: [
+      {
+        key: 'author',
+        name: 'Scenario author',
+        points: [
+          'Writes the task: everyone sees it as a card pinned over the canvas.',
+          'Draws the reference the answer is compared against.',
+          'Orders the hints the way they should be revealed.',
+          'Builds the rubric: each criterion from 0 to 3, weight ×2 or ×3 for the key ones.',
+          'Prepares deep-dive questions and decides whether the candidate gets the calculator and the checks.',
+        ],
+      },
+      {
+        key: 'candidate',
+        name: 'Candidate',
+        points: [
+          'Sees only the task and an empty canvas — no reference, no rubric.',
+          'Builds the system from blocks: clients, edge, compute, storage, messaging.',
+          'Writes requirements, the HTTP API and load estimates.',
+          'A revealed hint shows up under the task.',
+        ],
+      },
+      {
+        key: 'interviewer',
+        name: 'Interviewer',
+        points: [
+          'Watches the candidate’s board without changing it.',
+          'Reveals a hint when the candidate is stuck — and it counts in the score.',
+          'Scores the rubric during the conversation.',
+          'At the end sees what the answer lacks compared with the reference and what it adds.',
+        ],
+      },
+    ],
+    featuresTitle: 'What is on the board',
+    features: [
+      { icon: 'board', tone: 'sky', wide: true, demo: ['clients', 'edge', 'compute', 'storage', 'messaging', 'platform'], name: 'Canvas', text: '27 blocks in six groups, synchronous and asynchronous connections, undo and redo.' },
+      {
+        icon: 'req', tone: 'lavender', demo: ['FR-1', 'NFR-2 · p99 ≤ 200 ms'],
+        name: 'Requirements',
+        text: 'Functional and non-functional, each property with a number to check. A row is dragged onto the block that delivers it. The table exports to Markdown.',
+      },
+      {
+        icon: 'api', tone: 'butter', demo: ['POST /jobs · 202', 'GET /jobs/{id} · 200'],
+        name: 'HTTP API',
+        text: 'Routes from templates: CRUD, async job, file upload, list, webhook. Method, path, status code and fields.',
+      },
+      {
+        icon: 'calc', tone: 'peach', demo: ['28 req/s', '556 in flight', '2.3 TB'],
+        name: 'Back-of-the-envelope',
+        text: 'From users, writes and peak to requests per second, concurrency by Little’s law and stored data with replicas. Hints about caching, sharding and CDN; one click turns a result into a non-functional requirement.',
+      },
+      {
+        icon: 'compare', tone: 'sage', demo: ['Kafka ↔ SQS', 'Postgres ↔ Cassandra'],
+        name: 'Technology comparison',
+        text: 'For queues, databases, caches, object storage and search: when to pick, when to avoid and what to ask next. Kafka vs SQS in one table.',
+      },
+      {
+        icon: 'schema', tone: 'mint', demo: ['PK', 'FK', 'PART', 'SORT', 'SQL · CQL'],
+        name: 'Data schemas',
+        text: 'Tables and message types per block, PK, FK, PART and SORT keys, ready DDL for SQL and CQL.',
+      },
+      {
+        icon: 'check', tone: 'rose', wide: true, demo: ['orphan block', 'FR-3 with no block', 'NFR-4 with no number', 'single point of failure'],
+        name: 'Checks',
+        text: 'A block with no connections, a requirement with no block, a property with no number, a single point of failure. For the interviewer — how the answer differs from the reference.',
+      },
+    ],
+    flowTitle: 'How an interview goes',
+    flow: [
+      ['Prepare the scenario', 'As the author: task, reference, hints and rubric. Once per problem.'],
+      ['Open the interview', 'The candidate gets a link with ?role=candidate, you take the interviewer role.'],
+      ['The candidate draws', 'You reveal hints along the way; each one is recorded and counted in the score.'],
+      ['Score', 'From 0 to 3 per rubric item with weights, notes and a verdict.'],
+      ['Compare with the reference', 'Which blocks the candidate missed and which they added beyond the reference.'],
+    ],
+    privacyTitle: 'No accounts, no server',
+    privacy:
+      'Designs live in browser storage and are not sent anywhere. The interview runs in one browser, for example on a shared screen. A scenario or an answer travels as a JSON file.',
+    exampleTitle: 'What a worked problem looks like',
+    example:
+      'The scraping jobs write-up goes all the way: the task, questions, requirements, estimates, C1 → C2 → C3 and matching decisions to requirements.',
+    exampleLink: 'Open the write-up',
+    finalTitle: 'Start from a ready scenario',
+    finalText: 'The playground has an example — a URL shortener with a reference, hints and a rubric. Switch roles and see the interview from each side.',
+  },
+}[lang];
+
+const playground = localePath(lang, 'playground');
+
+/** Иконки фич — те же линии 1.6 и скруглённые концы, что у значков на правом краю. */
+const ICONS: Record<string, string> = {
+  board: '<rect x="3.5" y="4.5" width="7" height="5" rx="1"/><rect x="13.5" y="4.5" width="7" height="5" rx="1"/><rect x="8.5" y="15" width="7" height="5" rx="1"/><path d="M10.5 7h3M7 9.5l3.5 5.5M17 9.5 13.5 15"/>',
+  req: '<rect x="4.5" y="3.5" width="15" height="17" rx="1.5"/><path d="M8 8h8M8 12h8M8 16h5"/>',
+  api: '<path d="M8 8 4 12l4 4M16 8l4 4-4 4M13.5 5l-3 14"/>',
+  calc: '<rect x="5" y="3.5" width="14" height="17" rx="1.5"/><path d="M8 7.5h8M8.5 12h1M12 12h1M15.5 12h0M8.5 16h1M12 16h1M15.5 16h0"/>',
+  compare: '<path d="M4 6h7v13H4zM13 6h7v13h-7z"/><path d="M6 10h3M6 13h3M15 10h3M15 13h3"/>',
+  schema: '<ellipse cx="12" cy="6" rx="7" ry="2.5"/><path d="M5 6v12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V6M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/>',
+  check: '<path d="M12 3.5 19.5 6v5.5c0 4.5-3.2 7.7-7.5 9-4.3-1.3-7.5-4.5-7.5-9V6z"/><path d="m8.8 12 2.3 2.3 4.2-4.6"/>',
+};
+---
+
+<Base lang={lang} title={copy.title} description={copy.description} path="landing/system-design-interview">
+  <div class="landing">
+    <section class="hero" data-reveal>
+      <div class="hero__text">
+        <p class="hero__eyebrow">{copy.eyebrow}</p>
+        <h1 class="hero__title">{copy.heading}</h1>
+        <p class="hero__lead">{copy.lead}</p>
+        <div class="hero__actions">
+          <a class="btn btn--primary" href={playground}>{copy.open} →</a>
+          <a class="hero__link" href="#flow">{copy.how}</a>
+        </div>
+      </div>
+      <figure class="hero__art" aria-hidden="true">
+        <img src={assetPath('covers/system-design-interview.svg')} alt="" width="640" height="300" />
+      </figure>
+    </section>
+
+    <section class="pain" data-reveal>
+      <h2>{copy.painTitle}</h2>
+      <ul>{copy.pain.map((item) => <li>{item}</li>)}</ul>
+      <p>{copy.painAfter}</p>
+    </section>
+
+    <section class="roles" data-reveal>
+      <h2>{copy.rolesTitle}</h2>
+      <div class="roles__grid">
+        {
+          copy.roles.map((role) => (
+            <article class={`role role--${role.key}`} data-reveal-item>
+              <h3>{role.name}</h3>
+              <ul>{role.points.map((point) => <li>{point}</li>)}</ul>
+            </article>
+          ))
+        }
+      </div>
+    </section>
+
+    <section class="features" data-reveal>
+      <h2>{copy.featuresTitle}</h2>
+      <div class="features__grid">
+        {
+          copy.features.map((feature) => (
+            <article
+              class:list={['feature', `feature--${feature.tone}`, feature.wide && 'feature--wide']}
+              data-reveal-item
+            >
+              <div class="feature__top">
+                <span class="feature__tile">
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="20"
+                    height="20"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                    set:html={ICONS[feature.icon]}
+                  />
+                </span>
+                <h3>{feature.name}</h3>
+              </div>
+              <p>{feature.text}</p>
+              {/* Кусочек того, как это выглядит на доске: не обещание, а образец. */}
+              <ul class="feature__demo" aria-hidden="true">
+                {feature.demo.map((item) => <li>{item}</li>)}
+              </ul>
+            </article>
+          ))
+        }
+      </div>
+    </section>
+
+    <section class="flow" id="flow" data-reveal>
+      <h2>{copy.flowTitle}</h2>
+      <ol class="flow__list">
+        {
+          copy.flow.map(([name, text], i) => (
+            <li class="flow__step" data-reveal-item>
+              <span class="flow__num">{i + 1}</span>
+              <div>
+                <h3>{name}</h3>
+                <p>{text}</p>
+              </div>
+            </li>
+          ))
+        }
+      </ol>
+    </section>
+
+    <section class="aside-pair" data-reveal>
+      <article class="note">
+        <h2>{copy.privacyTitle}</h2>
+        <p>{copy.privacy}</p>
+      </article>
+      <article class="note">
+        <h2>{copy.exampleTitle}</h2>
+        <p>{copy.example}</p>
+        <a class="hero__link" href={localePath(lang, 'lessons/scraping-jobs')}>{copy.exampleLink} →</a>
+      </article>
+    </section>
+
+    <section class="final" data-reveal>
+      <h2>{copy.finalTitle}</h2>
+      <p>{copy.finalText}</p>
+      <a class="btn btn--primary" href={playground}>{copy.open} →</a>
+    </section>
+  </div>
+</Base>
+
+<script>
+  import { animate, inView, stagger } from 'motion';
+
+  /**
+   * Секции проявляются, когда до них доскроллили; карточки внутри — одна за
+   * другой. Без JS и при reduced motion всё видно сразу: скрытие ставит сам
+   * скрипт, а не CSS.
+   */
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    document.querySelectorAll<HTMLElement>('[data-reveal]').forEach((section) => {
+      const items = section.querySelectorAll<HTMLElement>('[data-reveal-item]');
+      section.style.opacity = '0';
+      items.forEach((item) => (item.style.opacity = '0'));
+
+      inView(
+        section,
+        () => {
+          animate(section, { opacity: [0, 1], y: [18, 0] }, { duration: 0.5, ease: [0.22, 1, 0.36, 1] });
+          if (items.length) {
+            animate(
+              items,
+              { opacity: [0, 1], y: [14, 0] },
+              { delay: stagger(0.07, { startDelay: 0.12 }), duration: 0.45, ease: [0.22, 1, 0.36, 1] },
+            );
+          }
+        },
+        { amount: 0.15 },
+      );
+    });
+  }
+</script>
+
+<style>
+  .landing {
+    display: grid;
+    gap: 4.5rem;
+    padding: 1.5rem 0 3rem;
+  }
+
+  h2 {
+    margin: 0 0 1rem;
+    font-size: 1.45rem;
+    letter-spacing: -0.01em;
+  }
+
+  h3 {
+    margin: 0 0 0.4rem;
+    font-size: 1rem;
+  }
+
+  /* ---------- первый экран ---------- */
+
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    gap: 2rem;
+    align-items: center;
+  }
+
+  .hero__eyebrow {
+    margin: 0 0 0.6rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .hero__title {
+    margin: 0;
+    font-size: clamp(1.9rem, 4vw, 2.8rem);
+    line-height: 1.12;
+    letter-spacing: -0.02em;
+  }
+
+  .hero__lead {
+    margin: 1rem 0 0;
+    max-width: 36rem;
+    font-size: 1.05rem;
+    line-height: 1.6;
+    color: var(--muted);
+  }
+
+  .hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1.2rem;
+    margin-top: 1.6rem;
+  }
+
+  .btn--primary {
+    padding: 0.65rem 1.15rem;
+    border-radius: 999px;
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--panel);
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  /* Общее `.btn:hover` красит текст в синий — на синем фоне кнопки он
+     пропадал. Здесь у кнопки свои цвета на все состояния: текст всегда
+     светлый, меняется только фон. */
+  .btn.btn--primary:hover:not(:disabled),
+  .btn.btn--primary:focus-visible,
+  .btn.btn--primary:active {
+    border-color: color-mix(in srgb, var(--accent) 82%, var(--fg));
+    background: color-mix(in srgb, var(--accent) 82%, var(--fg));
+    color: var(--panel);
+  }
+
+  .hero__link {
+    color: var(--accent);
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .hero__link:hover {
+    text-decoration: underline;
+  }
+
+  /* Акварель на тёплой бумаге — как обложки разборов в каталоге. */
+  .hero__art {
+    margin: 0;
+    border-radius: 16px;
+    overflow: hidden;
+    background: color-mix(in srgb, #efe6d6 55%, var(--panel));
+    box-shadow: 0 10px 40px var(--shadow);
+  }
+
+  .hero__art img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  /* ---------- боль ---------- */
+
+  .pain {
+    max-width: 44rem;
+  }
+
+  .pain ul {
+    margin: 0;
+    padding-left: 1.2rem;
+    line-height: 1.7;
+  }
+
+  .pain p {
+    margin: 1rem 0 0;
+    line-height: 1.6;
+    color: var(--muted);
+  }
+
+  /* ---------- роли ---------- */
+
+  .roles__grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+  }
+
+  /* Цвет роли — полоса сверху: те же три тона, что у кружков на иллюстрации. */
+  .role {
+    --role: #c9a24a;
+    padding: 1.1rem 1.2rem 1.2rem;
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--role);
+    border-radius: var(--radius);
+    background: var(--panel);
+  }
+
+  .role--candidate {
+    --role: #5b9bd0;
+  }
+
+  .role--interviewer {
+    --role: #8a70c9;
+  }
+
+  .role ul {
+    margin: 0;
+    padding-left: 1.1rem;
+    font-size: 0.92rem;
+    line-height: 1.55;
+  }
+
+  .role li + li {
+    margin-top: 0.35rem;
+  }
+
+  /* ---------- фичи ---------- */
+
+  /* Бенто 3 × 3: полотно и проверки — во всю ширину двух колонок, остальные
+     по одной. Семь карточек закрывают девять клеток без дыры в конце. */
+  .features__grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.9rem;
+  }
+
+  /* Тон карточки — из палитры акварели на первом экране: плитка под иконкой
+     и лёгкая заливка. `--tone` — насыщенный цвет, всё остальное от него. */
+  .feature {
+    --tone: #5b9bd0;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    padding: 1.15rem 1.2rem 1.1rem;
+    border: 1px solid color-mix(in srgb, var(--tone) 22%, var(--border));
+    border-radius: 14px;
+    background:
+      radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--tone) 10%, transparent), transparent 60%),
+      var(--panel);
+    overflow: hidden;
+    transition:
+      border-color 0.2s ease,
+      box-shadow 0.2s ease,
+      transform 0.2s ease;
+  }
+
+  .feature:hover {
+    border-color: color-mix(in srgb, var(--tone) 55%, var(--border));
+    box-shadow: 0 10px 28px color-mix(in srgb, var(--tone) 18%, transparent);
+    transform: translateY(-3px);
+  }
+
+  .feature--wide {
+    grid-column: span 2;
+  }
+
+  .feature--sky {
+    --tone: #5b9bd0;
+  }
+  .feature--lavender {
+    --tone: #8a70c9;
+  }
+  .feature--butter {
+    --tone: #c9a24a;
+  }
+  .feature--peach {
+    --tone: #d98a5c;
+  }
+  .feature--sage {
+    --tone: #6f9e6a;
+  }
+  .feature--mint {
+    --tone: #4f9e8e;
+  }
+  .feature--rose {
+    --tone: #c7707a;
+  }
+
+  .feature__top {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+  }
+
+  .feature__tile {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 2.3rem;
+    height: 2.3rem;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--tone) 16%, var(--panel));
+    color: var(--tone);
+  }
+
+  .feature h3 {
+    margin: 0;
+    font-size: 1.02rem;
+  }
+
+  .feature p {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.55;
+    color: var(--muted);
+  }
+
+  /* Образец снизу, прижат к низу карточки: в ряду карточки разной длины
+     текста, и образцы стоят на одной линии. */
+  .feature__demo {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin: auto 0 0;
+    padding: 0.4rem 0 0;
+    list-style: none;
+  }
+
+  .feature__demo li {
+    padding: 0.12rem 0.5rem;
+    border: 1px solid color-mix(in srgb, var(--tone) 28%, var(--border));
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--tone) 7%, var(--panel));
+    color: color-mix(in srgb, var(--tone) 75%, var(--fg));
+    font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.72rem;
+    white-space: nowrap;
+  }
+
+  /* В две колонки последняя широкая становится обычной: иначе справа от
+     «Схем» оставалась бы пустая клетка. */
+  @media (max-width: 60rem) {
+    .features__grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .feature--wide:last-child {
+      grid-column: auto;
+    }
+  }
+
+  @media (max-width: 40rem) {
+    .features__grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .feature--wide {
+      grid-column: auto;
+    }
+  }
+
+  /* ---------- ход собеседования ---------- */
+
+  .flow__list {
+    display: grid;
+    gap: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    max-width: 44rem;
+  }
+
+  /* Шаги стоят на вертикальной линии: номер в кружке, линия между ними. */
+  .flow__step {
+    position: relative;
+    display: grid;
+    grid-template-columns: 2.4rem minmax(0, 1fr);
+    gap: 0.9rem;
+    padding-bottom: 1.3rem;
+  }
+
+  .flow__step:not(:last-child)::before {
+    content: '';
+    position: absolute;
+    left: 1.2rem;
+    top: 2.4rem;
+    bottom: 0;
+    width: 2px;
+    background: var(--border);
+  }
+
+  .flow__num {
+    display: grid;
+    place-items: center;
+    width: 2.4rem;
+    height: 2.4rem;
+    border-radius: 50%;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  .flow__step h3 {
+    margin-top: 0.45rem;
+  }
+
+  .flow__step p {
+    margin: 0;
+    line-height: 1.55;
+    color: var(--muted);
+  }
+
+  /* ---------- приватность и пример ---------- */
+
+  .aside-pair {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+  }
+
+  .note {
+    padding: 1.2rem 1.3rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--panel);
+  }
+
+  .note h2 {
+    font-size: 1.1rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .note p {
+    margin: 0 0 0.6rem;
+    line-height: 1.6;
+    color: var(--muted);
+  }
+
+  /* ---------- финал ---------- */
+
+  .final {
+    padding: 2.2rem 1.5rem;
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--accent-soft) 70%, var(--panel));
+    text-align: center;
+  }
+
+  .final p {
+    margin: 0 0 1.2rem;
+    color: var(--muted);
+  }
+
+  @media (max-width: 52rem) {
+    .hero,
+    .aside-pair {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .roles__grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>
