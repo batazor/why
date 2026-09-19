@@ -4,6 +4,8 @@ import Base from '../../../layouts/Base.astro';
 import StepPlayer from '../../../components/StepPlayer.astro';
 import Quiz from '../../../components/Quiz.astro';
 import Incidents from '../../../components/Incidents.astro';
+import Brief from '../../../components/Brief.astro';
+import Comments from '../../../components/Comments.astro';
 import Chapters from '../../../components/Chapters';
 import FlowDiagram from '../../../components/FlowDiagram';
 import { getDeck } from '../../../code/registry';
@@ -109,6 +111,8 @@ const siblingHref = (entry: CollectionEntry<'lessons'>) =>
   description={lesson.data.description}
   path={`lessons/${slug}`}
 >
+  <Comments lang={lang} />
+
   <article>
     <h1>{lesson.data.title}</h1>
 
@@ -128,20 +132,31 @@ const siblingHref = (entry: CollectionEntry<'lessons'>) =>
       />
     )}
 
-    <div class:list={['callout', poster && 'callout--illustrated']}>
-      <div class="callout__body">
-        <span class="callout__label">{t('catalog.problem')}</span>
-        {lesson.data.problem}
-      </div>
-      {
-        poster && (
-          /* Постер дублирует текст рядом, поэтому для скринридера он декоративный. */
-          <figure class="callout__figure" aria-hidden="true">
-            <FlowDiagram client:visible spec={poster} labels={lesson.data.labels} />
-          </figure>
-        )
-      }
-    </div>
+    {/* Разбор задачи открывается заданием, разбор паттерна — болью. Место у них
+        одно: и то, и другое отвечает на «зачем я это читаю», и два блока подряд
+        об одном читатель воспринимает как повтор. */}
+    {
+      lesson.data.brief ? (
+        <Brief
+          label={lesson.data.brief.label}
+          source={lesson.data.brief.source}
+          text={lesson.data.brief.text}
+        />
+      ) : (
+        <div class:list={['callout', poster && 'callout--illustrated']}>
+          <div class="callout__body">
+            <span class="callout__label">{t('catalog.problem')}</span>
+            {lesson.data.problem}
+          </div>
+          {poster && (
+            /* Постер дублирует текст рядом, поэтому для скринридера он декоративный. */
+            <figure class="callout__figure" aria-hidden="true">
+              <FlowDiagram client:visible spec={poster} labels={lesson.data.labels} />
+            </figure>
+          )}
+        </div>
+      )
+    }
 
     <Incidents lang={lang} items={lesson.data.incidents} />
 
@@ -164,6 +179,7 @@ const siblingHref = (entry: CollectionEntry<'lessons'>) =>
       comments={lesson.data.comments}
       drags={drags}
       labels={lesson.data.labels}
+      widgets={deck.widgets}
     />
 
     <Quiz lang={lang} slug={slug!} items={lesson.data.quiz} />

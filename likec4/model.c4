@@ -126,4 +126,144 @@ model {
    * биллинга он уходит в ряд под ней — туда, где ему и место.
    */
   shop.billing -[calls]-> provider 'authorize, capture'
+
+  /**
+   * Сервис скрейпинг-джоб — разбор системного дизайна.
+   *
+   * Живёт в той же модели, что и магазин: LikeC4 держит один проект на каталог,
+   * и второй системе здесь не тесно — пересечений по идентификаторам нет.
+   *
+   * Как и у магазина, элементы появляются по мере разбора: каждый следующий кадр
+   * добавляет ровно один. Ничего впрок.
+   */
+  scrapeUser = actor 'User'
+
+  /** Чужие API: медленные, ненадёжные, лимитирующие. Мы их не контролируем. */
+  targets = external 'Target APIs' {
+    technology 'HTTP'
+  }
+
+  scraper = context 'Scraping service' {
+
+    /*
+     * Имена — как у сервисов в репозитории и в деплое, в одном стиле с
+     * `jobs-pg` и `results-s3`. Пишущая и читающая стороны названы терминами
+     * CQRS, `job-command` и `job-query`: по имени сразу видно, какая это сторона.
+     */
+    /** Точка входа: принимает запрос пользователя и раздаёт его внутрь. */
+    gateway = service 'api-gateway'
+
+    /**
+     * Командная сторона CQRS: единственный, кто пишет джобу. В целевые API не
+     * ходит никогда — иначе медленная цель становится медленным приёмом.
+     */
+    command = service 'job-command'
+
+    /**
+     * Читающая сторона: статусы и история попыток. Отдельно от командной,
+     * потому что читают на порядок чаще, чем пишут.
+     */
+    reader = service 'job-query'
+
+    /**
+     * Публикует в шину события по строкам jobs, которые ещё не опубликованы.
+     * Отдельный процесс: так ни приём, ни воркер не пишут в шину сами, и
+     * двойной записи «база + брокер» нет нигде.
+     */
+    publisher = service 'job-publisher'
+
+    /** Пул: берёт джобу, ходит в цель, складывает результат, двигает статус. */
+    worker = service 'scrape-worker'
+
+    /**
+     * Планировщик: решает, какая джоба поедет следующей, когда попытки
+     * кончились и что делать с зависшими. Возврат зависших — крон-модуль
+     * внутри него; на C2 модули не рисуют, это уровень C3.
+     */
+    scheduler = service 'job-scheduler' {
+
+      /** Крон-модуль из шага про аренду: возвращает зависшие джобы. */
+      sweeper = component 'stuck-sweeper'
+
+      /** Судьба неудачной попытки: следующая с backoff или `failed`. */
+      retries = component 'retry-planner'
+
+      /** Единственный модуль, который ходит в базу. */
+      repo = component 'jobs-repository'
+    }
+
+    /**
+     * Одна база: джобы и попытки. Строка jobs сама служит outbox: колонки
+     * `published_at` и `finish_published_at` показывают, какое событие по ней
+     * ещё не ушло в шину. Изменение состояния и отметка «опубликовать» — одна
+     * запись в одной строке, и отдельная таблица для этого не нужна.
+     */
+    jobs_db = store 'jobs-pg' {
+      technology 'postgres'
+    }
+
+    /**
+     * Шина: очередь работы и очередь фактов о её итогах.
+     *
+     * Внутри границы, а не сбоку от неё: очередь наша — мы её разворачиваем,
+     * настраиваем и чиним. Снаружи стоит то, чем мы не управляем, и шине там
+     * не место.
+     */
+    mq = broker 'MQ'
+
+    /** Результаты: терабайты, которым нечего делать в базе состояний. */
+    results = store 'results-s3' {
+      technology 's3'
+    }
+  }
+
+
+  /*
+   * Стрелка идёт туда, куда едут данные. Запись — от сервиса к хранилищу,
+   * чтение — от хранилища к сервису, публикация — в шину, потребление — из
+   * шины (так же нарисован магазин: `bus -> billing`). Синхронный вызов — от
+   * вызывающего к вызываемому.
+   *
+   * Вид связи — `write` или `read` — задаёт ещё и цвет. Вызов относится к тому
+   * пути, который открывает: «submit» ведёт к записи, «status» — к чтению.
+   */
+  /*
+   * Две линии от пользователя вместо одной: они же легенда цвета. LikeC4
+   * сливает связи одной пары элементов в одну серую линию со счётчиком,
+   * поэтому на каждом кадре остаётся только та, о которой кадр (см. views).
+   */
+  scrapeUser -[write]-> scraper.gateway 'write: submit job'
+  scrapeUser -[read]-> scraper.gateway 'read: status, result'
+
+  scraper.gateway -[write]-> scraper.command 'create job'
+  scraper.gateway -[read]-> scraper.reader 'status, list'
+
+  scraper.command -[write]-> scraper.jobs_db 'job, published_at = null'
+  scraper.jobs_db -[read]-> scraper.reader 'status, attempts'
+
+  // Публикатор — единственный, кто пишет в шину: оба события берутся из строк
+  // jobs, где отметка публикации ещё пустая.
+  scraper.jobs_db -[read]-> scraper.publisher 'unpublished rows'
+  // После отправки публикатор отмечает строку: между этими двумя шагами окно,
+  // из которого берётся повторная доставка.
+  scraper.publisher -[write]-> scraper.jobs_db 'published_at = now()'
+  scraper.publisher -[write]-> scraper.mq 'job queued, job finished'
+
+  scraper.mq -[read]-> scraper.worker 'job queued'
+  scraper.worker -[read]-> targets 'fetch'
+  scraper.worker -[write]-> scraper.results 'payload'
+  // Результат клиент скачивает из хранилища сам, по подписанной ссылке:
+  // данные в наше API не заходят.
+  scraper.results -[read]-> scrapeUser 'read: result by presigned URL'
+  scraper.worker -[write]-> scraper.jobs_db 'status, attempt, lease'
+
+  /*
+   * Связи планировщика — от модулей. На C2, где планировщик одной коробкой,
+   * LikeC4 сам поднимает их до сервиса: отдельная связь от сервиса дала бы на
+   * C3 вторую стрелку в базу прямо от рамки.
+   */
+  scraper.scheduler.sweeper -[calls]-> scraper.scheduler.repo 'expired leases'
+  scraper.scheduler.retries -[calls]-> scraper.scheduler.repo 'failed attempts'
+  scraper.jobs_db -[read]-> scraper.scheduler.repo 'expired leases, failed attempts'
+  scraper.scheduler.repo -[write]-> scraper.jobs_db 'queued / failed, published_at = null'
 }

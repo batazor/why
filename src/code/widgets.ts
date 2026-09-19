@@ -1,0 +1,292 @@
+/**
+ * Интерактивные врезки разбора: калькулятор, сортировка, симулятор.
+ *
+ * Разбор системного дизайна отличается от разбора паттерна тем, что в нём есть
+ * числа и решения, а не только код. Прочитать «поток умножаем на длительность и
+ * получаем одновременность» — не то же самое, что подвинуть длительность с двух
+ * секунд до тридцати и увидеть, как четыре воркера превращаются в шестьдесят.
+ *
+ * Устроено как всё общее в проекте: структура — здесь (она одинакова во всех
+ * локалях), проза — в `labels` локализованного урока. Ключи, которые виджет
+ * требует, перечисляет `widgetLabelKeys`; что они есть в каждой локали,
+ * проверяет scripts/check-steps.mjs — ровно как с комментариями к коду.
+ */
+
+export type WidgetName =
+  | 'load-calculator'
+  | 'requirement-sort'
+  | 'noisy-neighbour'
+  | 'requirements'
+  | 'transaction-flow'
+  | 'job-lifecycle';
+
+/** Один ползунок калькулятора. Диапазон и шаг — часть конструкции, не перевод. */
+export type LoadInput = {
+  key: string;
+  min: number;
+  max: number;
+  /**
+   * Шаг ползунка. У величин, растущих на порядки (пользователи, размер
+   * результата), шаг линейным быть не может: 1000 из миллиона неразличимы, а
+   * сотня из тысячи решает всё. Такие идут по логарифму.
+   */
+  scale?: 'linear' | 'log';
+  step?: number;
+  value: number;
+};
+
+export type LoadCalculatorData = {
+  inputs: LoadInput[];
+  /**
+   * Границы вердикта: до `single` хватает одной машины, до `pool` — пула,
+   * дальше разговор про шардирование. В джобах в секунду на пике.
+   */
+  verdict: { single: number; pool: number };
+};
+
+/** Утверждение, которое читатель раскладывает по корзинам. */
+export type SortItem = {
+  key: string;
+  /** Ключ корзины, в которую утверждение относится на самом деле. */
+  bin: string;
+};
+
+export type RequirementSortData = {
+  bins: string[];
+  items: SortItem[];
+};
+
+export type NoisyTenant = {
+  key: string;
+  /** Сколько джоб приходит в секунду в спокойном режиме. */
+  rate: number;
+  /** Разовый залп: столько джоб приходит одним куском в начале. */
+  burst: number;
+  /** Вес в режиме взвешенной очереди. */
+  weight: number;
+};
+
+export type NoisyNeighbourData = {
+  tenants: NoisyTenant[];
+  /** Сколько джоб пул выполняет одновременно. */
+  workers: number;
+  /** Сколько секунд занимает одна джоба. */
+  jobSeconds: number;
+  policies: string[];
+};
+
+/**
+ * Строка документа требований.
+ *
+ * Документ растёт по ходу разбора: строка появляется на шаге `step`, а число
+ * к ней — цель — может прийти позже, на шаге `goal`. «Приём отвечает быстро»
+ * записывают вместе с остальными свойствами, а «за 200 мс» — только когда
+ * дошли до SLO.
+ */
+export type RequirementRow = {
+  id: string;
+  kind: 'fr' | 'nfr';
+  step: string;
+  goal?: string;
+};
+
+export type RequirementsData = {
+  /** Имя документа: по нему общее состояние всех врезок страницы. */
+  name: string;
+  rows: RequirementRow[];
+};
+
+/**
+ * Транзакция командного сервиса изнутри: сценарии, между которыми
+ * переключается читатель. Ключ сценария — идентификатор, его текст живёт в
+ * `labels` урока.
+ */
+export type TransactionFlowData = {
+  scenarios: ('ok' | 'crash' | 'redeliver')[];
+};
+
+/**
+ * Стейт-машина джобы. Состояния — идентификаторы из API (`queued`, `running`),
+ * они не переводятся; описания и подписи переходов живут в `labels`.
+ *
+ * Позиция состояния — часть конструкции, как диапазон ползунка: раскладка
+ * одинакова во всех локалях. Стороны `out`/`in` — откуда выходит и куда входит
+ * линия: обратный переход `running → queued` идёт поверху, иначе он лёг бы
+ * на прямой.
+ */
+export type LifecycleSide = 'top' | 'right' | 'bottom' | 'left';
+
+export type LifecycleState = {
+  key: string;
+  x: number;
+  y: number;
+  /** Конечное состояние: из него переходов нет. */
+  terminal?: boolean;
+  /** Точка входа — не состояние, а начало линии. */
+  start?: boolean;
+};
+
+export type LifecycleTransition = {
+  id: string;
+  from: string;
+  to: string;
+  /** Кто переводит: от этого цвет линии. */
+  actor: 'client' | 'command' | 'worker' | 'scheduler';
+  out: LifecycleSide;
+  in: LifecycleSide;
+};
+
+export type JobLifecycleData = {
+  states: LifecycleState[];
+  transitions: LifecycleTransition[];
+  /** Какое состояние раскрыто сразу. */
+  initial: string;
+};
+
+export type WidgetStep =
+  | { widget: 'load-calculator'; wide?: boolean; data: LoadCalculatorData }
+  | { widget: 'requirement-sort'; wide?: boolean; data: RequirementSortData }
+  | { widget: 'noisy-neighbour'; wide?: boolean; data: NoisyNeighbourData }
+  | { widget: 'requirements'; wide?: boolean; data: RequirementsData }
+  | { widget: 'transaction-flow'; wide?: boolean; data: TransactionFlowData }
+  | { widget: 'job-lifecycle'; wide?: boolean; data: JobLifecycleData };
+
+/** Шаг разбора → врезка, которая на нём стоит. */
+export type WidgetSpec = Record<string, WidgetStep>;
+
+/** Итоги калькулятора: порядок здесь же задаёт порядок в таблице. */
+export const LOAD_OUTPUTS = [
+  'perDay',
+  'average',
+  'peak',
+  'inFlight',
+  'workers',
+  'backlog',
+  'perDayBytes',
+  'stored',
+] as const;
+
+/**
+ * Какие ключи `labels` обязана дать локаль.
+ *
+ * Собирается из данных, а не пишется списком: список рядом с данными
+ * расходится с ними на второй правке.
+ */
+export function widgetLabelKeys(step: WidgetStep): string[] {
+  switch (step.widget) {
+    case 'load-calculator':
+      return [
+        'calc.inputs',
+        'calc.result',
+        'calc.law',
+        'calc.verdict.single',
+        'calc.verdict.pool',
+        'calc.verdict.shard',
+        ...step.data.inputs.flatMap((input) => [`calc.${input.key}`, `calc.${input.key}.unit`]),
+        ...LOAD_OUTPUTS.flatMap((key) => [`calc.out.${key}`, `calc.out.${key}.unit`]),
+      ];
+    case 'requirement-sort':
+      return [
+        'sort.prompt',
+        'sort.check',
+        'sort.again',
+        'sort.score',
+        'sort.right',
+        'sort.wrong',
+        'sort.progress',
+        ...step.data.bins.map((bin) => `sort.bin.${bin}`),
+        ...step.data.items.flatMap((item) => [`sort.item.${item.key}`, `sort.why.${item.key}`]),
+      ];
+    case 'noisy-neighbour':
+      return [
+        'noisy.policy',
+        'noisy.start',
+        'noisy.pause',
+        'noisy.reset',
+        'noisy.burst',
+        'noisy.time',
+        'noisy.waiting',
+        'noisy.done',
+        'noisy.wait',
+        'noisy.queue',
+        'noisy.workers',
+        'noisy.seconds',
+        'noisy.slots',
+        'noisy.gap',
+        'noisy.starved',
+        'noisy.even',
+        'noisy.idle',
+        ...step.data.policies.map((policy) => `noisy.policy.${policy}`),
+        ...step.data.tenants.map((tenant) => `noisy.tenant.${tenant.key}`),
+      ];
+    case 'transaction-flow':
+      return [
+        'tx.scenario',
+        'tx.group',
+        'tx.cycle',
+        'tx.afterCommit',
+        'tx.jobs',
+        'tx.published',
+        'tx.mq',
+        'tx.sent',
+        'tx.unsent',
+        ...step.data.scenarios.flatMap((key) => [`tx.scenario.${key}`, `tx.verdict.${key}`]),
+      ];
+    case 'job-lifecycle':
+      return [
+        'lc.hint',
+        'lc.out',
+        'lc.terminal',
+        'lc.actors',
+        ...[...new Set(step.data.transitions.map((tr) => tr.actor))].map((a) => `lc.actor.${a}`),
+        ...step.data.states.filter((st) => !st.start).map((st) => `lc.state.${st.key}`),
+        ...step.data.transitions.map((tr) => `lc.tr.${tr.id}`),
+      ];
+    case 'requirements':
+      return [
+        'req.fr',
+        'req.nfr',
+        'req.col.text.fr',
+        'req.col.note.fr',
+        'req.col.text.nfr',
+        'req.col.note.nfr',
+        'req.col.goal',
+        'req.drop',
+        'req.chips',
+        'req.addAll',
+        'req.placed',
+        'req.goal',
+        'req.empty',
+        'req.reset',
+        ...step.data.rows.flatMap((row) => [
+          `req.text.${row.id}`,
+          `req.note.${row.id}`,
+          ...(row.goal ? [`req.goal.${row.id}`] : []),
+        ]),
+      ];
+  }
+}
+
+/**
+ * Что шаг приносит в документ: новые строки и цели к уже записанным.
+ *
+ * Ключ `row:ID` — строка, `goal:ID` — её цель. Строка, у которой цель
+ * появляется на том же шаге, приносит обе сразу: читателю это одна карточка.
+ */
+export function requirementsAt(data: RequirementsData, step: string) {
+  return data.rows.flatMap((row) => {
+    const keys: { row: RequirementRow; keys: string[]; goalOnly: boolean }[] = [];
+    if (row.step === step) {
+      keys.push({
+        row,
+        keys: row.goal === step ? [`row:${row.id}`, `goal:${row.id}`] : [`row:${row.id}`],
+        goalOnly: false,
+      });
+    } else if (row.goal === step) {
+      // Цель без строки не бывает: если строку читатель пропустил, она
+      // приходит вместе со своей целью.
+      keys.push({ row, keys: [`row:${row.id}`, `goal:${row.id}`], goalOnly: true });
+    }
+    return keys;
+  });
+}

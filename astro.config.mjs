@@ -63,7 +63,21 @@ export default defineConfig({
      * корне: всё оптимизируется до первого запроса.
      */
     optimizeDeps: {
-      include: ['likec4/react', '@likec4/core/model'],
+      include: [
+        'likec4/react',
+        '@likec4/core/model',
+        /*
+         * То же для остальных островов: дерево файлов редактора, React Flow
+         * врезок и motion. Каждый из них впервые встречается на своей
+         * странице, и без этого списка первый заход на неё давал тот же 504 —
+         * у редактора оставалась одна корневая папка, у симулятора пустое
+         * полотно.
+         */
+        '@vscode-elements/elements/dist/vscode-tree/index.js',
+        '@vscode-elements/elements/dist/vscode-tree-item/index.js',
+        '@xyflow/react',
+        'motion',
+      ],
     },
   },
 

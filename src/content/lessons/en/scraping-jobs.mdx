@@ -1,0 +1,880 @@
+---
+title: 'System design: a scraping jobs service'
+description: >-
+  One task from the brief to the diagram: what is being asked, what to ask back,
+  what to calculate, and why the architecture comes last.
+problem: 'A system design task arrives as a paragraph of text without a single number, and people start drawing the diagram in the first minute. Then it turns out the service has neither requirements nor estimates, and there is nothing to base the queue discussion on: nobody knows what load it has to handle.'
+brief:
+  label: Task description
+  source: Product Owner
+  text: >-
+    We need a system that lets users run scraping jobs against various APIs
+    without making them wait for the results. Users should be able to see what's
+    happening with their jobs and get the data when it's done. Sometimes the APIs
+    can be slow or unreliable, so we need to make sure jobs don't just fail for
+    no reason. Also, we expect this to be used by a lot of people, so it should
+    be able to handle a lot of jobs at once.
+tags: [system-design, async, queues]
+order: 13
+deck: scraping-jobs
+draft: true
+labels:
+  calc.inputs: What we know
+  calc.result: What follows from it
+  calc.law: "Little's law: {peak} jobs/s × {seconds} s = {inFlight} jobs in flight"
+  calc.verdict.single: 'One machine with a pool of goroutines can handle this flow. The queue is there so the user does not wait for an answer; there is nothing to scale yet.'
+  calc.verdict.pool: 'This needs a worker pool that scales separately from intake. A queue between them is required.'
+  calc.verdict.shard: 'One queue is not enough at this flow. It has to be split: by target host, so a third-party API is not overloaded, and by user, so one of them cannot take the whole pool.'
+  calc.users: Active users
+  calc.users.unit: people
+  calc.jobsPerUser: Jobs per user per day
+  calc.jobsPerUser.unit: jobs
+  calc.jobSeconds: Average job duration
+  calc.jobSeconds.unit: s
+  calc.peakFactor: Peak above average by
+  calc.peakFactor.unit: ×
+  calc.perWorker: Jobs per worker at once
+  calc.perWorker.unit: jobs
+  calc.resultKb: Result size
+  calc.resultKb.unit: KB
+  calc.retentionDays: Results kept for
+  calc.retentionDays.unit: days
+  calc.out.perDay: Jobs per day
+  calc.out.perDay.unit: jobs
+  calc.out.average: Average rate
+  calc.out.average.unit: jobs/s
+  calc.out.peak: Peak rate
+  calc.out.peak.unit: jobs/s
+  calc.out.inFlight: In flight at once
+  calc.out.inFlight.unit: jobs
+  calc.out.workers: Workers needed
+  calc.out.workers.unit: workers
+  calc.out.backlog: Backlog after five minutes of peak
+  calc.out.backlog.unit: jobs
+  calc.out.perDayBytes: Data per day
+  calc.out.perDayBytes.unit: ''
+  calc.out.stored: In storage
+  calc.out.stored.unit: ''
+  sort.prompt: >-
+    Ten statements from the conversation with the product. Sort them: what the
+    system does, with what properties it does it, and what it does not do at all.
+  sort.check: Check
+  sort.again: Sort again
+  sort.score: '{right} of {total} right.'
+  sort.right: 'Everything is sorted correctly.'
+  sort.wrong: The difference shows in what breaks when the requirement is not met.
+  sort.progress: '{placed} of {total} sorted'
+  sort.bin.fr: Function
+  sort.bin.nfr: Property
+  sort.bin.out: Out of scope
+  sort.item.submit: Accept a job and return its id right away
+  sort.why.submit: 'A function: accepting a job is an action of the system, and the user calls it. "Right away" is a property.'
+  sort.item.status: Show what is happening with a job, by its id
+  sort.why.status: 'A function: a separate endpoint called to learn the state.'
+  sort.item.result: Hand over a finished job's result on a separate request
+  sort.why.result: 'A function: the result is collected with a separate call.'
+  sort.item.cancel: Cancel a job that has not run yet
+  sort.why.cancel: 'A function. It requires a worker that can stop midway and a "cancelled" state for the job.'
+  sort.item.latency: Intake answers in under 200 ms 99 times out of 100
+  sort.why.latency: 'A property: the intake endpoint already exists; this sets how fast it answers and how often that holds.'
+  sort.item.durability: An accepted job survives a worker restart
+  sort.why.durability: 'A property: the "accept" function does not change. The requirement sets where an accepted job is stored and whether it survives a crash.'
+  sort.item.isolation: One user cannot take the whole pool
+  sort.why.isolation: 'A property: there is no new endpoint, but it decides whether the neighbours get their results.'
+  sort.item.intake: Intake keeps working while the target API is down
+  sort.why.intake: 'A property: it is about intake availability and adds no new actions. It implies that intake and execution must be separated.'
+  sort.item.captcha: Solve the target's captcha and anti-bot defences
+  sort.why.captcha: 'Out of scope: bypassing protection changes both the technical and the legal side of the task.'
+  sort.item.billing: Charge money for completed jobs
+  sort.why.billing: 'Out of scope for the first version: billing is a separate context with its own vocabulary, and including it would mean designing two services at once.'
+  req.fr: 'Functional'
+  req.nfr: 'Non-functional'
+  req.col.text.fr: 'The system can'
+  req.col.note.fr: 'Called by'
+  req.col.text.nfr: 'Property'
+  req.col.note.nfr: 'What breaks without it'
+  req.col.goal: 'Target'
+  req.drop: 'Drag here from the text on the left'
+  req.chips: 'Into the requirements table'
+  req.addAll: 'Move them all'
+  req.placed: 'in the table'
+  req.goal: 'target'
+  req.empty: 'Empty so far'
+  req.reset: 'Start over'
+  req.recall: 'Requirements table'
+  req.text.FR-1: 'Accept a job — what to fetch, from where, with what parameters — and return an id'
+  req.note.FR-1: 'human, script'
+  req.text.FR-2: 'Show a job''s state by its id'
+  req.note.FR-2: 'human, script'
+  req.text.FR-3: 'List one''s own jobs, filtered by state'
+  req.note.FR-3: 'human, script'
+  req.text.FR-4: 'Hand over a finished job''s result'
+  req.note.FR-4: 'human, script'
+  req.text.FR-5: 'Cancel a job that has not run yet'
+  req.note.FR-5: 'human, script'
+  req.text.FR-6: 'Repeat a job — as a new job linked to the old one'
+  req.note.FR-6: 'human, script'
+  req.text.FR-7: 'Call back when a job is finished'
+  req.note.FR-7: 'script'
+  req.text.FR-8: 'Show a job''s attempt history with the target''s answers'
+  req.note.FR-8: 'on call, human'
+  req.text.NFR-1: 'Intake survives the targets being down'
+  req.note.NFR-1: 'one broken target takes the whole product down'
+  req.goal.NFR-1: '99.9% successful intake responses over 30 days'
+  req.text.NFR-2: 'Intake answers fast'
+  req.note.NFR-2: 'the client treats a slow answer as failure and retries'
+  req.goal.NFR-2: 'p99 ≤ 200 ms'
+  req.text.NFR-3: 'An accepted job is not lost'
+  req.note.NFR-3: 'the client got "accepted", and the job was lost when a worker restarted'
+  req.goal.NFR-3: '99% of jobs reach a final state with no human'
+  req.text.NFR-4: 'Tenants are isolated'
+  req.note.NFR-4: 'one user takes the whole pool'
+  req.text.NFR-5: 'Repeating a submission does not create a second job'
+  req.note.NFR-5: 'after a lost response the client retries, and the work is done twice'
+  req.goal.NFR-5: 'an idempotency key on every POST /jobs'
+  req.text.NFR-6: 'We are polite to targets'
+  req.note.NFR-6: 'we get blocked before we run out of our own capacity'
+  req.goal.NFR-6: 'request and connection limits per domain, Retry-After honoured'
+  req.text.NFR-7: 'A job''s history is visible'
+  req.note.NFR-7: 'only "failed" is visible, with no reason'
+  req.goal.NFR-7: 'attempt history with the target''s answers; oldest job age on the dashboard'
+  req.text.NFR-8: 'A job starts without a long wait'
+  req.note.NFR-8: 'the queue grows while the user stares at "waiting"'
+  req.goal.NFR-8: '95% of jobs start within the first minute'
+  req.text.NFR-9: 'The system handles the peak flow'
+  req.note.NFR-9: 'the peak piles up in the queue and breaks NFR-8'
+  req.goal.NFR-9: '28 jobs/s at peak, up to 556 in flight'
+  req.text.NFR-10: 'A result is kept for the retention period'
+  req.note.NFR-10: 'data is deleted before it is collected, or kept forever'
+  req.goal.NFR-10: '30 days, about 2.3 TB'
+  req.text.NFR-11: 'Temporary target failures do not fail the job'
+  req.note.NFR-11: 'a job fails because of a one-second 503'
+  req.goal.NFR-11: 'up to 5 attempts, exponential backoff with jitter'
+  tx.scenario: 'Scenario'
+  tx.scenario.ok: 'Everything succeeds'
+  tx.scenario.crash: 'Crash before COMMIT'
+  tx.scenario.redeliver: 'Publisher crashes after sending'
+  tx.group: 'intake transaction · jobs-pg'
+  tx.cycle: 'job-publisher loop'
+  tx.afterCommit: 'after commit'
+  tx.jobs: 'Rows in jobs'
+  tx.published: 'published_at'
+  tx.mq: 'Messages in MQ'
+  tx.sent: 'set'
+  tx.unsent: 'empty'
+  tx.verdict.ok: 'The job is written with an empty published_at. The publisher found it, sent the event, and set the timestamp. There is one message in the queue.'
+  tx.verdict.crash: 'The transaction rolled back: there is no row and nothing to publish. The client got no answer, retries with the same idempotency key, and the job is created again.'
+  tx.verdict.redeliver: 'The event reached the bus, but published_at was not set. After a restart the publisher finds the same row and sends the event again: the queue has two messages about the same job.'
+  lc.hint: 'Click a state to see where it can go next'
+  lc.out: 'Next'
+  lc.terminal: 'terminal'
+  lc.actors: 'Who moves it'
+  lc.actor.client: 'client'
+  lc.actor.command: 'job-command'
+  lc.actor.worker: 'worker'
+  lc.actor.scheduler: 'scheduler'
+  lc.state.queued: 'The job is stored and waits for a worker. It comes back here between attempts.'
+  lc.state.running: 'A worker took the job and holds a lease. While the lease is renewed the job is its; once it expires the job goes back to the queue.'
+  lc.state.succeeded: 'The result is in storage and the link is written to the job. The status is set only after the result is saved.'
+  lc.state.failed: 'Attempts ran out or the error is permanent. The scheduler decides from the attempt history, not the worker.'
+  lc.state.cancelled: 'The user cancelled the job before it finished.'
+  lc.tr.submit: 'POST /jobs'
+  lc.tr.take: 'taken, lease'
+  lc.tr.done: 'result saved'
+  lc.tr.retry: 'retry after backoff, lease expired'
+  lc.tr.exhausted: 'attempts exhausted'
+  lc.tr.cancelQueued: 'cancel'
+  lc.tr.cancelRunning: 'cancel, worker interrupted'
+  seq.intake: 'intake transaction'
+  seq.publisher: 'publisher loop'
+  seq.worker: 'worker processing'
+  noisy.policy: Order
+  noisy.policy.fifo: One shared queue
+  noisy.policy.fair: Equal share
+  noisy.policy.weighted: Weighted
+  noisy.start: Run
+  noisy.pause: Pause
+  noisy.reset: Reset
+  noisy.waiting: waiting
+  noisy.done: done
+  noisy.wait: average wait
+  noisy.queue: Scheduler
+  noisy.workers: Worker pool
+  noisy.seconds: job
+  noisy.burst: Another burst
+  noisy.time: Simulated time
+  noisy.slots: busy
+  noisy.gap: '{slow} waits {ratio}× longer than {fast}.'
+  noisy.starved: "{tenant} has not got a single result yet: the whole pool is busy with somebody else's jobs."
+  noisy.even: Everyone waits about the same — the pool is shared.
+  noisy.idle: Run it and watch the slot colours in the pool — they show whose work is holding it.
+  noisy.tenant.shop: Shop
+  noisy.tenant.analyst: Analyst
+  noisy.tenant.crawler: Crawler with a burst
+terms:
+  C1: >-
+    The whole system as one block, and everything that talks to it: people and
+    neighbouring systems. What is inside is not shown at this level.
+  C2: >-
+    The parts the system is made of: services, databases, queues — and the links
+    between them.
+  job: >-
+    One unit of work: what to fetch and where from. It is queued, executed, and
+    its result is handed back under its own id.
+  SLO: >-
+    A promise about the system's behaviour stated as a number: which share of
+    requests meets the deadline, and over what window it is counted.
+  idempotency: >-
+    A property of an operation where repeating it with the same key gives the
+    same result and adds no side effects: the second attempt does not create a
+    second job.
+  backoff: 'A pause before a retry that grows with every attempt. Usually with random jitter, so jobs that failed at the same time do not retry at the same time.'
+  DLQ: 'A queue for messages that could not be processed within the allowed number of attempts. A human reviews them.'
+  presigned: >-
+    A time-limited signed link to a file in object storage. The data travels
+    straight from storage, and the link cannot be shared forever.
+  CQRS: >-
+    Command Query Responsibility Segregation: writes and reads are served by
+    different models and components that scale independently.
+  C3: >-
+    What is inside a single service: its modules and how they connect to each
+    other and to their neighbours.
+steps:
+  - id: overview
+    title: What is actually being asked
+    narration: |-
+      With a task like this, you first retell it in your own words and check the
+      retelling with whoever brought it. The paragraph above has no numbers, but it
+      has four promises, and each of them has a cost.
+
+      - **Accept and release.** The user submits a [[job]] and gets an answer right
+        away: accepted, here is the id. The answer does not contain the result. So
+        submission and execution happen at different times, and something sits
+        between them.
+      - **Show what is happening.** A job has a state: waiting, running, done,
+        failed. The state has to be stored somewhere, something has to change it,
+        and something has to show it.
+      - **Hand over the data when it is ready.** The result is collected later, with
+        a separate request. So it is stored outside the process that fetched it.
+      - **Do not fail for no reason.** Third-party APIs are often slow or down; that
+        is normal. We need timeouts, retries, and a way to tell "did not work now"
+        from "will never work".
+
+      The fifth point of the brief is a constraint: many users and many jobs at
+      once. It adds no features, but it decides how much the first four will cost.
+
+      The brief has no numbers, and it says nothing about what exactly is scraped
+      or how long results are kept. We need to ask the product about that, which is
+      the next step.
+  - id: questions
+    title: The questions without which there is nothing to calculate
+    narration: |-
+      This brief fits both one machine running goroutines and a hundred workers in
+      three regions. Which one we need depends on answers the brief does not
+      contain. So the next step is questions.
+
+      - **What are we scraping?** Public APIs with a key and a quota, third-party
+        sites with no agreement, or partner exports that expect us. This decides
+        the main risk: an overage bill, an IP ban, or neither.
+      - **Who submits jobs?** A human in a UI and a script collect results in
+        different ways.
+      - **How many jobs?** "A lot" can mean a hundred a day or a million an hour.
+        Until the number is named, the requirement cannot be checked.
+      - **How long are results kept?** An hour, a month, or until deleted by hand.
+        This decides the storage and its cost.
+      - **What counts as success?** Any answer from the target, or only usable data.
+        In the second case we need validation, and validation can fail too.
+      - **Are cancel and retry needed?** Cancelling requires a worker that can stop
+        midway. Retrying requires a decision about the previous result.
+      - **Are some jobs urgent?** Priorities make the scheduler more complex, and
+        adding them in advance is not worth it.
+
+      Answers in words go into requirements, numbers go into estimates. If the
+      product says "don't know", we write down an assumption and check it with a
+      number in the estimates step.
+  - id: actors
+    title: Who uses the system
+    narration: |-
+      A system like this usually has three kinds of users with different needs.
+
+      - **A human in a UI.** Started a job and is looking at the list. They want to
+        see the state change and open a finished result in one click. They will
+        wait if they can see that work is happening.
+      - **A script.** Submits a thousand jobs and leaves. Polling each one
+        separately is inconvenient for it: it needs a webhook or a request that
+        returns the state of many jobs at once.
+      - **The on-call engineer.** Comes when something is broken. They need the
+        history of a specific job: where it stopped and why.
+
+      This gives a requirement for the design: a job has an id that all three use to
+      read its history, and that history is stored in one place. Different
+      interfaces, one state.
+  - id: fr
+    title: Functional requirements
+    narration: |-
+      Requirements are kept as a file in the service repository, like the glossary
+      in the DDD chapter. A wiki drifts away from what the service does over time. A
+      file next to the code is edited in the same commit, and review shows which
+      requirement changed along with the code.
+
+      The table on the right is that file. The step's rows are under the text; move
+      them into the table. There is one document for the whole write-up: numbers
+      and new properties will be added in the SLO and estimate steps.
+
+      A functional requirement describes an action of the system. Every action has a
+      caller, so the table has a column for it. If there is no caller, it is not a
+      requirement but an early decision about the design.
+
+      Rows are numbered so they can be referenced: "FR-5 requires a worker that can
+      stop midway" is shorter than a retelling.
+
+      The queue, the pool, and retries are not in the table. They are ways of
+      implementing the system, even though people often try to list them as
+      features first.
+  - id: scope
+    title: Out of scope
+    narration: |-
+      What the system does not do should be written down as explicitly as what it
+      does. In six months someone will ask why there are no schedules, and the
+      answer should be in the document.
+
+      - **Solving captchas and bypassing anti-bot protection.** Changes both the
+        technical and the legal side of the task. If it is needed, it is a separate
+        product with its own risks.
+      - **Billing for completed jobs.** A separate context with its own
+        vocabulary. Including it here means designing two services at once.
+      - **Schedules.** Jobs are submitted from outside for now. Running on a timer
+        needs a separate scheduler with its own state, missed runs, and a rule for
+        when the previous run is still going.
+      - **Parsing responses into structured data.** We return what the target
+        returned. Turning HTML into a table is a separate task with its own release
+        cycle, and collection should not depend on it.
+
+      On the right are ten statements from the same conversation. Sort them by
+      kind. Some properties sound like features, and these are the ones people
+      usually argue about at review.
+  - id: nfr
+    title: Non-functional requirements
+    narration: |-
+      The second section is properties. A non-functional requirement adds no
+      actions to the system. It sets a guarantee for the actions that already
+      exist.
+
+      These requirements are easiest to check through consequences, so under each
+      property we write what breaks without it. If there is nothing to write, it is
+      a wish, and it is better to remove it right away.
+
+      The "Target" column is empty for now. "Intake answers fast" is a property;
+      "within 200 ms, 99 times out of 100" is a promise. Promises come in the next
+      step and go into this column: NFR-2 gets a number, and its wording stays the
+      same.
+  - id: slo
+    title: The numbers we commit to
+    narration: |-
+      A property without a number cannot be checked: whether intake is fast can be
+      argued forever. An [[SLO]] sets the share of requests, the threshold, and the
+      window they are counted over.
+
+      - **Intake availability, 99.9% over 30 days.** That is 43 minutes a month
+        when jobs are not accepted. A hundred percent would cost far more than this
+        task is worth.
+      - **Intake answers within 200 ms, 99 times out of 100.** We measure the upper
+        bound, not the average: the average hides the slow answers that make
+        clients retry.
+      - **95% of jobs start within the first minute.** This is a promise about the
+        queue. It breaks when the flow is larger than the pool can handle.
+      - **99% of accepted jobs reach a final state without a human.** Final states
+        are "done" and "failed for good". A job stuck in "running" forever is worse
+        than a failed one.
+
+      Decisions are made by these numbers. If the first one is broken, we scale
+      intake. If the third one is broken, we grow the pool or split the queue.
+  - id: load
+    title: 'Estimate: jobs per second'
+    narration: |-
+      Users and their habits set the job flow. The flow and the job duration set
+      concurrency, and concurrency sets the size of the pool. The calculator is on
+      the right: try your own values.
+
+      50,000 users with 8 jobs a day give 400,000 jobs a day, under five a second on
+      average. The load is uneven: more people come in the morning and evening,
+      and a sixfold peak gives 28 jobs a second.
+
+      The number of jobs running at once follows Little's law: the flow multiplied
+      by the time one job takes. 28 jobs a second at 20 seconds each is 556 jobs at
+      once. The pool size depends on this number, not on the number of users.
+
+      Try changing the duration. At two seconds a pool of fifty jobs and one machine
+      are enough. At thirty, almost a thousand jobs run at once: that needs a
+      cluster, autoscaling, and a separate budget. The task is the same; only the
+      speed of the target API changed. That is why the first question to the
+      product was what exactly we scrape.
+  - id: concurrency
+    title: 'Estimate: how many workers'
+    narration: |-
+      Concurrency is calculated, but one worker handles more than one job. A
+      scraper spends most of its time waiting on the network, and one process holds
+      dozens of open requests. Counting one job per worker would mean twenty times
+      more machines.
+
+      At 20 jobs per worker, 556 jobs at once need 28 workers. How many jobs one
+      worker actually holds has to be measured. The limit can be memory (the
+      target's whole response is kept in it), file descriptors, outbound
+      connections, or limits in the client library.
+
+      Two architecture requirements follow from this.
+
+      The pool scales on queue depth and the age of the oldest job. A scraper's CPU
+      load is low both in normal operation and during an incident, so autoscaling on
+      CPU notices nothing.
+
+      A worker can crash at any moment. A machine with 20 jobs in progress leaves 20
+      jobs that need to go back to the queue. How to do that is covered in the
+      lifecycle step.
+  - id: storage
+    title: 'Estimate: how much data'
+    narration: |-
+      A result does not fit in a database row. 200 KB per job at 400,000 jobs a day
+      is 76 GB a day and over 2 TB for a month of retention. That volume cannot live
+      in the jobs table.
+
+      This estimate leads to three decisions.
+
+      **Results go to object storage.** It is cheap, practically unlimited, and does
+      not care about response size. The database keeps metadata: id, state, link,
+      size, timestamps. Listing jobs does not read the data itself.
+
+      **Retention is a requirement.** "Kept for a month" means something deletes
+      old data. Otherwise the volume grows linearly, and the storage bill becomes
+      the first limit.
+
+      **Result size is an input.** In the calculator one step up, change it from 200
+      KB to 20 MB: monthly volume grows from 2 TB to 200 TB, and choosing storage
+      becomes a budget question.
+  - id: c1
+    title: 'C1: the system and everything that talks to it'
+    note: 'Not ours: their availability is not in our SLO'
+    narration: |-
+      Now we can draw. The first frame is [[C1]]: the system as one block.
+
+      On the left are the users: a human in a UI and a script. On the right are the
+      target APIs. We do not control them: they can be slow or down, and they
+      rate-limit us. At the bottom is the webhook for those who asked to be
+      notified.
+
+      The frame shows the system boundary. The target APIs are outside it, even
+      though the task is about them: their availability is not part of our SLO,
+      they set the limits, and the response format is theirs. We can only treat
+      them as an unreliable external environment.
+
+      This splits our promises. "The job is accepted" we guarantee ourselves.
+      "There will be data" only holds if the target answers.
+  - id: c2-gateway
+    title: 'The way in: gateway'
+    narration: |-
+      The first element inside the boundary is the entry point, `api-gateway`.
+      All external requests come here: both "submit a job" and "what happened to it".
+
+      The gateway checks who is calling, drops extra traffic, and passes the
+      request on. It is separate because authentication and per-client limits are needed by both the write
+      side and the read side. If they were implemented twice, the rules would drift
+      apart over time.
+    added:
+      - element: scraper.gateway
+        role: 'The way in: checks who is calling, holds the shared limits and hands the request inwards. Knows nothing about jobs.'
+  - id: c2-command
+    title: The write side
+    narration: |-
+      Behind the gateway is `job-command`, the only service that creates jobs,
+      and the database `jobs-pg` where they are stored.
+
+      Writes and reads are split following [[CQRS]]: the command side creates and
+      changes jobs, the read side only answers questions about them. The two
+      sides have different loads. A job is created once and asked about dozens of
+      times: a human refreshes a list, a script polls its thousand jobs. Scaling
+      both sides as one unit means sizing everything for reads, and writes get far
+      more capacity than they need. More on the split in the
+      [CQRS chapter](../why-cqrs/).
+
+      The command service validates parameters, checks the [[idempotency]] key, and writes the job.
+
+      There is no queue in the frame yet: first the write, then how the rest of
+      the system learns about it.
+    added:
+      - element: scraper.command
+        role: 'The only thing that creates a job. Never calls a target API.'
+      - element: scraper.jobs_db
+        role: 'Stores jobs: whose, in what state, how many attempts.'
+  - id: c2-outbox
+    title: How the queue learns about a job
+    note: 'The outbox is the published_at column, not a table'
+    narration: |-
+      The simple option — write the job to the database and send a message to the
+      queue right away — is unreliable. If the write succeeds and the publish
+      fails, the job exists but nobody will run it. If the message is sent and the
+      transaction rolls back, the queue points to a job that does not exist. One
+      transaction cannot cover both the database and the broker.
+
+      So the command service writes only to the database, and a separate publisher, `job-publisher`, sends the event to the bus. A separate table is not needed for this: the job is written with an
+      empty `published_at` column. Two elements appear on the diagram: the publisher and
+      the bus. How it works step by step comes next.
+    added:
+      - element: scraper.publisher
+        role: 'Finds rows in jobs with an empty publish mark, sends the event to the bus, and sets the timestamp. May send again — delivery is at-least-once.'
+      - element: scraper.mq
+        role: 'Work nobody has taken yet and events about finished work. It is inside the boundary because we run the bus ourselves.'
+  - id: c2-transaction
+    title: Inside intake and publishing
+    narration: |-
+      Intake is one transaction with one write: `INSERT INTO jobs` with an empty
+      `published_at`. After `COMMIT`, the row either exists together with its "to
+      publish" mark, or it does not exist. A second table is not needed: the job
+      state and the publish mark live in the same row.
+
+      The publisher runs as a separate loop: it selects rows with an empty
+      `published_at`, sends the event to the bus, and sets the timestamp. The bus is
+      not part of the transaction, so there is a window between sending and
+      marking. If the publisher crashes in that window, after a restart it finds
+      the same row and sends the event again. At-least-once delivery means a worker
+      can receive the same job twice, so taking a job goes through a status in the
+      database.
+
+      The completion event goes the same way: the worker sets the status to "done"
+      together with an empty `finish_published_at`, and the publisher sends the
+      event. The worker itself does not write to the bus.
+
+      On the right are three scenarios: everything succeeds, the service crashes
+      before `COMMIT`, the publisher crashes after sending. Compare what is left in
+      the table and in the queue.
+  - id: c2-workers
+    title: The worker pool
+    narration: |-
+      The worker pool, `scrape-worker`, does the work: it reads the queue, takes a job, and calls the third-party API.
+
+      The pool scales separately from intake, on queue depth and the age of the
+      oldest job. By our estimate that is 28 processes with 20 jobs each, and the
+      number depends on the speed of the target API.
+
+      The boundary in the frame separates what we control from what we do not. Our
+      pool is on the left, third-party APIs on the right. On our side we can set a
+      timeout, retries, and a per-domain limit.
+    added:
+      - element: scraper.worker
+        role: 'Takes a job from the queue and calls the third-party API. Nothing else in the system calls external APIs.'
+  - id: c2-lease
+    title: Claiming a job, and the stuck ones
+    note: 'Two arrows: reads expired leases first, then writes queued'
+    narration: |-
+      Receiving a message from the queue is not enough to take a job. The worker
+      sets its status to "running" with the time it was taken, and only then calls
+      the target. If a duplicate message arrives, the worker sees that the job is
+      already taken and skips it.
+
+      This approach has a known problem: a worker can crash before it finishes. The
+      job then stays "running" forever, and a dashboard will not show it, because
+      formally it is in progress.
+
+      The fix uses the same timestamp. The scheduler service, `job-scheduler`,
+      has a cron module: once a minute it finds jobs that have been in
+      progress for too long, sets their status to `queued`, and clears
+      `published_at`. The publisher sends them to the queue again. The C2
+      diagram shows `job-scheduler` itself: the cron is a module inside it,
+      and its modules are shown at the C3 level, after the full C2 diagram.
+    added:
+      - element: scraper.scheduler
+        role: 'The scheduler: picks the next job, decides when attempts are exhausted, and its cron module returns stuck jobs to the queue once a minute.'
+  - id: c2-view
+    title: 'The read side: status and history'
+    narration: |-
+      `job-query` covers the brief's requirement to see what is happening
+      with jobs.
+
+      The read side answers three questions: what state a job is in, which jobs a
+      user has, and what happened to a specific job. The third is the most useful:
+      an attempt history with the target's answers shows, for example, "three
+      timeouts, then 401", and from that it is clear what to fix.
+
+      The gateway sends these requests here, not to the command service. Their
+      requirements differ: intake must answer within 200 ms and keep working when
+      targets are down, while a job list can take a hundred milliseconds longer.
+    added:
+      - element: scraper.reader
+        role: 'Answers what state a job is in and what happened to it. Scales separately from writes: there are more reads.'
+  - id: c2-results
+    title: Getting the result
+    note: 'The result goes to the client directly, past api-gateway'
+    narration: |-
+      For the client a job has two states: still running, or done. Finding out is
+      an ordinary database query through `job-query`. The answer contains the
+      status and, if the job is done, a link to the result.
+
+      The data itself lives in `results-s3`: its volume is in terabytes, and it does
+      not belong in the state database. `job-query` does not pass it through;
+      it returns a time-limited [[presigned|presigned URL]], and the client downloads
+      the result directly from storage.
+
+      The worker sets the status to "done" only after the file is already in
+      storage, so the link of a finished job always leads to the result. How storage
+      and retention work is covered in the step "Where the results live".
+    added:
+      - element: scraper.results
+        role: 'Job results. Their volume is in terabytes, so they are stored apart from the state database.'
+  - id: c2-full
+    title: C2 as a whole
+    note: 'Only job-publisher writes to MQ'
+    narration: |-
+      The service is complete. Only the connections between services are shown; arrows at both ends
+      mean the connection goes both ways. What travels over them, and in what order, is in the next two
+      steps.
+
+      On the left are the entry point and the two sides, write and read, which scale
+      independently. In the middle is the database: job state with publish marks,
+      which keep writes and publishing consistent. Only the publisher writes to the
+      bus. On the right are the worker
+      pool, the only element that calls third-party APIs, and the result storage.
+      The bus carries two queues: work to do and completion events.
+
+      Three things are not on the diagram yet and come next: how a worker tells a
+      temporary failure from a permanent one, where the per-domain limit comes
+      from, and how the pool is shared between tenants.
+  - id: seq-submit
+    title: Writing, step by step
+    narration: |-
+      The C2 diagram shows who is connected to whom, but not in what order. Here is
+      one job submission, top to bottom.
+
+      The client gets `202` right after the write to `jobs-pg` — at that moment the
+      job has not been sent anywhere yet. From there it moves without the client:
+      the publisher finds the row and puts the event on the bus, the worker takes
+      the job, calls the target, stores the result, and sets the status to "done".
+  - id: seq-read
+    title: Reading, step by step
+    narration: |-
+      Getting the result is shorter. The gateway asks `job-query`, which reads the
+      status and the link from `jobs-pg`. If the job is done, the client gets a
+      presigned URL and collects the data from `results-s3` itself, bypassing our
+      services.
+  - id: c3-scheduler
+    title: 'C3: inside job-scheduler'
+    narration: |-
+      One level down. [[C3]] shows what a single service is made of. Take
+      `job-scheduler`: on C2 it was one box that writes to the database, and inside
+      it has three modules.
+
+      - **stuck-sweeper** — the cron module from the lease step. Once a minute it
+        finds jobs with an expired lease, returns them to `queued`, and clears
+        `published_at`.
+      - **retry-planner** — decides what happens after a failed attempt. A temporary
+        failure gets the next attempt scheduled with backoff; a permanent failure or
+        exhausted attempts move the job to `failed`. Details are in the retries step.
+      - **jobs-repository** — the only module that talks to `jobs-pg`. The other two
+        go through it.
+
+      No module writes to the bus. They change the job row and clear the publish
+      mark, and `job-publisher` sends the event. So the scheduler has the same
+      guarantee as intake: the state change and the "to publish" mark are one
+      write.
+    added:
+      - element: scraper.scheduler.sweeper
+        role: 'Cron module: once a minute returns jobs with an expired lease to the queue.'
+      - element: scraper.scheduler.retries
+        role: 'Schedules the next attempt with backoff, or moves the job to failed when attempts run out.'
+      - element: scraper.scheduler.repo
+        role: 'The only module that talks to jobs-pg.'
+  - id: api
+    title: 'The contract: a receipt instead of a result'
+    narration: |-
+      `POST /jobs` answers `202 Accepted`. The body contains the id, the state
+      `queued`, and an address to follow the job. A `200` with data does not fit:
+      there is no data yet, and if the connection is held open, the load balancer's
+      timeout decides what happens to the job.
+
+      The request carries an idempotency key. A client that got no answer will
+      retry, and with the same key it gets the same job, not a new one. Without the
+      key, any network glitch doubles the work and the cost of calls to the target.
+
+      `GET /jobs/{id}` returns the state, attempts, and the last error. `GET /jobs`
+      returns a filtered list, so a script with a thousand jobs needs one request.
+      `GET /jobs/{id}/result` does not return the data itself; it returns a
+      time-limited link to object storage, which serves large volumes more cheaply
+      than our API.
+
+      A webhook works in the other direction: the service tells the client that the
+      job is done. It complements polling but does not replace it. A webhook can
+      fail to arrive, and the client must be able to ask on its own.
+  - id: lifecycle
+    title: The life of a job
+    narration: |-
+      A job has few states, and those are what the user sees.
+
+      `queued` → `running` → `succeeded` or `failed`. In addition, `cancelled`:
+      while the job has not started, or while the worker can still stop it. From
+      `running` there is a transition back to `queued`: the attempt failed, and the
+      job waits for the next one.
+
+      The worker moves a job to `running` when it takes it. It also moves it to
+      `succeeded`, but only after the result is saved in storage; otherwise there
+      would be "done" with no data. A job moves to `failed` when its attempts run
+      out. The scheduler decides that, not the worker.
+
+      A job that was taken and lost needs separate handling: the worker crashed, and
+      the job stayed in `running`. This is solved with a lease: the worker extends
+      its ownership of the job, and if the lease expires, the job returns to the
+      queue. Without a lease, the jobs of a crashed machine never come back, and a
+      dashboard will not show it, because formally they are running.
+  - id: retries
+    title: Timeouts, retries, and what counts as failure
+    narration: |-
+      The brief asks that jobs do not fail for no reason. For that we need to tell
+      two kinds of failure apart. The line is not the status code but whether
+      another attempt can give a different result.
+
+      **Temporary failures.** A timeout, a dropped connection, `429`, `503`. Retrying
+      makes sense, but not immediately and not with the whole pool at once. We need
+      exponential [[backoff]] with random jitter. Without jitter, a thousand jobs
+      that failed in the same second retry in the same second and overload the
+      target again just as it starts to recover.
+
+      **Permanent failures.** `404`, `401`, wrong parameters, an invalid response. A
+      retry gives the same result and costs another request to the target. Such a
+      job goes straight to `failed`.
+
+      The number of attempts is limited. Jobs that run out of attempts go to a
+      [[DLQ|dead-letter queue]], where a human looks at them. For example, a hundred
+      jobs to one domain answering `401` usually mean one expired key.
+
+      A retry is safe only if the target does not treat it as a new action. For
+      reads this is almost always true, but it is worth checking before retries are
+      turned on.
+  - id: politeness
+    title: Being polite to somebody else's API
+    narration: |-
+      We sized our own pool, but the target has its own limits. 28 workers with 20
+      jobs each give up to 560 parallel requests. If they all go to one domain, we
+      get blocked before we run out of our own capacity.
+
+      So the limit is set per target: so many requests a second and so many
+      concurrent connections per domain. This is a token bucket per host, shared by
+      all workers, so it is stored outside process memory, where all workers can
+      see it.
+
+      It follows that the queue is split by target, not by user. In a shared queue,
+      a job for a free domain waits behind jobs for a busy one, and the pool sits
+      idle. With a queue per domain, a busy domain only delays its own jobs.
+
+      The `Retry-After` header in the target's response must be respected. Ignoring
+      it can turn a temporary limit into a permanent block.
+  - id: fairness
+    title: The noisy neighbour
+    narration: |-
+      Tenant isolation is a single line in the requirements. The simulator on the
+      right shows what it means in practice.
+
+      Three users: a shop and an analyst with a small flow, and a crawler that
+      submitted 400 jobs at once. A pool of eight workers at four seconds a job
+      handles two jobs a second. Turn on the shared queue: in the first seconds the
+      crawler completes dozens of jobs, while its neighbours have none done and
+      their queue grows. The system is working correctly: it runs jobs in the order
+      they arrived.
+
+      Switch the order to equal share. Same workers, same flow, same job duration;
+      only the rule for picking the next job changed. The neighbours get their
+      results, the crawler gets a third of the pool, and its queue takes longer to
+      drain.
+
+      A fair order makes the scheduler more complex: it needs a queue per tenant,
+      tracking of allocated slots, and a rule for a tenant that was quiet for a
+      long time and suddenly arrives with work. The next step is weights: paying
+      customers can get more than free ones. The product decides the weights.
+  - id: results
+    title: Where the results live
+    narration: |-
+      The worker saves the result to object storage. There are two reasons: the
+      volume estimated in the storage step (over 2 TB a month), and the purpose of
+      the state database, which is to answer questions about state, not to store
+      large files.
+
+      The write order is: data to storage first, then the link to the database,
+      then the state `succeeded`. In the reverse order the client would see "done"
+      before the data is available and would not find the result.
+
+      The user gets a temporary [[presigned|presigned URL]]. The data is downloaded
+      directly from storage, bypassing our API, and the link stops working when it
+      expires.
+
+      Deleting by retention also needs thought. Storage can delete files by rule,
+      but the database will not know, and the job stays `succeeded` with a link to a
+      deleted file. So either the retention deadline is shown in the response, or
+      the job moves to a separate state after its data is deleted.
+  - id: observability
+    title: What to measure
+    narration: |-
+      A system like this has many metrics, but four are enough for decisions.
+
+      - **Age of the oldest job in the queue.** Matters more than queue length: a
+        thousand jobs processed within a minute is normal work, ten jobs waiting for
+        an hour is an incident. It is also a good metric to scale the pool on.
+      - **Time to first attempt, p95.** Maps directly to the SLO. Other metrics help
+        explain why it was missed.
+      - **Failure rate by class and by domain.** The overall failure rate mixes one
+        customer's expired key with problems at one target. A hundred `401`
+        responses from one domain are one incident.
+      - **Queue depth per tenant.** Shows a noisy neighbour before anyone
+        complains.
+
+      Jobs taken by a crashed worker need separate tracking. Formally they are in
+      `running`, and normal metrics treat them as fine. They can only be found by
+      time in state: a job running longer than its lease should appear in a
+      report.
+  - id: tradeoffs
+    title: What it cost
+    narration: |-
+      The system keeps all four promises from the brief. This is what it cost.
+
+      **Asynchrony made the client's work harder.** It does not get data in response
+      to a request: it stores an id, polls the service or waits for a webhook, and
+      handles the `failed` state. For a script this is normal; for a page in a
+      browser it is extra code that a synchronous API would not need.
+
+      **The queue is one more component that can fail.** It smooths out peaks, but it
+      can itself go down, overflow, or lose messages when misconfigured. It needs
+      monitoring.
+
+      **Fairness made the scheduler more complex.** Instead of "take the next one"
+      it needs per-tenant queues, tracking, and weights. This code has to be tested
+      and explained to new people on the team.
+
+      **Results are stored in two places.** Metadata in the database, data in
+      storage, and the two can diverge. That is why the write order had to be
+      spelled out separately.
+
+      The design will need to change if there is a requirement to get data
+      immediately (fast targets would need a separate synchronous path), or if the
+      flow grows so much that one queue can no longer cope and has to be split by
+      domain physically.
+---
+
+From here the format changes: instead of one pattern, a whole task. The brief
+above came in the form you get in an interview or in the first message from
+the product: a paragraph of text without a single number.
+
+The first impulse is to draw the diagram: queue, workers, database, arrows.
+The diagram will come, but at the end.
+
+A queue on a diagram says nothing by itself. It starts to mean something
+together with numbers: how many jobs a second it accepts, how many wait in it
+at peak, how long a job sits there before a worker takes it. Without numbers,
+choosing between Kafka and Postgres is a guess.
+
+So the order is:
+
+1. **Understand what is asked.** Retell the task as a set of promises the
+   system makes.
+2. **Ask.** Find out everything the brief leaves out but the solution needs.
+3. **Write down requirements.** Functional — what the system does;
+   non-functional — with what properties.
+4. **Estimate.** Flow, concurrency, data volume.
+5. **Draw.** <span data-term="C1">C1</span>, <span data-term="C2">C2</span> and below, backing each
+   decision with numbers.
+
+Each step builds on the answers of the previous one.

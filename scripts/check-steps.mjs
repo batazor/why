@@ -37,7 +37,8 @@ async function likec4Views() {
   for (const file of files) {
     const source = await readFile(path.join(likec4Dir, file), 'utf8');
 
-    for (const match of source.matchAll(/^\s*view\s+([A-Za-z_][\w]*)/gm)) {
+    // `dynamic view` — тоже view: последовательность запросов рисуется им же.
+    for (const match of source.matchAll(/^\s*(?:dynamic\s+)?view\s+([A-Za-z_][\w]*)/gm)) {
       views.add(match[1]);
     }
 
@@ -52,6 +53,45 @@ async function likec4Views() {
   }
 
   return views;
+}
+
+/**
+ * Полные id элементов модели LikeC4: `scraper.results`, `shop.billing.invoice`.
+ *
+ * Нужны карточкам «новое на схеме»: карточка берёт имя из модели по id, и
+ * опечатка в id иначе доезжает до читателя сырой строкой вместо названия.
+ * Разбор грубый — по объявлениям `имя = вид` и скобкам, — но модель пишется
+ * в одном стиле, и этого хватает.
+ */
+async function likec4Elements() {
+  if (!existsSync(likec4Dir)) return null;
+  const ids = new Set();
+
+  for (const file of (await readdir(likec4Dir)).filter((f) => f.endsWith('.c4'))) {
+    const source = await readFile(path.join(likec4Dir, file), 'utf8');
+    // Комментарии вырезаются: в них тоже встречаются «a = b» и скобки.
+    const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    const stack = [];
+    let depth = 0;
+
+    for (const line of code.split('\n')) {
+      const declared = /^\s*([A-Za-z_]\w*)\s*=\s*[A-Za-z_]\w*\b/.exec(line);
+      if (declared) {
+        const fqn = [...stack.map((item) => item.name), declared[1]].join('.');
+        ids.add(fqn);
+        if (line.includes('{')) stack.push({ name: declared[1], depth: depth + 1 });
+      }
+      for (const char of line) {
+        if (char === '{') depth += 1;
+        if (char === '}') {
+          if (stack.length && stack[stack.length - 1].depth === depth) stack.pop();
+          depth -= 1;
+        }
+      }
+    }
+  }
+
+  return ids;
 }
 
 /** Пометка на схеме должна умещаться в две строки. */
@@ -84,6 +124,9 @@ const locales = (await readdir(lessonsDir, { withFileTypes: true }))
 
 /** Какие view объявлены в модели; null — модели в проекте нет. */
 const likec4ViewIds = await likec4Views();
+
+/** Какие элементы объявлены в модели; null — модели в проекте нет. */
+const likec4ElementIds = await likec4Elements();
 
 /** locale -> slug -> frontmatter */
 const bySlug = new Map();
@@ -182,8 +225,12 @@ for (const [slug, perLocale] of bySlug) {
   }
 
   // Шаги, для которых схема резервирует место под пометку. Текст пометки —
-  // проза, значит переводится и обязан быть в каждой локали.
-  const annotatedSteps = (deckModule.flow?.annotations ?? []).map((a) => a.step);
+  // проза, значит переводится и обязан быть в каждой локали. Пометки бывают и
+  // у схемы React Flow (по координатам), и у кадров LikeC4 (по элементу).
+  const annotatedSteps = [
+    ...(deckModule.flow?.annotations ?? []).map((a) => a.step),
+    ...Object.keys(deckModule.likec4?.notes ?? {}),
+  ];
 
   for (const step of deck) {
     if (step.code && step.lang) {
@@ -304,6 +351,22 @@ for (const [slug, perLocale] of bySlug) {
       errors.push(`колода "${deckName}": ведёт разбор по likec4, но каталога likec4/ нет`);
     }
 
+    /**
+     * Стикер кадра привязан к элементу модели. Опечатка в id иначе даёт кадр
+     * без стикера и без единой ошибки: элемент просто не находится на экране.
+     */
+    for (const [step, note] of Object.entries(deckModule.likec4.notes ?? {})) {
+      if (!deckIds.includes(step)) {
+        errors.push(`колода "${deckName}": стикер likec4 на несуществующем шаге "${step}"`);
+      }
+      if (!deckModule.likec4.views[step]) {
+        errors.push(`колода "${deckName}", шаг "${step}": стикер есть, а кадра likec4 нет`);
+      }
+      if (likec4ElementIds && !likec4ElementIds.has(note.element)) {
+        errors.push(`колода "${deckName}", шаг "${step}": стикер ссылается на "${note.element}" — нет в likec4/`);
+      }
+    }
+
     for (const [step, viewId] of Object.entries(deckModule.likec4.views)) {
       if (!deckIds.includes(step)) {
         errors.push(`колода "${deckName}": likec4 ссылается на несуществующий шаг "${step}"`);
@@ -316,8 +379,35 @@ for (const [slug, perLocale] of bySlug) {
     }
   }
 
+  /**
+   * Врезки: калькулятор, сортировка, симулятор.
+   *
+   * Структура общая для локалей и лежит в колоде, проза — в `labels` урока.
+   * Значит проверять надо то же, что у комментариев к коду: шаг существует, а
+   * ключи подписей есть в каждой локали. Пропущенный ключ иначе доезжает до
+   * читателя именем ключа вместо надписи.
+   */
+  const neededLabels = new Set();
+
+  // Подписи рамок групп поверх последовательностей — тоже проза локали.
+  for (const groups of Object.values(deckModule.likec4?.groups ?? {})) {
+    for (const group of groups) neededLabels.add(group.label);
+  }
+
+  if (deckModule.widgets) {
+    const { widgetLabelKeys } = await import(path.join(codeDir, 'widgets.ts'));
+
+    for (const [step, widget] of Object.entries(deckModule.widgets)) {
+      if (!deckIds.includes(step)) {
+        errors.push(`колода "${deckName}": врезка на несуществующем шаге "${step}"`);
+      }
+      for (const key of widgetLabelKeys(widget)) neededLabels.add(key);
+    }
+  }
+
   // Эталон порядка шагов — первая локаль по алфавиту; остальные обязаны совпасть.
   let reference = null;
+  let addedReference = null;
   let quizReference = null;
   let incidentReference = null;
 
@@ -357,6 +447,32 @@ for (const [slug, perLocale] of bySlug) {
     if (missingComments.length) {
       errors.push(`${where}: нет переводов комментариев к коду — ${missingComments.join(', ')}`);
     }
+    /**
+     * «Новое на схеме»: id элементов — идентификаторы, а не проза, поэтому
+     * набор и порядок обязаны совпасть во всех локалях, а каждый id — найтись
+     * в модели.
+     */
+    const added = data.steps
+      .map((step) => `${step.id}: ${(step.added ?? []).map((item) => item.element).join(', ')}`)
+      .join('\n');
+    if (addedReference === null) {
+      addedReference = { locale, added };
+    } else if (addedReference.added !== added) {
+      errors.push(`${where}: элементы «новое на схеме» расходятся с ${addedReference.locale}`);
+    }
+    for (const step of data.steps) {
+      for (const item of step.added ?? []) {
+        if (likec4ElementIds && !likec4ElementIds.has(item.element)) {
+          errors.push(`${where}, шаг "${step.id}": нет элемента "${item.element}" в likec4/`);
+        }
+      }
+    }
+
+    const missingLabels = [...neededLabels].filter((key) => !(key in (data.labels ?? {})));
+    if (missingLabels.length) {
+      errors.push(`${where}: нет подписей для врезок — ${missingLabels.join(', ')}`);
+    }
+
     const strayComments = given.filter((key) => !neededComments.has(key));
     if (strayComments.length) {
       warnings.push(`${where}: комментарии ${strayComments.join(', ')} не используются ни в одном шаге`);

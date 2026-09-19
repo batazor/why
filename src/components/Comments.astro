@@ -1,0 +1,295 @@
+---
+import { useTranslations, type Locale } from '../i18n/ui';
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+---
+
+{/*
+  Комментарии к выделенному тексту — Hypothesis: бесплатно и без своего
+  бэкенда. Заметка цепляется к цитате, а не к номеру строки, поэтому переживает
+  мелкие правки прозы. Ветки у /en/ и /ru/ разные: это разные URL.
+
+  Родная панель Hypothesis с её вкладкой на краю окна не показывается: iframe
+  встаёт в наш контейнер (externalContainerSelector), а открывает его своя
+  кнопка. Внутрь iframe стили не пробиваются, поэтому свои у нас только рамка
+  панели и подсветки в тексте.
+*/}
+<button
+  class="comments-fab"
+  type="button"
+  aria-controls="comments-panel"
+  aria-expanded="false"
+  aria-label={t('lesson.comments')}
+  hidden
+>
+  {/* Подсказка своя, а не title: системная появляется через секунду и
+      выглядит чужой рядом с панелями задания и таблицы. */}
+  <span class="comments-fab__tip" aria-hidden="true">{t('lesson.comments')}</span>
+  {/* Тот же рисунок, что у значка задания: линия 1.6, скруглённые концы. */}
+  <svg
+    viewBox="0 0 24 24"
+    width="20"
+    height="20"
+    aria-hidden="true"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.6"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <path d="M4 5h16v11H10l-4 4v-4H4z"></path>
+    <path d="M8 9h8M8 12.5h5"></path>
+  </svg>
+  <span class="comments-fab__count" hidden></span>
+</button>
+
+<aside id="comments-panel" class="comments-panel" aria-label={t('lesson.comments')} hidden>
+  <header class="comments-panel__head">
+    <div>
+      <strong>{t('lesson.comments')}</strong>
+      <p>{t('lesson.commentsHint')}</p>
+    </div>
+    <button class="comments-panel__close" type="button" aria-label={t('lesson.commentsClose')}>
+      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+        <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M4 4l8 8M12 4l-8 8"></path>
+      </svg>
+    </button>
+  </header>
+  <div class="comments-panel__frame"></div>
+</aside>
+
+<script is:inline>
+  // Конфиг функцией, а не JSON: только так Hypothesis сообщает, что хочет
+  // открыться (читатель нажал «Annotate» или щёлкнул по подсветке), и мы
+  // выдвигаем свою панель.
+  window.hypothesisConfig = () => ({
+    openSidebar: false,
+    showHighlights: 'always',
+    externalContainerSelector: '.comments-panel__frame',
+    onLayoutChange: (layout) => {
+      if (layout.expanded) window.dispatchEvent(new Event('why:comments-open'));
+    },
+  });
+</script>
+<script src="https://hypothes.is/embed.js" async is:inline></script>
+
+<script>
+  import { fabRail } from './fab-rail';
+
+  const fab = document.querySelector<HTMLButtonElement>('.comments-fab')!;
+  const panel = document.querySelector<HTMLElement>('.comments-panel')!;
+  const close = panel.querySelector<HTMLButtonElement>('.comments-panel__close')!;
+  const count = fab.querySelector<HTMLElement>('.comments-fab__count')!;
+
+  const setOpen = (open: boolean) => {
+    panel.hidden = !open;
+    fab.setAttribute('aria-expanded', String(open));
+    document.documentElement.classList.toggle('comments-open', open);
+  };
+
+  // В общий столбик кружков на правом краю — рядом с заданием и таблицей.
+  fabRail().append(fab);
+  fab.hidden = false;
+  fab.addEventListener('click', () => setOpen(panel.hidden));
+  close.addEventListener('click', () => {
+    setOpen(false);
+    fab.focus();
+  });
+  window.addEventListener('why:comments-open', () => setOpen(true));
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !panel.hidden) setOpen(false);
+  });
+
+  // Число на кнопке — публичные заметки к этой странице. Спрашиваем по
+  // canonical: Hypothesis сам сводит его с остальными адресами документа.
+  // Не ответил API — кнопка просто без числа.
+  const uri = document.querySelector<HTMLLinkElement>('link[rel="canonical"]')?.href ?? location.href;
+  fetch(`https://api.hypothes.is/api/search?limit=0&uri=${encodeURIComponent(uri)}`)
+    .then((response) => (response.ok ? response.json() : null))
+    .then((data) => {
+      if (data?.total > 0) {
+        count.textContent = String(data.total);
+        count.hidden = false;
+      }
+    })
+    .catch(() => {});
+</script>
+
+<style>
+  /* Двойник значка задания (.brief-recall): тот же кружок. Где он стоит,
+     решает общий столбик на правом краю (.fab-rail в global.css). */
+  .comments-fab {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    background: var(--panel);
+    color: var(--muted);
+    box-shadow: 0 2px 10px var(--shadow);
+    cursor: pointer;
+  }
+
+  .comments-fab[hidden] {
+    display: none;
+  }
+
+  .comments-fab__tip {
+    position: absolute;
+    right: calc(100% + 0.6rem);
+    top: 50%;
+    padding: 0.3rem 0.6rem;
+    border-radius: 6px;
+    background: var(--fg);
+    color: var(--panel);
+    font-size: 0.78rem;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(4px, -50%);
+    transition:
+      opacity 0.15s ease,
+      transform 0.15s ease;
+  }
+
+  .comments-fab:hover .comments-fab__tip,
+  .comments-fab:focus-visible .comments-fab__tip {
+    opacity: 1;
+    transform: translate(0, -50%);
+  }
+
+  /* Панель открыта — подсказка про неё уже не нужна. */
+  .comments-fab[aria-expanded='true'] .comments-fab__tip {
+    opacity: 0;
+  }
+
+  .comments-fab:hover,
+  .comments-fab[aria-expanded='true'] {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+
+  /* Число — бейджем на краю кружка, а не внутри: внутри место иконки. */
+  .comments-fab__count {
+    position: absolute;
+    top: -0.3rem;
+    right: -0.3rem;
+    min-width: 1.15rem;
+    padding: 0 0.3rem;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--panel);
+    font-size: 0.65rem;
+    font-weight: 700;
+    line-height: 1.15rem;
+    text-align: center;
+  }
+
+  .comments-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    width: min(26rem, 100vw);
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    box-shadow: -12px 0 32px var(--shadow);
+    animation: comments-in 0.2s ease-out;
+  }
+
+  /* hidden у панели должен побеждать display:flex выше. */
+  .comments-panel[hidden] {
+    display: none;
+  }
+
+  @keyframes comments-in {
+    from {
+      transform: translateX(1.5rem);
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .comments-panel {
+      animation: none;
+    }
+  }
+
+  .comments-panel__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1rem 0.85rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .comments-panel__head p {
+    margin: 0.15rem 0 0;
+    color: var(--muted);
+    font-size: 0.85rem;
+    line-height: 1.4;
+  }
+
+  .comments-panel__close {
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+  }
+
+  .comments-panel__close:hover {
+    background: var(--accent-soft);
+    color: var(--fg);
+  }
+
+  .comments-panel__frame {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .comments-panel__frame :global(iframe) {
+    width: 100%;
+    height: 100%;
+    border: 0;
+  }
+
+  /* Подсветки Hypothesis живут в DOM урока, поэтому их можно одеть в цвета
+     сайта: вместо жёлтого маркера — тонкое подчёркивание акцентом. */
+  :global(.hypothesis-highlights-always-on .hypothesis-highlight) {
+    background: transparent !important;
+    border-bottom: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+    cursor: pointer;
+  }
+
+  :global(.hypothesis-highlights-always-on .hypothesis-highlight .hypothesis-highlight) {
+    border-bottom-color: var(--accent);
+  }
+
+  :global(.hypothesis-highlight.hypothesis-highlight-focused) {
+    background: var(--accent-soft) !important;
+  }
+
+  @media print {
+    .comments-fab,
+    .comments-panel {
+      display: none;
+    }
+  }
+</style>

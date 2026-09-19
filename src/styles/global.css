@@ -2333,6 +2333,17 @@ a.chapters__link:hover {
 .step__aside .likec4-stage {
   height: auto;
   max-height: min(var(--flow-height, 400px), 68vh);
+  /* Кадр внутри шага — не прилипшая полоса, и события мыши ему нужны: зум
+     щипком и перетаскивание камеры. Прокрутку страницы он не забирает —
+     обычное колесо проходит мимо схемы (`preventScrolling: false`). */
+  pointer-events: auto;
+}
+
+/* Кадр во всю ширину — итоговая схема, и ей нужен экран целиком: при пределе
+   в 68% высокая схема сжималась до мелких подписей, хотя по ширине места было
+   вдвое больше. 88% оставляют видными заголовок шага и полосу навигации. */
+.step__wide .likec4-stage {
+  max-height: min(var(--flow-height, 400px), 88vh);
 }
 
 /**
@@ -2991,4 +3002,1608 @@ vscode-tree-item.is-new {
 .step__list li::marker,
 .levels__list li::marker {
   color: var(--muted);
+}
+
+/* Задание: чужая постановка, с которой начинается разбор.
+
+   Карточка, а не обычная цитата: условие читают не один раз, к нему
+   возвращаются с середины разбора — и у него должен быть видимый край,
+   иначе через экран уже не отличить, где кончилось то, что попросили, и
+   началось то, что мы решили.
+
+   Подпись набрана тем же рукописным шрифтом, что и пометки на схемах: текст
+   пришёл с доски, и карточка об этом напоминает. Сам текст задания остаётся
+   в основном шрифте — абзац курсивом читается вдвое медленнее, а его читают
+   внимательно. */
+.brief {
+  margin: 1.75rem 0 2.25rem;
+  /* Шире колонки прозы: условие — не абзац разбора, а то, на что разбор
+     ссылается, и по ширине оно обязано отличаться от текста вокруг. Выход за
+     колонку законен — `.prose` ограничивает свою ширину, но не обрезает
+     детей; так же из неё выходит блок уровней.
+
+     Предел — 48rem, а не вся страница: строка в ширину контейнера уходит за
+     сотню знаков, и короткое задание в ней начинают перечитывать. */
+  max-width: none;
+  width: min(48rem, calc(100vw - 2.5rem));
+  padding: 1.2rem 1.5rem 1.35rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  box-shadow: 0 1px 2px var(--shadow);
+}
+
+.brief__head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+
+.brief__label {
+  font-family: var(--font-note);
+  font-size: 1.4rem;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.brief__source {
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.brief__text {
+  margin: 0;
+  /* Отступ и полоса слева достались бы от стандартной цитаты браузера: край у
+     карточки уже есть, второй внутри неё лишний. */
+  padding: 0;
+  border: 0;
+}
+
+.brief__text > p {
+  margin: 0 0 0.75rem;
+}
+
+.brief__text > p:last-child {
+  margin-bottom: 0;
+}
+
+/* Значок «задание под рукой»: появляется, когда карточка условия уехала
+   вверх, и открывает её копию поверх страницы.
+
+   Прижат к правому краю и посажен по середине высоты: снизу справа живут
+   плавающие кнопки почти всех сайтов, и читатель принимает такую за чат
+   поддержки. */
+/* Столбик кружков на правом краю: задание, таблица требований, комментарии.
+   Кружки добавляют разные компоненты (fab-rail.ts), порядок держит `order`, а
+   скрытый кружок выпадает из потока — промежутки всегда ровные. */
+.fab-rail {
+  position: fixed;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.fab-rail > .brief-recall {
+  order: 1;
+}
+
+.fab-rail > .req-recall {
+  order: 2;
+}
+
+.fab-rail > .comments-fab {
+  order: 3;
+}
+
+/* Кружок — один на все три: размер, рамка и тень. */
+.brief-recall,
+.req-recall {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--muted);
+  box-shadow: 0 2px 10px var(--shadow);
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.brief-recall[hidden],
+.req-recall[hidden] {
+  display: none;
+}
+
+.brief-recall:hover,
+.brief-recall:focus-visible,
+.req-recall:hover,
+.req-recall:focus-visible,
+.req-recall[aria-expanded='true'] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Панель с копией задания. Ширина — по карточке в тексте, но с потолком по
+   окну: на телефоне панель шире экрана не бывает. */
+.brief-recall__panel {
+  position: fixed;
+  /* Нативному popover браузер ставит `inset: 0`, и при живом `left` правый
+     край не работает вовсе: панель уезжает к левому краю окна. Поэтому
+     левая сторона гасится руками. */
+  left: auto;
+  right: 4.5rem;
+  /* По середине высоты без transform: его занимает анимация раскрытия. */
+  top: 0;
+  bottom: 0;
+  height: fit-content;
+  margin: auto 0;
+  padding: 0;
+  width: min(30rem, calc(100vw - 6rem));
+  max-height: min(70vh, 40rem);
+  overflow-y: auto;
+  border: 0;
+  background: transparent;
+  z-index: 41;
+}
+
+/* Без затемнения: панель открывается наведением, и затемнение мигало бы от
+   каждого прохода курсора по краю окна. */
+.brief-recall__panel::backdrop {
+  background: transparent;
+}
+
+/* Карточка внутри панели уже не в колонке текста: ширину держит панель, а
+   собственные отступы карточке здесь не нужны. */
+.brief-recall__panel .brief {
+  width: auto;
+  max-width: none;
+  margin: 0;
+  box-shadow: 0 8px 30px var(--shadow);
+}
+
+/* На узком экране панель встаёт снизу во всю ширину: сбоку от значка ей уже
+   негде развернуться. */
+@media (max-width: 40rem) {
+  /* Столбик уходит в нижний угол. */
+  .fab-rail {
+    top: auto;
+    bottom: 1rem;
+    transform: none;
+  }
+
+  /* Рядом со столбиком, а не над ним: столбик в углу высокий. */
+  .brief-recall__panel {
+    right: 4.5rem;
+    left: 1rem;
+    top: auto;
+    bottom: 1rem;
+    margin: 0;
+    max-width: none;
+    width: auto;
+  }
+}
+
+/* ---------- таблица требований на правом краю ---------- */
+
+/* Панель с таблицей: слева от столбика, как у задания, но шире — у таблицы
+   три колонки. Прокручивается сам документ, а путь файла остаётся сверху. */
+.req-recall__panel {
+  position: fixed;
+  right: 4.5rem;
+  top: 0;
+  bottom: 0;
+  height: fit-content;
+  margin: auto 0;
+  z-index: 41;
+  width: min(46rem, calc(100vw - 6.5rem));
+  border-radius: var(--radius);
+  box-shadow:
+    0 1px 2px var(--shadow),
+    0 16px 48px var(--shadow);
+}
+
+.req-recall__panel[hidden] {
+  display: none;
+}
+
+.req-recall__panel .req-board {
+  display: flex;
+  flex-direction: column;
+  max-height: min(80vh, 46rem);
+}
+
+.req-recall__panel .req-board__path {
+  flex: none;
+  background: color-mix(in srgb, var(--border) 35%, var(--panel));
+}
+
+.req-recall__panel .req-board__doc {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.4rem 1.1rem 1.1rem;
+}
+
+/* Шапка колонок держится при прокрутке: без неё в середине длинного раздела
+   непонятно, где цель, а где «что ломается». */
+.req-recall__panel .req-board__table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--panel);
+}
+
+.req-recall__panel .req-board__section + .req-board__section {
+  margin-top: 1.4rem;
+}
+
+.req-recall__panel .req-board__title {
+  position: static;
+  padding: 0.7rem 0 0.35rem;
+}
+
+.req-recall__panel .req-board__table {
+  font-size: 0.8rem;
+}
+
+.req-recall__panel .req-board__table td {
+  padding: 0.5rem 0.55rem;
+}
+
+.req-recall__panel .req-board__table tbody tr:hover td {
+  background: color-mix(in srgb, var(--accent-soft) 55%, transparent);
+}
+
+.req-recall__panel .req-board__table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+@media (max-width: 40rem) {
+  .req-recall__panel {
+    right: 4.5rem;
+    left: 1rem;
+    top: auto;
+    bottom: 1rem;
+    margin: 0;
+    width: auto;
+  }
+}
+
+/* ---------- врезки разбора ---------- */
+
+/* Калькулятор нагрузки: слева то, что известно, справа то, что из этого
+   следует. Две колонки, потому что читатель двигает одно и смотрит на другое —
+   в столбик пришлось бы прокручивать между причиной и следствием. */
+.calc {
+  display: grid;
+  /* Две колонки, если врезке хватает ширины, одна под другой — если нет.
+     Порог по ширине самой врезки, а не окна: в колонке рядом с текстом она
+     занимает от трети до половины экрана, и медиазапрос по окну промахивался
+     бы в обе стороны. */
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: 1.5rem;
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+/* Колонка липкая: одна под другой ползунки и итоги выше экрана, и низ уезжал
+   бы за край, пока шаг не кончится. Прокрутка — внутри врезки. */
+.step__aside .calc {
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.calc__heading {
+  margin: 0 0 0.75rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.calc__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.15rem 0.5rem;
+  margin-bottom: 0.9rem;
+  font-size: 0.85rem;
+}
+
+.calc__name {
+  color: var(--fg);
+}
+
+/* Значение моноширинным: при перетаскивании ползунка цифры меняются каждый
+   кадр, и в пропорциональном шрифте подпись дёргается по ширине. */
+.calc__value {
+  font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.calc__value small {
+  color: var(--muted);
+}
+
+.calc__slider {
+  grid-column: 1 / -1;
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.calc__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.calc__cell {
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+/* Два числа, ради которых калькулятор и стоит в разборе: сколько джоб в работе
+   одновременно и сколько воркеров это значит. Остальные — контекст к ним. */
+.calc__cell.is-key {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.calc__cell dt {
+  font-size: 0.72rem;
+  color: var(--muted);
+  line-height: 1.3;
+}
+
+.calc__cell dd {
+  margin: 0.15rem 0 0;
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.calc__cell dd small {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.calc__law {
+  margin: 0.9rem 0 0;
+  font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.calc__verdict {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+/* Сортировка требований: список утверждений, у каждого — переключатель из
+   трёх вариантов. Стоит в колонке рядом с текстом шага, поэтому компактный. */
+.sort {
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+/* Колонка липкая, а список длиннее экрана: без предела его низ уезжал бы за
+   край, пока шаг не кончится. Прокрутка остаётся внутри врезки. */
+.step__aside .sort {
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.sort__prompt {
+  margin: 0 0 0.9rem;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.sort__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  /* Две колонки, где хватает ширины, одна — где нет. Колонку задаёт не окно,
+     а сама врезка: в колонке рядом с текстом её ширина от трети до половины
+     экрана, и порог по окну промахивался бы в обе стороны.
+
+     Нижний предел 20rem — на нём строка утверждения и переключатель под ней
+     ещё читаются. Верхний — половина врезки: на мониторе в 2000px без него
+     появлялась третья колонка, и строки в ней ломались на каждом втором
+     слове. */
+  grid-template-columns: repeat(auto-fill, minmax(max(20rem, calc((100% - 0.5rem) / 2)), 1fr));
+  gap: 0.5rem;
+}
+
+.sort__item {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.sort__item.is-right {
+  border-color: var(--ok);
+}
+
+.sort__item.is-wrong {
+  border-color: var(--bad);
+  background: var(--bad-soft);
+}
+
+/* Переключатель — одной полосой: три варианта рядом читаются как выбор из
+   трёх, а не как три независимые кнопки. */
+.sort__choice {
+  display: inline-flex;
+  justify-self: start;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.sort__option {
+  padding: 0.18rem 0.6rem;
+  border: 0;
+  border-left: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.sort__option:first-child {
+  border-left: 0;
+}
+
+.sort__option:hover {
+  color: var(--fg);
+}
+
+.sort__option.is-on {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.sort__why {
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.sort__foot {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.9rem;
+}
+
+.sort__progress {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.sort__again {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.sort__score {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+/* Шумный сосед: сверху ручки, снизу полотно React Flow с живыми числами. */
+.noisy {
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.noisy__controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.9rem;
+}
+
+.noisy__label {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-right: 0.2rem;
+}
+
+.noisy__policy {
+  padding: 0.25rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.noisy__policy.is-on {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* Кнопка запуска отодвинута от переключателей: порядок выбирают до запуска и
+   меняют на ходу, а «пуск» — другое действие, и путать их нельзя. */
+.noisy__run {
+  margin-left: auto;
+}
+
+.noisy__reset {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.noisy__stage {
+  height: var(--flow-height, 300px);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.noisy-node {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 10rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  font-size: 0.75rem;
+}
+
+.noisy-node--accent {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* Очередь, в которой уже полсотни джоб: её видно, не читая цифр. */
+.noisy-node--hot {
+  border-color: var(--bad);
+  background: var(--bad-soft);
+}
+
+.noisy-node__title {
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.noisy-node__row {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Шаг без кадра в разборе, который ведёт проза: текст занимает обе колонки.
+
+   Колонка под кадр здесь пустует почти всегда, и отдавать ей треть ширины ради
+   трёх шагов из двадцати незачем. Предел в 46rem остаётся: строка во всю
+   ширину разбора читается хуже короткой, и длина её выбирается по глазу, а не
+   по тому, сколько места осталось. */
+.player--editor.player--prose .step--text:not(.step--wide):not(.step--aside) {
+  grid-column: 1 / -1;
+}
+
+.player--editor.player--prose .step--text:not(.step--wide):not(.step--aside) > div {
+  max-width: min(46rem, 100%);
+}
+
+/* Текст над кадром во всю ширину — той же длины строки, что и шаги без кадра:
+   иначе абзацы на этих шагах переверстываются и текст прыгает по ширине. */
+.player--prose .step--wide > div {
+  max-width: min(46rem, 100%);
+}
+
+/* Шумный сосед, второй заход: у каждого арендатора свой цвет, и тот же цвет
+   у его джоб в слотах пула. Цифры остаются, но смотреть теперь можно на
+   цвета: при общей очереди все восемь слотов одного цвета. */
+
+.noisy-node--t0,
+.noisy-node--t1,
+.noisy-node--t2 {
+  border-left: 3px solid var(--tenant);
+}
+
+.noisy-node {
+  min-width: 11.5rem;
+}
+
+.noisy-node__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.noisy-node__row b {
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.noisy-node__bar {
+  display: block;
+  height: 5px;
+  margin: 0.2rem 0 0.3rem;
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.noisy-node__fill {
+  display: block;
+  height: 100%;
+  background: var(--tenant, var(--accent));
+  transition: width 0.2s ease;
+}
+
+.noisy-node__slots {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin: 0.3rem 0 0.4rem;
+}
+
+.noisy-slot {
+  height: 14px;
+  border-radius: 3px;
+  transition: background-color 0.2s ease;
+}
+
+.noisy-slot.is-free {
+  background: transparent;
+  border: 1px dashed var(--border);
+}
+
+
+.noisy__clock {
+  margin-left: auto;
+  font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Часы теперь отодвигают правую группу, кнопке запуска это больше не нужно. */
+.noisy__run {
+  margin-left: 0;
+}
+
+.noisy__burst {
+  padding: 0.3rem 0.65rem;
+  border: 1px solid;
+  border-radius: 999px;
+  background: transparent;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.noisy__burst:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.noisy__verdict {
+  margin: 0.8rem 0 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+/* Карточки одной ширины: иначе «32.5 s» у краулера раздвигает его карточку, и
+   столбец арендаторов перестаёт быть столбцом. */
+.noisy-node {
+  width: 13rem;
+  min-width: 0;
+}
+
+/* Планировщик шире: в нём одна строка, но длинная, и переносить название
+   порядка на две — хуже, чем дать карточке место. */
+.noisy-node--accent {
+  width: 14.5rem;
+}
+
+/* Цвета арендаторов — одно место на всю врезку: карточки, слоты пула и линии
+   связи берут их отсюда. Раньше цвет жил в трёх правилах сразу, и поменять его
+   значило найти все три. */
+.noisy {
+  --tenant-0: #4a86c8;
+  --tenant-1: #2f9e6f;
+  --tenant-2: #d9822b;
+}
+
+.noisy-node--t0 { --tenant: var(--tenant-0); }
+.noisy-node--t1 { --tenant: var(--tenant-1); }
+.noisy-node--t2 { --tenant: var(--tenant-2); }
+
+.noisy-slot--t0 { background: var(--tenant-0); }
+.noisy-slot--t1 { background: var(--tenant-1); }
+.noisy-slot--t2 { background: var(--tenant-2); }
+
+.noisy__burst {
+  border-color: var(--tenant-2);
+  color: var(--tenant-2);
+}
+
+/* Подпись доли — маленькая пилюля на линии, с тонкой рамкой, чтобы не
+   сливаться с бледной пунктирной линией под ней. */
+.noisy .react-flow__edge-textbg {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+/* Концы линий не упираются в рамку карточки: закругление делает стык мягче,
+   а на толстой линии без него виден обрубленный торец. */
+.noisy .react-flow__edge-path {
+  stroke-linecap: round;
+}
+
+/* Кадр LikeC4 теперь можно двигать: курсор говорит об этом до первой попытки,
+   иначе про панораму узнают только случайно. */
+.likec4-stage .react-flow__pane {
+  cursor: grab;
+}
+
+.likec4-stage .react-flow__pane.dragging {
+  cursor: grabbing;
+}
+
+/* ---------- новое на схеме ---------- */
+
+/* Карточки элементов, появившихся на шаге. Стоят под текстом шага: сперва
+   читатель узнаёт, зачем элемент нужен, потом видит его отдельной строкой — и
+   тут же коробку на схеме рядом. */
+.added {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.added__card {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--ok);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+/* Подпись «новое на схеме» — зелёная, как «плюс» в диффе: это то, что шаг
+   добавил, а не то, что было. */
+.added__label {
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ok);
+}
+
+.added__name {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+/* Технология — моноширинной плашкой: это имя из модели, а не слово текста. */
+.added__tech {
+  padding: 0.05rem 0.4rem;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  font-weight: 400;
+}
+
+.added__role {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* Первая колонка таблицы в документе — ключ строки: FR-1, «Продукт». Перенос
+   рвёт его пополам («FR-» / «1»), и номер перестаёт читаться как номер. */
+.editor__doc th:first-child,
+.editor__doc td:first-child {
+  white-space: nowrap;
+}
+
+/* ---------- документ требований ---------- */
+
+/* Чипы требований под текстом шага. Цвет полосы — вид требования: синий у
+   функций, фиолетовый у свойств. Тот же цвет у строки в таблице — по нему
+   видно, куда карточка ляжет. */
+.req-chips {
+  margin-top: 1.1rem;
+}
+
+.req-chips__label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.req-chips__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.req-chip {
+  --req: var(--accent);
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--req);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  text-align: left;
+  cursor: grab;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.req-chip--nfr {
+  --req: #7a5cc4;
+}
+
+.req-chip:hover:not(:disabled) {
+  border-color: var(--req);
+  transform: translateX(2px);
+}
+
+.req-chip:active:not(:disabled) {
+  cursor: grabbing;
+}
+
+/* Перенесённая карточка остаётся на месте, но гаснет: по ней видно, что из
+   шага уже в документе, а список не прыгает, теряя строки. */
+.req-chip.is-placed {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.req-chip__grip {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.req-chip__id {
+  flex: none;
+  font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--req);
+}
+
+.req-chip__text {
+  flex: 1;
+}
+
+.req-chip__done {
+  flex: none;
+  font-size: 0.72rem;
+  color: var(--ok);
+}
+
+.req-chips__all {
+  margin-top: 0.5rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-size: 0.8rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Таблица — документ в редакторе: путь сверху, отрендеренный markdown под
+   ним. Это тот же файл репозитория, что словарь в главе про DDD, только
+   заполняет его читатель. */
+.req-board {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  overflow: hidden;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.step__aside .req-board {
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Над таблицей тащат карточку: вся таблица — цель, и она это показывает. */
+.req-board.is-over {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.req-board__path {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.45rem 0.8rem;
+  border-bottom: 1px solid var(--border);
+  font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.req-board__reset {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.req-board__doc {
+  padding: 0.9rem 1rem 1rem;
+}
+
+.req-board__section + .req-board__section {
+  margin-top: 1.1rem;
+}
+
+.req-board__title {
+  margin: 0 0 0.45rem;
+  font-size: 0.9rem;
+}
+
+.req-board__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.req-board__table th {
+  padding: 0.3rem 0.45rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: left;
+}
+
+.req-board__table td {
+  padding: 0.35rem 0.45rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+/* Номер — ключ строки: не рвётся и стоит в цвете своего вида. */
+.req-board__table td:first-child {
+  white-space: nowrap;
+  font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  color: var(--accent);
+}
+
+.req-board__section:nth-of-type(2) td:first-child {
+  color: #7a5cc4;
+}
+
+.req-board__note {
+  color: var(--muted);
+}
+
+.req-board__goal {
+  font-weight: 600;
+}
+
+/* Место для строки, которую шаг приносит, — пунктиром: «сюда» раньше, чем
+   читатель спросит, куда тащить. */
+.req-board__slot td {
+  border-bottom: 1px dashed var(--border);
+  color: var(--muted);
+  font-style: italic;
+}
+
+.req-board__empty td {
+  color: var(--muted);
+  text-align: center;
+  padding: 0.8rem;
+}
+
+/* Строка, которой шаг приносит цель: ячейка цели ждёт, как пустое место. */
+.req-board__table tr.is-incoming .req-board__goal {
+  color: var(--muted);
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent 0 6px,
+    var(--accent-soft) 6px 12px
+  );
+}
+
+/* Только что положенная строка вспыхивает: таблица длинная, и без этого её
+   ищут глазами. */
+.req-board__table tr.is-flash td {
+  animation: req-flash 1.4s ease;
+}
+
+@keyframes req-flash {
+  from {
+    background: color-mix(in srgb, var(--ok) 22%, transparent);
+  }
+  to {
+    background: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .req-board__table tr.is-flash td {
+    animation: none;
+  }
+}
+
+/* Раздел документа — сворачиваемый: шаг раскрывает только то, что трогает. */
+.req-board__section > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.req-board__section > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Шеврон вместо системного треугольника: тот же знак, что у веток дерева в
+   редакторе рядом. */
+.req-board__section > summary::before {
+  content: '';
+  width: 0.4rem;
+  height: 0.4rem;
+  border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted);
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+}
+
+.req-board__section[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+.req-board__count {
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.req-board__breaks {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+/* Цель — самое длинное в строке свойства: ей треть таблицы. */
+.req-board__section:nth-of-type(2) .req-board__table th:last-child,
+.req-board__section:nth-of-type(2) .req-board__table td:last-child {
+  width: 38%;
+}
+
+/* ---------- транзакция изнутри ---------- */
+
+.tx {
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.tx__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.8rem;
+}
+
+.tx__label {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-right: 0.2rem;
+}
+
+.tx__scenario {
+  padding: 0.22rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+
+.tx__scenario.is-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.tx__stage {
+  height: var(--flow-height, 340px);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+/* Рамка транзакции — родитель sub-flow. Пунктир, как у границы контекста на
+   схемах LikeC4: это граница, а не ещё одна коробка. */
+.tx-group {
+  width: 100%;
+  height: 100%;
+  border: 1.5px dashed var(--accent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  transition: border-color 0.2s ease, background-color 0.2s ease, opacity 0.2s ease;
+}
+
+.tx-group__title {
+  position: absolute;
+  top: 0.55rem;
+  left: 0.75rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+/* Откаченная транзакция: всё внутри рамки было — и исчезло. Красная рамка и
+   зачёркнутые шаги показывают именно это, а не «не началось». */
+.tx-group--undone {
+  border-color: var(--bad);
+  background: var(--bad-soft);
+}
+
+.tx-group--undone .tx-group__title {
+  color: var(--bad);
+}
+
+.tx-node {
+  min-width: 11rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--ok);
+  border-radius: 7px;
+  background: var(--panel);
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: opacity 0.2s ease, border-color 0.2s ease;
+}
+
+.tx-node--mono {
+  font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.74rem;
+  font-weight: 500;
+}
+
+.tx-node--failed {
+  border-color: var(--bad);
+  background: var(--bad-soft);
+}
+
+.tx-node--undone {
+  border-left-color: var(--bad);
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.tx-node--skipped {
+  border-left-color: var(--border);
+  opacity: 0.4;
+}
+
+.tx-edge path {
+  stroke: var(--muted);
+  stroke-width: 1.5;
+}
+
+.tx-edge--skipped path,
+.tx-edge--undone path {
+  stroke-dasharray: 4 4;
+  opacity: 0.5;
+}
+
+.tx-edge--failed path {
+  stroke: var(--bad);
+}
+
+.tx .react-flow__edge-textbg {
+  fill: var(--panel);
+}
+
+.tx .react-flow__edge-text {
+  font-size: 11px;
+  fill: var(--muted);
+}
+
+.tx__state {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin: 0.8rem 0 0;
+}
+
+.tx__state > div {
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+
+.tx__state dt {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.tx__state dd {
+  margin: 0.1rem 0 0;
+  font-size: 1rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Два сообщения об одной джобе — то, ради чего сценарий существует. */
+.tx__state dd.is-warn {
+  color: var(--bad);
+}
+
+.tx__verdict {
+  margin: 0.7rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+/* Цикл публикатора — вторая рамка: другая транзакция, поэтому и цвет другой. */
+.tx-group--muted {
+  border-color: var(--muted);
+  background: color-mix(in srgb, var(--muted) 6%, transparent);
+}
+
+.tx-group--muted .tx-group__title {
+  color: var(--muted);
+}
+
+.tx-group--skipped {
+  opacity: 0.4;
+}
+
+/* Условие или значение под командой: `published_at = NULL`. */
+.tx-node__sub {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.68rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+/* ---------- жизненный цикл джобы ---------- */
+
+/* Цвет перехода — кто его делает. Те же цвета у легенды и у списка «куда
+   дальше», поэтому они заданы один раз, переменной на классе актора. */
+.lc {
+  --lc-client: var(--muted);
+  --lc-command: var(--accent);
+  --lc-worker: var(--ok);
+  --lc-scheduler: #7a5cc4;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.lc__stage {
+  height: var(--flow-height, 380px);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.lc-edge--client,
+.lc__actor--client,
+.lc__move--client {
+  --lc: var(--lc-client);
+}
+
+.lc-edge--command,
+.lc__actor--command,
+.lc__move--command {
+  --lc: var(--lc-command);
+}
+
+.lc-edge--worker,
+.lc__actor--worker,
+.lc__move--worker {
+  --lc: var(--lc-worker);
+}
+
+.lc-edge--scheduler,
+.lc__actor--scheduler,
+.lc__move--scheduler {
+  --lc: var(--lc-scheduler);
+}
+
+.lc-edge path.react-flow__edge-path {
+  stroke: var(--lc);
+  stroke-width: 1.6;
+  transition: opacity 0.2s ease;
+}
+
+.lc-edge .react-flow__arrowhead polyline,
+.lc-edge marker path {
+  stroke: var(--lc);
+  fill: var(--lc);
+}
+
+.lc-edge.is-far {
+  opacity: 0.25;
+}
+
+.lc .react-flow__edge-textbg {
+  fill: var(--panel);
+}
+
+.lc .react-flow__edge-text {
+  font-size: 11px;
+  fill: var(--fg);
+}
+
+/* Точка входа — сплошной кружок, как начальное состояние в UML. */
+.lc-start {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--fg);
+}
+
+.lc-state {
+  min-width: 7.5rem;
+  padding: 0.55rem 0.9rem;
+  border: 1.5px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--fg);
+  font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    opacity 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+/* Конечное состояние — двойная рамка, как в UML: из него выхода нет. */
+.lc-state--terminal {
+  box-shadow: 0 0 0 3px var(--panel), 0 0 0 4.5px var(--border);
+}
+
+.lc-state--succeeded {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.lc-state--failed {
+  border-color: var(--bad);
+  color: var(--bad);
+}
+
+.lc-state--cancelled {
+  color: var(--muted);
+}
+
+.lc-state.is-on {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.lc-state--terminal.is-on {
+  box-shadow: 0 0 0 3px var(--panel), 0 0 0 4.5px var(--accent);
+}
+
+.lc-state.is-far {
+  opacity: 0.4;
+}
+
+.lc__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  margin: 0.7rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.lc__actor::before {
+  content: '';
+  display: inline-block;
+  width: 1.1rem;
+  height: 2px;
+  margin-right: 0.4rem;
+  vertical-align: middle;
+  background: var(--lc);
+}
+
+.lc__about {
+  margin-top: 0.8rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--border);
+}
+
+.lc__name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-weight: 600;
+}
+
+.lc__badge {
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.lc__text {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.lc__label {
+  margin: 0.7rem 0 0.3rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.lc__moves {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8rem;
+}
+
+.lc__move {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--lc);
+}
+
+.lc__move code {
+  flex: none;
+  font-size: 0.76rem;
+}
+
+.lc__move span {
+  color: var(--muted);
+}
+
+/* Стикер поверх кадра LikeC4: та же записка на полях, что у схем React Flow,
+   но координаты у неё экранные — её ставит кадр рядом с элементом. */
+.likec4-stage {
+  position: relative;
+}
+
+.likec4-note {
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+}
+
+/* Рамка группы шагов поверх последовательности: транзакция, цикл. Пунктир —
+   как у рамок-фрагментов в UML: это граница, а не ещё один участник. */
+.likec4-group {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  border: 1.5px dashed var(--muted);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
+}
+
+/* Подпись в углу рамки, на плашке: иначе она тонет в линиях шагов. Угол
+   правый: первая стрелка группы начинается слева и легла бы под плашку. */
+.likec4-group__title {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  padding: 0.1rem 0.5rem;
+  border-radius: 0 8px 0 8px;
+  background: var(--muted);
+  color: var(--panel);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }

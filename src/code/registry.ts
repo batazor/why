@@ -2,6 +2,7 @@ import type { CodeDeck } from './types';
 import type { FlowSpec } from './flow';
 import type { LikeC4Spec } from './likec4';
 import type { FileTreeSpec } from './tree';
+import type { WidgetSpec } from './widgets';
 
 export type DeckModule = {
   default: CodeDeck;
@@ -13,13 +14,28 @@ export type DeckModule = {
   tree?: FileTreeSpec;
   /** Постер: суть проблемы одной схемой (FlowSpec с fixedStep). */
   poster?: FlowSpec;
+  /**
+   * Интерактивные врезки: шаг → калькулятор, сортировка или симулятор.
+   *
+   * Занимают ту же половину разбора, что схема и редактор: полотно на шаге
+   * одно, и врезка на нём — такой же кадр, только его двигает читатель.
+   */
+  widgets?: WidgetSpec;
 };
 
 // Единственное место, где резолвятся колоды и схемы. Каталогу нужны постеры,
 // странице урока — и постер, и схема; дублировать glob в двух местах значит
 // рано или поздно развести их правила.
 const decks = import.meta.glob<DeckModule>(
-  ['./*.ts', '!./types.ts', '!./registry.ts', '!./flow.ts', '!./*.flow.ts', '!./*.poster.ts'],
+  [
+    './*.ts',
+    '!./types.ts',
+    '!./registry.ts',
+    '!./flow.ts',
+    '!./*.flow.ts',
+    '!./*.poster.ts',
+    '!./widgets.ts',
+  ],
   { eager: true },
 );
 

@@ -13,6 +13,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { NODE_SIZE, type FlowSpec } from '../code/flow';
+import NoteArrow from './NoteArrow';
 
 type CardData = {
   kind: string;
@@ -81,14 +82,6 @@ type AnnotationData = { level: number; label: string; arrow?: string };
  * ли он в системном шрифте, и по-разному сидит на базовой линии. Путь везде
  * выглядит одинаково и красится currentColor.
  */
-function NoteArrow() {
-  return (
-    <svg className="fnote__arrow-svg" viewBox="0 0 40 40" aria-hidden="true">
-      <path d="M 37 33 C 18 33 7 26 7 9" />
-      <path d="M 2 15 L 7 6 L 12 15" />
-    </svg>
-  );
-}
 
 /**
  * Пометка поверх схемы — приём из overview-примера React Flow: записка на полях,

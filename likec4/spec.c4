@@ -59,6 +59,18 @@ specification {
     }
   }
 
+  /**
+   * Модуль внутри сервиса — уровень C3. На C2 его не видно: там сервис одной
+   * коробкой, а модули появляются, когда спускаются внутрь.
+   */
+  element component {
+    style {
+      shape rectangle
+      size xs
+      opacity 30%
+    }
+  }
+
   element aggregate {
     style {
       shape rectangle
@@ -114,6 +126,20 @@ specification {
 
   relationship calls
   relationship consumes
+  /**
+   * Чтение и запись — цветом. Нужны разбору задачи, где на одной схеме
+   * встречаются оба пути, и без цвета не видно, где джоба пишется, а где её
+   * только читают. Остальные виды связей цвета не несут: схемы магазина в
+   * главах про DDD остаются как были.
+   */
+  relationship read {
+    color sky
+    line solid
+  }
+  relationship write {
+    color amber
+    line solid
+  }
   relationship publishes
   relationship persists
   relationship owns

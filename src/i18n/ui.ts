@@ -9,29 +9,35 @@ export const localeNames: Record<Locale, string> = {
 };
 
 /**
- * Строки интерфейса. Контент уроков сюда не попадает — он живёт в src/content.
+ * Строки интерфейса. Контент сюда не попадает — он живёт в src/content.
  * Ключи плоские и осмысленные: переводчику видно, где строка живёт, без чтения кода.
+ *
+ * Читателю это не уроки: его ничему не учат и ничего с него не спрашивают —
+ * при нём разбирают задачу или чужое решение и показывают, почему оно устроено
+ * так. Поэтому в тексте «разборы» (write-ups), а не «уроки». Ключи и адреса
+ * остались на `lesson`: это внутренние имена, и менять их значило бы ломать
+ * ссылки, которые уже разошлись.
  */
 const ui = {
   en: {
     'site.title': 'Why',
     'site.tagline': 'Problems in software, shown one step at a time.',
-    'nav.lessons': 'Lessons',
+    'nav.lessons': 'Write-ups',
     'nav.language': 'Language',
     'nav.skip': 'Skip to content',
     'nav.theme': 'Switch theme',
-    'nav.allLessons': 'All lessons',
+    'nav.allLessons': 'All write-ups',
     'nav.prevLesson': 'Previous',
     'nav.nextLesson': 'Next',
     'nav.prevChapter': 'Previous chapter',
     'nav.nextChapter': 'Next chapter',
     'lesson.chapters': 'Chapters',
-    'catalog.heading': 'Lessons',
+    'catalog.heading': 'Write-ups',
     'catalog.empty': 'Nothing published yet.',
     'catalog.problem': 'The problem',
     'catalog.filter': 'Filter by tag',
     'catalog.allTags': 'All',
-    'catalog.noMatch': 'No lessons with these tags.',
+    'catalog.noMatch': 'No write-ups with these tags.',
     'notFound.title': 'Page not found',
     'notFound.body': 'This page does not exist, or it moved. The catalog is below.',
     'lesson.incidents': 'It has already happened',
@@ -49,6 +55,10 @@ const ui = {
     'lesson.runInLean': 'Run in the Lean playground',
     'lesson.keyboardHint': 'Use ← and → to move between steps.',
     'lesson.files': 'Service files',
+    'lesson.added': 'New on the diagram',
+    'lesson.comments': 'Comments',
+    'lesson.commentsHint': 'Select any text in the write-up to comment on it.',
+    'lesson.commentsClose': 'Close comments',
     'quiz.heading': 'Check yourself',
     'quiz.correct': 'Correct.',
     'quiz.wrong': 'Not quite.',
@@ -59,22 +69,22 @@ const ui = {
   ru: {
     'site.title': 'Why',
     'site.tagline': 'Проблемы в разработке, показанные по шагам.',
-    'nav.lessons': 'Уроки',
+    'nav.lessons': 'Разборы',
     'nav.language': 'Язык',
     'nav.skip': 'К содержимому',
     'nav.theme': 'Сменить тему',
-    'nav.allLessons': 'Все уроки',
+    'nav.allLessons': 'Все разборы',
     'nav.prevLesson': 'Предыдущий',
     'nav.nextLesson': 'Следующий',
     'nav.prevChapter': 'Предыдущая глава',
     'nav.nextChapter': 'Следующая глава',
     'lesson.chapters': 'Главы',
-    'catalog.heading': 'Уроки',
+    'catalog.heading': 'Разборы',
     'catalog.empty': 'Пока ничего не опубликовано.',
     'catalog.problem': 'Проблема',
     'catalog.filter': 'Фильтр по тегу',
     'catalog.allTags': 'Все',
-    'catalog.noMatch': 'Уроков с такими тегами нет.',
+    'catalog.noMatch': 'Разборов с такими тегами нет.',
     'notFound.title': 'Страница не найдена',
     'notFound.body': 'Такой страницы нет или она переехала. Каталог — ниже.',
     'lesson.incidents': 'Это уже случалось',
@@ -82,7 +92,7 @@ const ui = {
     'lesson.incidentsNext': 'Следующий случай',
     'lesson.incidentExpand': 'Читать дальше',
     'lesson.incidentCollapse': 'Свернуть',
-    'lesson.walkthrough': 'Разбор по шагам',
+    'lesson.walkthrough': 'Шаг за шагом',
     'lesson.stepOf': 'Шаг {n} из {total}',
     'lesson.prev': 'Назад',
     'lesson.next': 'Дальше',
@@ -91,6 +101,10 @@ const ui = {
     'lesson.copied': 'Скопировано',
     'lesson.runInLean': 'Запустить в песочнице Lean',
     'lesson.files': 'Файлы сервиса',
+    'lesson.added': 'Новое на схеме',
+    'lesson.comments': 'Комментарии',
+    'lesson.commentsHint': 'Выделите любой фрагмент разбора, чтобы его прокомментировать.',
+    'lesson.commentsClose': 'Закрыть комментарии',
     'lesson.keyboardHint': 'Листать шаги можно стрелками ← и →.',
     'quiz.heading': 'Проверь себя',
     'quiz.correct': 'Верно.',

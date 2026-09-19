@@ -300,4 +300,286 @@ views {
 
     autoLayout LeftRight
   }
+
+  /**
+   * Разбор сервиса скрейпинг-джоб: C2 по одному элементу за кадр.
+   *
+   * Каждый следующий view добавляет ровно то, о чём говорит его шаг. Смысл в
+   * порядке: читатель видит, какой вопрос вызвал к жизни каждую коробку.
+   */
+
+  /**
+   * Экран `c1`: система одним блоком и всё, что с ней разговаривает.
+   *
+   * Внутренностей нет намеренно: на этом уровне важно только то, что целевые
+   * API снаружи границы — их доступность не наш SLO и их поведение не наше
+   * решение.
+   */
+  view scrape_context {
+    title 'The system and its neighbours'
+
+    include
+      scrapeUser,
+      scraper,
+      targets
+
+    /* Легенда цвета — пара линий у пользователя: запись уходит в gateway,
+       чтение приходит из хранилища. Запрос статуса сливался бы с записью в
+       одну серую линию. */
+    exclude scrapeUser -> * where kind is read
+
+    autoLayout LeftRight
+  }
+
+  /** Экран `c2-gateway`: пользователь и точка входа. */
+  view scrape_gateway {
+    title 'Way in'
+
+    include
+      scrapeUser,
+      scraper,
+      scraper.gateway
+
+    // Кадр про запись: от пользователя — только линия записи.
+    exclude scrapeUser -> * where kind is read
+
+    autoLayout LeftRight
+  }
+
+  /**
+   * Экран `c2-command`: командная сторона и база джоб.
+   *
+   * Здесь появляется единственный, кто пишет джобу, и место, где она лежит.
+   * Очереди ещё нет: сначала запись, потом разговор о том, как о ней узнают.
+   */
+  view scrape_command {
+    title 'Write side'
+
+    include
+      scrapeUser,
+      scraper,
+      scraper.gateway,
+      scraper.command,
+      scraper.jobs_db
+
+    // Кадр про запись: от пользователя — только линия записи.
+    exclude scrapeUser -> * where kind is read
+
+    autoLayout LeftRight
+  }
+
+  /**
+   * Экран `c2-outbox`: publisher и шина.
+   *
+   * Publisher читает неопубликованные строки jobs из той же базы: строка
+   * джобы и есть outbox, поэтому отдельной таблицы на кадре нет.
+   */
+  view scrape_outbox {
+    title 'Outbox to the bus'
+
+    include
+      scrapeUser,
+      scraper,
+      scraper.gateway,
+      scraper.command,
+      scraper.jobs_db,
+      scraper.publisher,
+      scraper.mq
+
+    // Кадр про запись: от пользователя — только линия записи.
+    exclude scrapeUser -> * where kind is read
+
+    autoLayout LeftRight
+  }
+
+  /**
+   * Экран `c2-workers`: пул читает очередь и ходит в чужие API.
+   *
+   * Только путь чтения: шина, пул, цели. Запись джобы и публикация разобраны
+   * на предыдущих шагах, и на этом кадре они уводили бы взгляд от того, что
+   * пул — единственное место, где система выходит наружу.
+   */
+  view scrape_workers {
+    title 'Worker pool'
+
+    include
+      scraper,
+      scraper.mq,
+      scraper.worker,
+      targets
+
+    autoLayout LeftRight
+  }
+
+  /**
+   * Экран `c2-lease`: аренда и тот, кто возвращает просроченные.
+   *
+   * Воркер пишет в базу статус и время взятия, крон-модуль планировщика
+   * возвращает в очередь то, что взяли и потеряли.
+   */
+  view scrape_lease {
+    title 'Lease and the scheduler'
+
+    include
+      scraper,
+      scraper.jobs_db,
+      scraper.mq,
+      scraper.worker,
+      targets,
+      scraper.scheduler
+
+    autoLayout LeftRight
+  }
+
+  /**
+   * Экран `c2-results`: как клиент получает результат.
+   *
+   * Только путь чтения: статус из базы через `job-query` и сами данные из
+   * хранилища по подписанной ссылке. Кто и как результат туда положил —
+   * обработка, и на этом кадре она не нужна.
+   */
+  view scrape_results {
+    title 'Getting the result'
+
+    include
+      scrapeUser,
+      scraper,
+      scraper.gateway,
+      scraper.reader,
+      scraper.jobs_db,
+      scraper.results
+
+    // Кадр про чтение: от пользователя — только линия чтения.
+    exclude scrapeUser -> * where kind is write
+
+    autoLayout LeftRight
+  }
+
+  /** Экран `c2-view`: читающая сторона, к которой ходит gateway. */
+  view scrape_read {
+    title 'Read side'
+
+    include
+      scrapeUser,
+      scraper,
+      scraper.gateway,
+      scraper.reader,
+      scraper.jobs_db
+
+    // Кадр про чтение: от пользователя — только линия чтения.
+    exclude scrapeUser -> * where kind is write
+
+    autoLayout LeftRight
+  }
+
+  /**
+   * Экраны `seq-submit` и `seq-read`: запросы по шагам.
+   *
+   * Схема C2 говорит, кто с кем связан, но не в каком порядке. Динамический
+   * view рисуется последовательностью: сверху вниз, с ответами. Структура и
+   * порядок разведены по разным кадрам — на одном их не прочитать.
+   */
+  dynamic view scrape_submit_seq {
+    title 'Submitting a job'
+
+    scrapeUser -> scraper.gateway 'POST /jobs'
+    scraper.gateway -> scraper.command 'create job'
+    scraper.command -> scraper.jobs_db 'INSERT job, published_at = null'
+    scraper.gateway <- scraper.command 'job id'
+    scrapeUser <- scraper.gateway '202 Accepted + id'
+    scraper.jobs_db -> scraper.publisher 'unpublished rows'
+    scraper.publisher -> scraper.mq 'job queued'
+    scraper.publisher -> scraper.jobs_db 'published_at = now()'
+    scraper.mq -> scraper.worker 'job queued'
+    scraper.worker -> scraper.jobs_db 'status = running, lease'
+    scraper.worker -> targets 'fetch'
+    scraper.worker -> scraper.results 'payload'
+    scraper.worker -> scraper.jobs_db 'status = done, link'
+  }
+
+  dynamic view scrape_read_seq {
+    title 'Getting the result'
+
+    scrapeUser -> scraper.gateway 'GET /jobs/{id}'
+    scraper.gateway -> scraper.reader 'status'
+    scraper.jobs_db -> scraper.reader 'status, link'
+    scraper.gateway <- scraper.reader 'done + presigned URL'
+    scrapeUser <- scraper.gateway '200 + presigned URL'
+    scraper.results -> scrapeUser 'result by presigned URL'
+  }
+
+  /**
+   * Экран `c3-scheduler`: внутри job-scheduler.
+   *
+   * Уровень C3 — модули одного сервиса. Рядом база и публикатор: без них не
+   * видно, что планировщик в шину не пишет, а только меняет строку джобы.
+   *
+   * Сверху вниз, с поджатыми промежутками: кадр стоит в колонке рядом с
+   * текстом, и вытянутая вбок схема сжималась в ней до мелких подписей.
+   * Вертикальной нужна высота — её кадру задаёт колода.
+   */
+  view scrape_scheduler {
+    title 'Inside job-scheduler'
+
+    include
+      scraper,
+      scraper.scheduler,
+      scraper.scheduler.sweeper,
+      scraper.scheduler.retries,
+      scraper.scheduler.repo,
+      scraper.jobs_db,
+      scraper.publisher,
+      scraper.mq
+
+    autoLayout TopBottom 40 60
+  }
+
+  /**
+   * Экран `c2-full`: сервис целиком.
+   *
+   * Сверху вниз, с узкими промежутками между рядами (20) и широкими между
+   * соседями (90): так схема выходит почти квадратной и заполняет широкий и
+   * высокий кадр. Место под подписи на связях Graphviz оставляет сам. Слева направо она вытягивается в полосу и упирается в ширину окна —
+   * масштаб там не растёт, сколько кадру ни дай высоты.
+   */
+view scrape_full {
+    title 'The service'
+
+    include
+      scrapeUser,
+      scraper,
+      scraper.gateway,
+      scraper.command,
+      scraper.reader,
+      scraper.publisher,
+      scraper.worker,
+      scraper.scheduler,
+      scraper.jobs_db,
+      scraper.results,
+      scraper.mq,
+      targets
+
+    /* Только связи между сервисами, без цвета чтения и записи. Пара,
+       которая ходит в обе стороны, — одна линия со стрелками на концах. */
+    include
+      scrapeUser -> scraper.gateway with { color gray; tail normal },
+      scraper.gateway -> scraper.command with { color gray },
+      scraper.gateway -> scraper.reader with { color gray },
+      scraper.command -> scraper.jobs_db with { color gray },
+      scraper.jobs_db -> scraper.reader with { color gray },
+      scraper.publisher -> scraper.jobs_db with { color gray; tail normal },
+      scraper.publisher -> scraper.mq with { color gray },
+      scraper.mq -> scraper.worker with { color gray },
+      scraper.worker -> targets with { color gray },
+      scraper.worker -> scraper.results with { color gray },
+      scraper.worker -> scraper.jobs_db with { color gray },
+      scraper.results -> scrapeUser with { color gray },
+      scraper.scheduler -> scraper.jobs_db with { color gray; tail normal }
+    exclude
+      scrapeUser -> scraper.gateway where kind is read,
+      scraper.jobs_db -> scraper.publisher,
+      scraper.jobs_db -> scraper.scheduler
+
+    autoLayout TopBottom 20 90
+  }
 }

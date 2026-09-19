@@ -12,11 +12,25 @@ import type { CodeDeck } from '../code/types';
 import type { FlowSpec } from '../code/flow';
 import type { LikeC4Spec } from '../code/likec4';
 import type { FileTreeSpec } from '../code/tree';
+import type { WidgetSpec } from '../code/widgets';
+import LoadCalculator from './widgets/LoadCalculator';
+import RequirementSort from './widgets/RequirementSort';
+import NoisyNeighbour from './widgets/NoisyNeighbour';
+import RequirementsBoard from './widgets/RequirementsBoard';
+import RequirementsRecall from './widgets/RequirementsRecall';
+import RequirementChips from './widgets/RequirementChips';
+import TransactionFlow from './widgets/TransactionFlow';
+import JobLifecycle from './widgets/JobLifecycle';
+import { likec4model } from '../likec4/generated';
 
 interface NarrationStep {
   id: string;
   title: string;
   narration: string;
+  /** Текст стикера поверх схемы, если он у шага есть. */
+  note?: string;
+  /** Элементы, которые появляются на схеме на этом шаге. */
+  added?: { element: string; role: string }[];
 }
 
 interface Props {
@@ -44,11 +58,19 @@ interface Props {
   comments?: Record<string, string>;
   /** Локализованные подписи для перетаскивания карточки в схему. */
   drags?: { step: string; chip: string; slot: string; action?: string; applied?: string; result?: string }[];
-  /** Локализованные подписи узлов и рёбер схемы. */
+  /** Локализованные подписи узлов и рёбер схемы и врезок. */
   labels?: Record<string, string>;
+  /**
+   * Интерактивные врезки: шаг → калькулятор, сортировка, симулятор.
+   *
+   * Стоят там же, где кадр схемы: в колонке рядом с текстом своего шага. Разбор
+   * системного дизайна без них превращается в чтение чужих выводов — числа
+   * названы, но проверить их нечем.
+   */
+  widgets?: WidgetSpec;
 }
 
-const { lang, steps, deck, flow, likec4, tree, docs = [], notes = [], comments = {}, drags = [], labels = {} } = Astro.props;
+const { lang, steps, deck, flow, likec4, tree, docs = [], notes = [], comments = {}, drags = [], labels = {}, widgets } = Astro.props;
 
 if (flow && likec4) {
   throw new Error('StepPlayer: flow и likec4 вместе — схему рисует что-то одно');
@@ -87,11 +109,27 @@ type Panel = 'diagram' | 'editor' | 'none';
  * Схема, нарисованная руками (`flow`), остаётся на прилипшей сцене: она одна
  * на весь разбор и по шагам не меняется, а переезжают по ней пометки.
  */
-const inStep = Boolean(likec4 || tree);
+const inStep = Boolean(likec4 || tree || widgets);
 
 /** Шаги с кадром внутри. `wide` — во всю ширину окна, остальные — рядом с текстом. */
-const wideSteps = new Set(likec4?.wide ?? []);
-const inlineSteps = new Set(Object.keys(likec4?.views ?? {}));
+const widgetSteps = new Set(Object.keys(widgets ?? {}));
+/** Документ требований разбора, если он есть: значок таблицы на правом краю. */
+const requirementsData = Object.values(widgets ?? {}).find(
+  (widget) => widget.widget === 'requirements',
+)?.data as import('../code/widgets').RequirementsData | undefined;
+
+const wideSteps = new Set([
+  ...(likec4?.wide ?? []),
+  ...Object.entries(widgets ?? {})
+    .filter(([, widget]) => widget.wide)
+    .map(([step]) => step),
+]);
+
+/** Шаги, у которых кадр — схема LikeC4. */
+const viewSteps = new Set(Object.keys(likec4?.views ?? {}));
+
+/** Кадр шага: схема или врезка. Место в колонке у них одно. */
+const inlineSteps = new Set([...viewSteps, ...widgetSteps]);
 
 /**
  * Шаги, которым нужен редактор.
@@ -103,6 +141,21 @@ const editorSteps = new Set(
     ? steps.filter((step) => tree?.steps[step.id] && !inlineSteps.has(step.id)).map((s) => s.id)
     : [],
 );
+
+/**
+ * У разбора есть шаги без кадра — им отдаётся колонка под кадр.
+ *
+ * Шаг с кадром или редактором держит текст в своей колонке: ширина строки у
+ * таких шагов одна, и абзацы не переверстываются на переходе. Шагу без кадра
+ * эта колонка ни к чему — в 24rem помещается несколько слов в строке.
+ *
+ * Порог «кадров меньше половины» не годился: у разбора задачи кадров стало
+ * четырнадцать на двадцать семь шагов, и текст остальных тринадцати сузился
+ * обратно. В разборах по схемам шагов без кадра нет вовсе, и правило их не
+ * трогает.
+ */
+const framed = new Set([...inlineSteps, ...Object.keys(tree?.steps ?? {})]);
+const proseLed = steps.some((step) => !framed.has(step.id));
 
 const panelOf = (id: string): Panel | undefined =>
   inStep
@@ -227,10 +280,14 @@ const shikiOptions = {
   class:list={[
     'player',
     stage && 'player--diagram',
-    /* Скроллителлинг включает любая прилипшая половина разбора — схема или
-       редактор: шаги листаются прокруткой, а половина следует за текстом. */
-    (stage || tree) && 'player--scroll',
+    /* Скроллителлинг включает любая прилипшая половина разбора — схема,
+       редактор или врезка: шаги листаются прокруткой, а половина следует за
+       текстом. Без этого плеер уходит в пошаговый режим с кнопками «назад» и
+       «дальше», а разбор обязан читаться сверху вниз, как остальные. */
+    (stage || tree || widgets) && 'player--scroll',
     sideBySide && 'player--editor',
+    /* Шагам без кадра отдаётся колонка под кадр — см. `proseLed`. */
+    proseLed && 'player--prose',
   ]}
   data-player
   data-panel={sideBySide ? firstPanel : undefined}
@@ -310,6 +367,47 @@ const shikiOptions = {
               )}
 
               {
+                /* Требования шага — под его текстом: их тащат в таблицу,
+                   которая стоит в колонке рядом. */
+                (() => {
+                  const widget = widgets?.[merged[i].id];
+                  return widget?.widget === 'requirements' ? (
+                    <RequirementChips
+                      client:visible
+                      step={merged[i].id}
+                      data={widget.data}
+                      labels={labels}
+                    />
+                  ) : null;
+                })()
+              }
+
+              {
+                /* Новое на схеме — карточками под текстом. Имя и технология
+                   из модели LikeC4: подпись обязана совпасть с коробкой на
+                   схеме рядом, а текст урока держит только роль. */
+                merged[i].added?.length ? (
+                  <ul class="added" aria-label={t('lesson.added')}>
+                    {merged[i].added!.map((item) => {
+                      const element = likec4model.findElement(item.element as never);
+                      return (
+                        <li class="added__card">
+                          <span class="added__label">{t('lesson.added')}</span>
+                          <span class="added__name">
+                            {element?.title ?? item.element}
+                            {element?.technology && (
+                              <span class="added__tech">{element.technology}</span>
+                            )}
+                          </span>
+                          <span class="added__role" set:html={inlineMarkdown(item.role)} />
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : null
+              }
+
+              {
                 drags.find((drag) => drag.step === merged[i].id) && (
                   /* Карточка живёт в тексте, а слот — в схеме: чтобы донести
                      одну до другого, читателю приходится смотреть на обе. */
@@ -350,18 +448,67 @@ const shikiOptions = {
    * колонка рядом с текстом.
    */
   const inlineStage = (i: number) =>
-    inlineSteps.has(merged[i].id) && (
+    viewSteps.has(merged[i].id) && (
       <figure
         class={wideSteps.has(merged[i].id) ? 'step__wide' : 'step__aside'}
-        style={`--flow-height: ${likec4!.height}px`}
+        style={`--flow-height: ${likec4!.heights?.[merged[i].id] ?? likec4!.height}px`}
       >
         <LikeC4Stage
           client:visible
           view={likec4!.views[merged[i].id]}
           tags={(likec4!.tags ?? []).includes(merged[i].id)}
+          note={
+            likec4!.notes?.[merged[i].id] && merged[i].note
+              ? { ...likec4!.notes[merged[i].id], text: merged[i].note!, level: i + 1 }
+              : undefined
+          }
+          bare={(likec4!.bare ?? []).includes(merged[i].id)}
+          groups={(likec4!.groups?.[merged[i].id] ?? []).map((group) => ({
+            ...group,
+            title: labels[group.label] ?? group.label,
+          }))}
         />
       </figure>
     );
+
+  /**
+   * Врезка шага: та же колонка, что у схемы, но внутри неё читатель что-то
+   * двигает. Высоту задаёт не колода, а содержимое: у калькулятора она зависит
+   * от числа ползунков, и держать её числом значило бы держать это число в
+   * двух местах.
+   */
+  const inlineWidget = (i: number) => {
+    const widget = widgets?.[merged[i].id];
+    if (!widget) return null;
+
+    return (
+      <div class={wideSteps.has(merged[i].id) ? 'step__wide' : 'step__aside'}>
+        {widget.widget === 'load-calculator' && (
+          <LoadCalculator client:visible lang={lang} data={widget.data} labels={labels} />
+        )}
+        {widget.widget === 'requirement-sort' && (
+          <RequirementSort client:visible data={widget.data} labels={labels} />
+        )}
+        {widget.widget === 'noisy-neighbour' && (
+          <NoisyNeighbour client:visible data={widget.data} labels={labels} />
+        )}
+        {widget.widget === 'transaction-flow' && (
+          <TransactionFlow client:visible data={widget.data} labels={labels} />
+        )}
+        {widget.widget === 'job-lifecycle' && (
+          <JobLifecycle client:visible data={widget.data} labels={labels} />
+        )}
+        {widget.widget === 'requirements' && (
+          <RequirementsBoard
+            client:visible
+            step={merged[i].id}
+            data={widget.data}
+            labels={labels}
+          />
+        )}
+      </div>
+    );
+  };
 
 
           const panel = (i: number) =>
@@ -397,6 +544,7 @@ const shikiOptions = {
                 {body(i)}
                 {panel(i)}
                 {inlineStage(i)}
+                {inlineWidget(i)}
               </li>
             );
           }
@@ -506,6 +654,10 @@ const shikiOptions = {
     </div>
     <button class="btn" type="button" data-next>{t('lesson.next')} →</button>
   </div>
+  {/* Таблица требований под рукой — значок на правом краю, рядом с заданием. */}
+  {requirementsData && (
+    <RequirementsRecall client:idle data={requirementsData} labels={labels} />
+  )}
 </section>
 
 <p class="hint">{t('lesson.keyboardHint')}</p>

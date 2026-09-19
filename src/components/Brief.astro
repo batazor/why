@@ -1,0 +1,222 @@
+---
+/**
+ * Задание в том виде, в каком его принесли.
+ *
+ * Это не наш текст, а чужая постановка: абзац от продукта, с которого разбор
+ * начинается и к которому возвращаются, когда спорят, что вообще обещали.
+ * Обычной цитатой он теряется — через экран уже не видно, где кончилось
+ * условие и началось решение. Поэтому карточка: у неё есть край.
+ *
+ * Стоит на месте блока «Проблема»: у разбора задачи проблема и есть задание,
+ * и два блока об одном подряд читателю только мешают.
+ *
+ * Весь текст — проза локали, поэтому приходит из frontmatter урока, а не из
+ * словаря интерфейса: подпись у задания своя в каждом разборе («Задание»,
+ * «Письмо от продукта», «Условие»).
+ */
+import { proseBlocks } from '../prose';
+
+interface Props {
+  /** Подпись карточки: что это за текст. */
+  label: string;
+  /** Кто это сказал. Без него строка автора не показывается. */
+  source?: string;
+  /** Сама постановка. Абзацы делятся пустой строкой, как и весь нарратив. */
+  text: string;
+}
+
+const { label, source, text } = Astro.props;
+---
+
+<figure class="brief" data-brief data-brief-label={label}>
+  <figcaption class="brief__head">
+    <span class="brief__label">{label}</span>
+    {source && <span class="brief__source">{source}</span>}
+  </figcaption>
+  {/* blockquote, а не div: это дословная цитата чужого текста, и для
+      скринридера она обязана остаться цитатой. */}
+  <blockquote class="brief__text">
+    {
+      proseBlocks(text).map((block) =>
+        block.kind === 'ul' ? (
+          <ul class="brief__list">
+            {block.items.map((item) => (
+              <li set:html={item} />
+            ))}
+          </ul>
+        ) : (
+          <p set:html={block.html} />
+        ),
+      )
+    }
+  </blockquote>
+</figure>
+
+<script>
+  import { animate } from 'motion';
+  import { concealPanel, fabRail, revealPanel } from './fab-rail';
+
+  /**
+   * Задание под рукой: когда карточка уехала вверх, справа появляется значок,
+   * по которому она открывается снова.
+   *
+   * Разбор задачи устроен не как разбор паттерна: к условию возвращаются с
+   * любого места — на шаге про расчёты, чтобы вспомнить, что обещали, и на
+   * шаге про ретраи, чтобы проверить, не придумали ли требование сами.
+   * Прокручивать ради этого страницу вверх и терять место — плохая цена за
+   * один абзац.
+   *
+   * Значок и панель делает скрипт, а не разметка: без JS они не работали бы
+   * всё равно, а карточка в потоке видна и так. Тот же уговор, что у фильтра
+   * в каталоге и у галереи случаев.
+   */
+  const ICON = `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none"
+    stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6 3h8l4 4v14H6z" /><path d="M14 3v4h4" /><path d="M9 12h6M9 16h4" /></svg>`;
+
+  const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Нативный popover сам закрывается по Escape и щелчку снаружи и сам держит
+  // верхний слой. Где его нет — то же самое делается руками, ниже.
+  const NATIVE = Object.prototype.hasOwnProperty.call(HTMLElement.prototype, 'popover');
+
+  document.querySelectorAll<HTMLElement>('[data-brief]').forEach((brief, i) => {
+    const label = brief.dataset.briefLabel ?? '';
+    const id = `brief-recall-${i}`;
+
+    const panel = document.createElement('div');
+    panel.className = 'brief-recall__panel';
+    panel.id = id;
+    panel.setAttribute('aria-label', label);
+    if (NATIVE) panel.setAttribute('popover', 'auto');
+    else panel.hidden = true;
+
+    // Копия, а не перенос: карточка остаётся на своём месте в тексте, и
+    // страница без открытой панели выглядит ровно как раньше.
+    const copy = brief.cloneNode(true) as HTMLElement;
+    copy.removeAttribute('data-brief');
+    copy.removeAttribute('data-brief-label');
+    panel.append(copy);
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'brief-recall';
+    button.setAttribute('aria-label', label);
+    button.innerHTML = ICON;
+    button.hidden = true;
+    button.setAttribute('aria-controls', id);
+
+    document.body.append(panel);
+    fabRail().append(button);
+
+    const open = () => (NATIVE ? panel.matches(':popover-open') : !panel.hidden);
+
+    // Панель уходит анимацией, и пока она уходит, она формально ещё открыта:
+    // флаг не даёт закрыть её дважды и не мешает открыть снова.
+    let closing = false;
+    function close() {
+      if (!open() || closing) return;
+      closing = true;
+      concealPanel(panel, () => {
+        if (!closing) return;
+        closing = false;
+        if (NATIVE) panel.hidePopover();
+        else panel.hidden = true;
+      });
+    }
+
+    function show() {
+      clearTimeout(leave);
+      if (closing) {
+        closing = false;
+        revealPanel(panel);
+        return;
+      }
+      if (open()) return;
+      if (NATIVE) panel.showPopover();
+      else panel.hidden = false;
+      revealPanel(panel);
+    }
+
+    /**
+     * Задание открывается наведением или фокусом, без щелчка: сверить условие
+     * и вернуться к тексту — одно движение. Закрывается с задержкой, чтобы
+     * курсор успел переехать со значка на панель. Щелчок — для касаний, там
+     * наведения нет.
+     */
+    let leave = 0;
+    function hide() {
+      clearTimeout(leave);
+      leave = window.setTimeout(close, 250);
+    }
+    for (const el of [button, panel]) {
+      el.addEventListener('pointerenter', show);
+      el.addEventListener('pointerleave', hide);
+      el.addEventListener('focusin', show);
+      el.addEventListener('focusout', hide);
+    }
+    button.addEventListener('click', show);
+
+    if (!NATIVE) {
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && open()) close();
+      });
+      document.addEventListener('click', (event) => {
+        const target = event.target as Node;
+        if (open() && !panel.contains(target) && !button.contains(target)) close();
+      });
+    }
+
+    /**
+     * Значок живёт ровно тогда, когда карточки не видно.
+     *
+     * Состояние считает IntersectionObserver, а не `inView` из motion:
+     * наблюдатель отвечает и на первый кадр тоже, поэтому читатель, пришедший
+     * по ссылке в середину страницы, сразу видит значок. Анимация при этом
+     * всё равно motion — она общая для всего сайта.
+     */
+    let shown = false;
+    function paint(visible: boolean) {
+      if (visible === shown) return;
+      shown = visible;
+
+      if (visible) {
+        button.hidden = false;
+        if (!calm) {
+          animate(
+            button,
+            { opacity: [0, 1], scale: [0.7, 1], x: [12, 0] },
+            { duration: 0.24, ease: [0.22, 1, 0.36, 1] },
+          );
+        }
+        return;
+      }
+
+      // Панель принадлежит значку: уехала причина — уходит и следствие,
+      // иначе открытое задание висит поверх карточки, на которую читатель
+      // как раз вернулся.
+      close();
+
+      if (calm) {
+        button.hidden = true;
+        return;
+      }
+      animate(
+        button,
+        { opacity: [1, 0], scale: [1, 0.7], x: [0, 12] },
+        { duration: 0.18, ease: 'easeIn' },
+      ).finished.then(() => {
+        // Проверка на случай, если за время анимации карточка снова уехала:
+        // прятать тогда нечего, значок уже нужен.
+        if (!shown) button.hidden = true;
+      });
+    }
+
+    new IntersectionObserver(
+      ([entry]) => paint(!entry.isIntersecting),
+      // Полоса в 80px сверху: под шапкой карточка формально ещё видна, а
+      // читать её там уже нельзя.
+      { rootMargin: '-80px 0px 0px 0px' },
+    ).observe(brief);
+  });
+</script>
