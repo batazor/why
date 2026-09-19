@@ -1,0 +1,2105 @@
+/*
+ * Песочница системного дизайна. Все классы с префиксом pg-, цвета — токены
+ * сайта (--bg, --panel, --fg…) с запасными значениями: при выносе в отдельный
+ * продукт файл заработает и без global.css.
+ */
+
+.pg {
+  --pg-bg: var(--bg, #fbfbf9);
+  --pg-panel: var(--panel, #fff);
+  --pg-fg: var(--fg, #16181d);
+  --pg-muted: var(--muted, #5f6672);
+  --pg-border: var(--border, #e3e3dd);
+  --pg-accent: var(--accent, #2f5fd0);
+  --pg-accent-soft: var(--accent-soft, #eaf0fd);
+  --pg-bad: var(--bad, #b42318);
+  --pg-bad-soft: var(--bad-soft, #fdeceb);
+  --pg-radius: 8px;
+
+  /* Оттенки категорий блоков: по цвету видно, где хранилища, а где вычисления. */
+  --pg-client: #6b7280;
+  --pg-edge: #0e8a8a;
+  --pg-compute: #2f5fd0;
+  --pg-storage: #b7621b;
+  --pg-messaging: #8b4fc9;
+  --pg-infra: #3f7d3a;
+
+  /* Песочница — приложение, а не текст: выходит из колонки страницы к краям окна. */
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  height: calc(100dvh - 3.6rem);
+  min-height: 34rem;
+  display: flex;
+  flex-direction: column;
+  background: var(--pg-bg);
+  color: var(--pg-fg);
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+/* Песочница занимает весь экран: подвал сайта под ней только добавлял прокрутку. */
+body:has(.pg) .site-footer {
+  display: none;
+}
+
+.pg--loading {
+  opacity: 0;
+}
+
+/* --------------------------------------------------------------- Панель */
+
+.pg-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--pg-border);
+  background: var(--pg-panel);
+}
+
+.pg-toolbar__project .pg-select {
+  min-width: 13rem;
+  font-weight: 600;
+}
+
+.pg-toolbar__spacer {
+  flex: 1;
+}
+
+.pg-status {
+  color: var(--pg-muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.pg-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0 0.5rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------- Элементы */
+
+.pg-input {
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  background: var(--pg-bg);
+  border: 1px solid var(--pg-border);
+  border-radius: 6px;
+  padding: 0.35rem 0.5rem;
+}
+
+.pg-input:focus {
+  outline: 2px solid var(--pg-accent);
+  outline-offset: -1px;
+}
+
+.pg-select {
+  width: auto;
+}
+
+.pg-textarea {
+  resize: vertical;
+  min-height: 2.5rem;
+}
+
+.pg-textarea--task {
+  flex: 1;
+  min-height: 16rem;
+  resize: none;
+}
+
+.pg-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font: inherit;
+  color: inherit;
+  background: var(--pg-panel);
+  border: 1px solid var(--pg-border);
+  border-radius: 6px;
+  padding: 0.3rem 0.6rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pg-button:hover {
+  border-color: var(--pg-accent);
+  color: var(--pg-accent);
+}
+
+.pg-button--small {
+  font-size: 0.8rem;
+  padding: 0.2rem 0.5rem;
+}
+
+.pg-button--danger:hover {
+  border-color: var(--pg-bad);
+  color: var(--pg-bad);
+}
+
+.pg-icon-button {
+  flex: none;
+  background: none;
+  border: 0;
+  color: var(--pg-muted);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+}
+
+.pg-icon-button:hover {
+  color: var(--pg-bad);
+  background: var(--pg-bad-soft);
+}
+
+.pg-heading {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--pg-muted);
+}
+
+.pg-hint {
+  margin: 0.25rem 0 0.5rem;
+  color: var(--pg-muted);
+  font-size: 0.8rem;
+}
+
+.pg-hint--empty {
+  font-style: italic;
+}
+
+.pg-count {
+  display: inline-block;
+  min-width: 1.3em;
+  margin-left: 0.3em;
+  padding: 0 0.35em;
+  border-radius: 999px;
+  background: var(--pg-accent-soft);
+  color: var(--pg-accent);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-align: center;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.pg-count--warn {
+  background: var(--pg-bad-soft);
+  color: var(--pg-bad);
+}
+
+.pg-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0 0 0.85rem;
+  border: 0;
+  padding: 0;
+}
+
+.pg-field--grow {
+  flex: 1;
+}
+
+.pg-field__label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--pg-muted);
+  padding: 0;
+}
+
+.pg-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.pg-chip {
+  font: inherit;
+  font-size: 0.78rem;
+  color: var(--pg-muted);
+  background: var(--pg-bg);
+  border: 1px dashed var(--pg-border);
+  border-radius: 999px;
+  padding: 0.1rem 0.55rem;
+  cursor: pointer;
+}
+
+.pg-chip.is-on {
+  color: var(--pg-accent);
+  background: var(--pg-accent-soft);
+  border: 1px solid var(--pg-accent);
+}
+
+.pg-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.pg-segmented {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0;
+}
+
+.pg-segmented legend {
+  width: 100%;
+  margin-bottom: 0.25rem;
+}
+
+.pg-segmented label {
+  flex: 1;
+  text-align: center;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--pg-border);
+  cursor: pointer;
+}
+
+.pg-segmented label:first-of-type {
+  border-radius: 6px 0 0 6px;
+}
+
+.pg-segmented label:last-of-type {
+  border-radius: 0 6px 6px 0;
+  border-left: 0;
+}
+
+.pg-segmented label.is-on {
+  background: var(--pg-accent-soft);
+  color: var(--pg-accent);
+  border-color: var(--pg-accent);
+}
+
+.pg-segmented input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------- Раскладка */
+
+.pg-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 13.5rem minmax(0, 1fr) 25rem;
+}
+
+/* ------------------------------------------------------------- Палитра */
+
+.pg-palette {
+  overflow-y: auto;
+  padding: 0.75rem;
+  border-right: 1px solid var(--pg-border);
+  background: var(--pg-panel);
+}
+
+.pg-palette__filter {
+  margin-top: 0.5rem;
+}
+
+.pg-palette__group {
+  margin-bottom: 0.75rem;
+}
+
+.pg-palette__category {
+  margin: 0 0 0.3rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--pg-muted);
+}
+
+.pg-palette__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.pg-palette__item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font: inherit;
+  font-size: 0.82rem;
+  text-align: left;
+  color: inherit;
+  background: var(--pg-bg);
+  border: 1px solid var(--pg-border);
+  border-left: 3px solid var(--pg-tint);
+  border-radius: 6px;
+  padding: 0.3rem 0.5rem;
+  cursor: grab;
+}
+
+.pg-palette__item:hover {
+  border-color: var(--pg-tint);
+}
+
+.pg-palette__item:active {
+  cursor: grabbing;
+}
+
+.pg-palette__item .codicon {
+  color: var(--pg-tint);
+}
+
+.pg-block--client { --pg-tint: var(--pg-client); }
+.pg-block--edge { --pg-tint: var(--pg-edge); }
+.pg-block--compute { --pg-tint: var(--pg-compute); }
+.pg-block--storage { --pg-tint: var(--pg-storage); }
+.pg-block--messaging { --pg-tint: var(--pg-messaging); }
+.pg-block--infra { --pg-tint: var(--pg-infra); }
+
+/* -------------------------------------------------------------- Полотно */
+
+.pg-canvas {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.pg-canvas .react-flow {
+  --xy-background-color: var(--pg-bg);
+  --xy-background-pattern-color: var(--pg-border);
+  --xy-edge-stroke: var(--pg-muted);
+  --xy-edge-stroke-selected: var(--pg-accent);
+  --xy-edge-label-background-color: var(--pg-panel);
+  --xy-edge-label-color: var(--pg-fg);
+  --xy-controls-button-background-color: var(--pg-panel);
+  --xy-controls-button-background-color-hover: var(--pg-accent-soft);
+  --xy-controls-button-color: var(--pg-fg);
+  --xy-controls-button-border-color: var(--pg-border);
+  --xy-minimap-background-color: var(--pg-panel);
+  --xy-minimap-mask-background-color: color-mix(in srgb, var(--pg-bg) 70%, transparent);
+  --xy-connectionline-stroke: var(--pg-accent);
+}
+
+.pg-canvas .react-flow__edge-textbg {
+  fill: var(--pg-panel);
+}
+
+.pg-canvas .react-flow__edge-text {
+  font-size: 11px;
+  fill: var(--pg-fg);
+}
+
+.pg-canvas .react-flow__edge.selected .react-flow__edge-path {
+  stroke-width: 2.5;
+}
+
+.pg-canvas__empty {
+  position: absolute;
+  inset: 40% 15% auto;
+  margin: 0;
+  text-align: center;
+  color: var(--pg-muted);
+  pointer-events: none;
+}
+
+.pg-minimap .react-flow__minimap-node {
+  fill: var(--pg-border);
+}
+
+.pg-block {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 180px;
+  min-height: 56px;
+  padding: 0.45rem 0.6rem;
+  background: var(--pg-panel);
+  border: 1px solid var(--pg-border);
+  border-top: 3px solid var(--pg-tint);
+  border-radius: var(--pg-radius);
+  box-shadow: 0 1px 3px var(--shadow, rgba(16, 18, 22, 0.12));
+  color: var(--pg-fg);
+}
+
+.pg-block.is-selected {
+  border-color: var(--pg-accent);
+  border-top-color: var(--pg-tint);
+  box-shadow: 0 0 0 2px var(--pg-accent-soft), 0 2px 8px var(--shadow, rgba(16, 18, 22, 0.12));
+}
+
+.pg-block__icon {
+  flex: none;
+  font-size: 20px !important;
+  color: var(--pg-tint);
+}
+
+.pg-block__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.pg-block__label {
+  font-weight: 600;
+  font-size: 0.82rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.pg-block__kind {
+  font-size: 0.7rem;
+  color: var(--pg-muted);
+}
+
+.pg-block__reqs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin-top: 3px;
+}
+
+.pg-block__reqs > span {
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--pg-accent-soft);
+  color: var(--pg-accent);
+  font: 600 0.62rem/1.5 ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+.pg-block__reqs > span.is-nfr {
+  background: color-mix(in srgb, var(--pg-storage) 14%, transparent);
+  color: var(--pg-storage);
+}
+
+/* Ручки видны на наведении: на схеме из двадцати блоков постоянные точки — шум. */
+.pg-block__handle {
+  width: 9px !important;
+  height: 9px !important;
+  background: var(--pg-panel) !important;
+  border: 1.5px solid var(--pg-accent) !important;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.pg-block:hover .pg-block__handle,
+.pg-block.is-selected .pg-block__handle,
+.react-flow__node.connecting .pg-block__handle,
+.react-flow.connecting .pg-block__handle {
+  opacity: 1;
+}
+
+/* ---------------------------------------------------------- Боковая */
+
+.pg-side {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--pg-border);
+  background: var(--pg-panel);
+}
+
+.pg-tabs {
+  display: flex;
+  /* Вкладок у ролей от пяти до семи: переносятся, а не прячутся за краем. */
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--pg-border);
+}
+
+.pg-tab {
+  flex: none;
+  font: inherit;
+  font-size: 0.82rem;
+  color: var(--pg-muted);
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 0.55rem 0.5rem;
+  cursor: pointer;
+}
+
+.pg-tab.is-on {
+  color: var(--pg-fg);
+  border-bottom-color: var(--pg-accent);
+  font-weight: 600;
+}
+
+.pg-side__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.pg-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  padding: 0.85rem;
+}
+
+/* ---------------------------------------------------------- Требования */
+
+.pg-req + .pg-req {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--pg-border);
+}
+
+.pg-req__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pg-req__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.pg-req__item {
+  padding: 0.5rem;
+  border: 1px solid var(--pg-border);
+  border-radius: var(--pg-radius);
+  background: var(--pg-bg);
+}
+
+.pg-req__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+
+.pg-req__row--nfr {
+  margin-top: 0.4rem;
+  padding-left: 3.4rem;
+}
+
+.pg-req__row--nfr .pg-select {
+  flex: none;
+  max-width: 45%;
+}
+
+.pg-req__id {
+  flex: none;
+  width: 3rem;
+  padding-top: 0.4rem;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--pg-accent);
+}
+
+.pg-req__text {
+  background: var(--pg-panel);
+}
+
+/* ---------------------------------------------------------- Инспектор */
+
+.pg-edge-route {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.85rem;
+  font-weight: 600;
+}
+
+/* ----------------------------------------------------------- Оценки */
+
+.pg-calc__bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.pg-calc__row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0 0.5rem;
+  margin-bottom: 0.45rem;
+}
+
+.pg-calc__name {
+  font-size: 0.8rem;
+}
+
+.pg-calc__value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.pg-calc__slider {
+  grid-column: 1 / -1;
+  width: 100%;
+  accent-color: var(--pg-accent);
+}
+
+.pg-calc__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+  margin: 0.5rem 0;
+}
+
+.pg-calc__cell {
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--pg-border);
+  border-radius: 6px;
+  background: var(--pg-bg);
+}
+
+.pg-calc__cell.is-key {
+  border-color: var(--pg-accent);
+  background: var(--pg-accent-soft);
+}
+
+.pg-calc__cell dt {
+  font-size: 0.72rem;
+  color: var(--pg-muted);
+}
+
+.pg-calc__cell dd {
+  margin: 0;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.pg-calc__law {
+  margin: 0.25rem 0;
+  font-size: 0.8rem;
+  color: var(--pg-muted);
+}
+
+.pg-calc__hints {
+  margin: 0.5rem 0;
+  padding-left: 1.1rem;
+  font-size: 0.8rem;
+}
+
+.pg-calc__hints li + li {
+  margin-top: 0.25rem;
+}
+
+/* ----------------------------------------------------------- Проверки */
+
+.pg-findings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.pg-finding {
+  display: flex;
+  gap: 0.45rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 6px;
+  background: var(--pg-bg);
+  border: 1px solid var(--pg-border);
+}
+
+.pg-finding--warn {
+  border-color: var(--pg-bad);
+  background: var(--pg-bad-soft);
+}
+
+.pg-finding--warn .codicon {
+  color: var(--pg-bad);
+}
+
+.pg-finding--info .codicon {
+  color: var(--pg-accent);
+}
+
+/* -------------------------------------------------------------- Узко */
+
+@media (max-width: 1100px) {
+  .pg-body {
+    grid-template-columns: 11rem minmax(0, 1fr) 19rem;
+  }
+}
+
+/*
+ * На телефоне три колонки не помещаются: полотно сверху, палитра лентой под
+ * ним (добавлять щелчком — перетаскивание пальцем тут не работает), панели
+ * ниже. Страница прокручивается целиком.
+ */
+@media (max-width: 760px) {
+  .pg {
+    height: auto;
+  }
+
+  .pg-body {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .pg-canvas {
+    order: 1;
+    height: 60vh;
+  }
+
+  .pg-palette {
+    order: 2;
+    border-right: 0;
+    border-top: 1px solid var(--pg-border);
+    max-height: 14rem;
+  }
+
+  .pg-palette__list {
+    grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  }
+
+  .pg-side {
+    order: 3;
+    border-left: 0;
+    border-top: 1px solid var(--pg-border);
+  }
+
+  .pg-side__body {
+    overflow: visible;
+  }
+
+  .pg-toolbar__project {
+    flex-basis: 100%;
+  }
+
+  .pg-toolbar__project .pg-select {
+    width: 100%;
+  }
+}
+
+/* ------------------------------------------------------------- Роли */
+
+.pg-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding-right: 0.5rem;
+  margin-right: 0.25rem;
+  border-right: 1px solid var(--pg-border);
+}
+
+.pg-role .pg-select {
+  font-weight: 600;
+  background: var(--pg-accent-soft);
+  border-color: var(--pg-accent);
+  color: var(--pg-accent);
+}
+
+.pg-toolbar__title {
+  font-size: 0.95rem;
+}
+
+.pg-switch {
+  display: inline-flex;
+  border: 1px solid var(--pg-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.pg-switch button {
+  font: inherit;
+  color: var(--pg-muted);
+  background: var(--pg-panel);
+  border: 0;
+  padding: 0.3rem 0.65rem;
+  cursor: pointer;
+}
+
+.pg-switch button + button {
+  border-left: 1px solid var(--pg-border);
+}
+
+.pg-switch button.is-on {
+  background: var(--pg-accent-soft);
+  color: var(--pg-accent);
+  font-weight: 600;
+}
+
+.pg-timer {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--pg-muted);
+  white-space: nowrap;
+}
+
+.pg-timer.is-running {
+  color: var(--pg-bad);
+}
+
+.pg-button.is-on {
+  background: var(--pg-accent-soft);
+  border-color: var(--pg-accent);
+  color: var(--pg-accent);
+}
+
+.pg-body--no-palette {
+  grid-template-columns: minmax(0, 1fr) 25rem;
+}
+
+.pg-canvas__banner {
+  position: absolute;
+  bottom: 0.75rem;
+  /* Внизу по центру: верх занимает карточка задания, углы — кнопки и миникарта. */
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  z-index: 5;
+  margin: 0;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: var(--pg-panel);
+  border: 1px solid var(--pg-border);
+  color: var(--pg-muted);
+  font-size: 0.78rem;
+  pointer-events: none;
+}
+
+.pg--author .pg-canvas__banner {
+  border-color: var(--pg-storage);
+  color: var(--pg-storage);
+}
+
+/* Отключённые поля остаются читаемыми: интервьюер читает, а не пробивается сквозь серость. */
+.pg-plain {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.pg-plain:disabled .pg-input,
+.pg-competency__select:disabled,
+.pg-input[readonly] {
+  opacity: 1;
+  color: var(--pg-fg);
+  background: transparent;
+}
+
+.pg-plain:disabled .pg-button,
+.pg-plain:disabled .pg-icon-button {
+  display: none;
+}
+
+.pg-plain:disabled .pg-chip:not(.is-on) {
+  display: none;
+}
+
+.pg-note {
+  margin: 0 0 0.85rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--pg-storage) 10%, transparent);
+  color: var(--pg-fg);
+  font-size: 0.8rem;
+}
+
+.pg-toggle--block {
+  padding: 0.15rem 0;
+}
+
+.pg-weight {
+  align-items: center;
+  font-size: 0.78rem;
+  color: var(--pg-muted);
+}
+
+.pg-guide {
+  margin-bottom: 1rem;
+  padding: 0.6rem 0.7rem;
+  border-radius: var(--pg-radius);
+  background: var(--pg-accent-soft);
+}
+
+.pg-guide p,
+.pg-guide ol {
+  margin: 0.35rem 0 0;
+  white-space: pre-wrap;
+}
+
+.pg-guide ol {
+  padding-left: 1.1rem;
+}
+
+.pg-checklist {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.pg-checklist li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--pg-border);
+  border-radius: 6px;
+  background: var(--pg-bg);
+}
+
+.pg-checklist li.is-done {
+  border-color: var(--pg-accent);
+}
+
+.pg-checklist__check {
+  display: flex;
+  gap: 0.45rem;
+  cursor: pointer;
+}
+
+.pg-checklist li.is-done .pg-checklist__check span {
+  color: var(--pg-muted);
+  text-decoration: line-through;
+}
+
+/* --------------------------------------------------------- Оценка */
+
+.pg-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--pg-radius);
+  background: var(--pg-accent-soft);
+  color: var(--pg-accent);
+}
+
+.pg-total strong {
+  font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pg-rubric {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.pg-rubric li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--pg-border);
+  border-radius: 6px;
+}
+
+.pg-rubric__levels {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+}
+
+.pg-level {
+  width: 1.8rem;
+  height: 1.8rem;
+  font: inherit;
+  font-weight: 600;
+  color: var(--pg-muted);
+  background: var(--pg-bg);
+  border: 1px solid var(--pg-border);
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.pg-level.is-on {
+  color: #fff;
+  border-color: transparent;
+}
+
+.pg-level--0.is-on { background: var(--pg-bad); }
+.pg-level--1.is-on { background: #c7791b; }
+.pg-level--2.is-on { background: var(--pg-compute); }
+.pg-level--3.is-on { background: #1f7a4d; }
+
+/* ------------------------------------------------ Требования блока */
+
+.pg-linked {
+  list-style: none;
+  margin: 0 0 0.4rem;
+  padding: 0;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.pg-linked__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid var(--pg-border);
+  border-left: 3px solid var(--pg-accent);
+  border-radius: 6px;
+  background: var(--pg-bg);
+}
+
+.pg-linked__item--nfr {
+  border-left-color: var(--pg-storage);
+}
+
+.pg-linked__id {
+  flex: none;
+  font: 600 0.72rem/1.6 ui-monospace, 'SF Mono', Menlo, monospace;
+  color: var(--pg-accent);
+}
+
+.pg-linked__item--nfr .pg-linked__id {
+  color: var(--pg-storage);
+}
+
+.pg-linked__text {
+  flex: 1;
+  font-size: 0.82rem;
+}
+
+.pg-linked__target {
+  display: block;
+  color: var(--pg-muted);
+  font-size: 0.76rem;
+}
+
+/* ------------------------------------------------ Карта компетенций */
+
+.pg-competency {
+  margin: 0 0 0.85rem;
+  padding: 0.6rem;
+  border: 1px solid var(--pg-border);
+  border-radius: var(--pg-radius);
+  background: var(--pg-bg);
+}
+
+.pg-competency__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.35rem;
+}
+
+.pg-competency__select {
+  width: 100%;
+}
+
+.pg-competency__why {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+}
+
+.pg-competency__why dt {
+  font-weight: 600;
+  color: var(--pg-muted);
+  font-size: 0.74rem;
+}
+
+.pg-competency__why dd {
+  margin: 0 0 0.35rem;
+}
+
+.pg-competency > .pg-field__label {
+  display: block;
+  margin-top: 0.5rem;
+}
+
+.pg-probes {
+  margin: 0.25rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.8rem;
+}
+
+.pg-probes li + li {
+  margin-top: 0.2rem;
+}
+
+.pg-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(10, 12, 16, 0.45);
+}
+
+.pg-dialog__box {
+  width: min(64rem, 100%);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  background: var(--pg-panel);
+  color: var(--pg-fg);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.pg-dialog__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--pg-border);
+}
+
+.pg-dialog__head h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.pg-compare__scroll {
+  overflow: auto;
+}
+
+.pg-compare {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.pg-compare th,
+.pg-compare td {
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid var(--pg-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.pg-compare thead th {
+  position: sticky;
+  top: 0;
+  background: var(--pg-panel);
+  font-size: 0.9rem;
+}
+
+.pg-compare thead th .pg-button {
+  display: flex;
+  margin-top: 0.3rem;
+}
+
+.pg-compare tbody th {
+  width: 9rem;
+  color: var(--pg-muted);
+  font-weight: 600;
+  font-size: 0.76rem;
+}
+
+.pg-compare .is-chosen {
+  background: var(--pg-accent-soft);
+}
+
+.pg-compare__prose td {
+  font-size: 0.78rem;
+  color: var(--pg-muted);
+}
+
+.pg-compare__prose td.is-chosen {
+  color: var(--pg-fg);
+}
+
+@media (max-width: 760px) {
+  .pg-role {
+    border-right: 0;
+  }
+}
+
+/* ---------------------------------------------------------------- API */
+
+/*
+ * Карточка маршрута — та же, что во врезке разбора (.api-card): полоска и
+ * плашка цвета метода, путь с подсвеченными параметрами, код, поля. Своя
+ * копия под префиксом pg-, чтобы песочница переехала без global.css.
+ */
+
+.pg-api-tpl {
+  margin-bottom: 1rem;
+  padding: 0.6rem;
+  border: 1px dashed var(--pg-border);
+  border-radius: var(--pg-radius);
+}
+
+.pg-api-tpl__row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+}
+
+.pg-api-tpl__slash {
+  color: var(--pg-muted);
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+.pg-api-tpl__service {
+  flex: 1;
+  min-width: 0;
+}
+
+.pg-api-groups {
+  display: grid;
+  gap: 0.75rem;
+}
+
+/* Группа — место, куда бросают маршрут: рамка проявляется при переносе. */
+.pg-api-group {
+  padding: 0.5rem;
+  margin: -0.5rem;
+  border: 1px dashed transparent;
+  border-radius: var(--pg-radius);
+  transition: border-color 0.12s, background-color 0.12s;
+}
+
+.pg-api-groups.is-dragging .pg-api-group {
+  border-color: var(--pg-border);
+}
+
+.pg-api-group.is-over {
+  border-color: var(--pg-accent) !important;
+  background: var(--pg-accent-soft);
+}
+
+.pg-api-group__title {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.4rem;
+}
+
+.pg-api-group.is-empty .pg-api-group__title {
+  opacity: 0.7;
+}
+
+.pg-api-group__drop {
+  margin: 0;
+  padding: 0.55rem;
+  border: 1px dashed var(--pg-border);
+  border-radius: 6px;
+  color: var(--pg-muted);
+  font-size: 0.76rem;
+  text-align: center;
+}
+
+.pg-api[draggable='true'] {
+  cursor: grab;
+}
+
+.pg-api {
+  position: relative;
+}
+
+/* Удалить — в углу карточки, проявляется на наведении: иначе у каждой
+   карточки корзина спорит с кодом ответа за внимание. */
+.pg-api__delete {
+  position: absolute;
+  right: 0.3rem;
+  bottom: 0.3rem;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.pg-api:hover .pg-api__delete,
+.pg-api__delete:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .pg-api__delete {
+    opacity: 1;
+  }
+}
+
+/* Блок схемы, на который сейчас бросят маршрут. */
+.react-flow__node.pg-route-drop .pg-block {
+  border-color: var(--pg-accent);
+  box-shadow: 0 0 0 3px var(--pg-accent-soft), 0 2px 8px var(--shadow, rgba(16, 18, 22, 0.12));
+}
+
+.pg-api-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  /* minmax(0, …): иначе самое широкое поле правки раздувает всю колонку за край панели. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.5rem;
+}
+
+.pg-api__status-select {
+  flex: none;
+  width: 6.5rem;
+}
+
+.pg-api {
+  --method: #3b82c4;
+  --method-soft: color-mix(in srgb, var(--method) 14%, var(--pg-panel));
+  border: 1px solid var(--pg-border);
+  border-left: 3px solid var(--method);
+  border-radius: 8px;
+  background: var(--pg-panel);
+  box-shadow: 0 1px 2px var(--shadow, rgba(16, 18, 22, 0.12));
+}
+
+.pg-api--post { --method: #c27c1e; }
+.pg-api--put,
+.pg-api--patch { --method: #0e8a8a; }
+.pg-api--delete { --method: #c2413b; }
+
+/* Исходящий вызов — наш запрос клиенту: другой цвет и пунктир. */
+.pg-api--out {
+  --method: #7a5cc4;
+  border-left-style: dashed;
+}
+
+.pg-api__open {
+  display: block;
+  width: 100%;
+  padding: 0.6rem 0.75rem 0.65rem;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.pg-api__open:hover {
+  background: color-mix(in srgb, var(--method) 5%, transparent);
+}
+
+.pg-api:not(:has(.pg-api__open)):not(.is-editing) {
+  padding: 0.6rem 0.75rem 0.65rem;
+}
+
+.pg-api.is-editing {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.6rem 0.75rem;
+  border-color: var(--method);
+}
+
+.pg-api__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.pg-api__method {
+  padding: 0.1rem 0.45rem;
+  border-radius: 5px;
+  background: var(--method-soft);
+  color: var(--method);
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.pg-api__path {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--pg-fg);
+  overflow-wrap: anywhere;
+}
+
+.pg-api__param {
+  color: var(--method);
+}
+
+.pg-api__status {
+  margin-left: auto;
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.66rem;
+  font-weight: 600;
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--pg-muted) 12%, var(--pg-panel));
+  color: var(--pg-muted);
+}
+
+.pg-api__status--2xx {
+  background: color-mix(in srgb, var(--ok, #1f7a4d) 13%, var(--pg-panel));
+  color: var(--ok, #1f7a4d);
+}
+
+.pg-api__status--4xx,
+.pg-api__status--5xx {
+  background: var(--pg-bad-soft);
+  color: var(--pg-bad);
+}
+
+.pg-api__about {
+  margin: 0.35rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--pg-muted);
+}
+
+.pg-api__out {
+  margin-right: 0.4rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--method-soft);
+  color: var(--method);
+  font-size: 0.64rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pg-api__fields {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0.45rem 0 0;
+}
+
+.pg-api__fields > div {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+
+.pg-api__fields dt {
+  flex: none;
+  width: 3.4rem;
+  font-size: 0.64rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--pg-muted);
+}
+
+.pg-api__fields dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin: 0;
+}
+
+.pg-api__fields code {
+  padding: 0.02rem 0.35rem;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--pg-border) 55%, transparent);
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.68rem;
+}
+
+.pg-api__links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.45rem;
+}
+
+.pg-api__service {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.72rem;
+  color: var(--pg-muted);
+}
+
+.pg-api__fr {
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--pg-accent-soft);
+  color: var(--pg-accent);
+  font: 600 0.64rem/1.5 ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+.pg-api__edit-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.35rem;
+}
+
+.pg-api__method-select {
+  flex: none;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-weight: 700;
+  color: var(--method);
+}
+
+.pg-api__path-input {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+.pg-api__field {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.pg-api__field > span {
+  font-size: 0.64rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--pg-muted);
+}
+
+.pg-api__field--grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.pg-api-list--compact .pg-api {
+  padding: 0.35rem 0.5rem;
+  box-shadow: none;
+}
+
+.pg-api .pg-toggle {
+  flex: none;
+  max-width: 45%;
+  padding: 0 0 0.4rem;
+  white-space: normal;
+  font-size: 0.78rem;
+}
+
+.pg-api__field--grow .pg-select {
+  width: 100%;
+}
+
+/* ------------------------------------------------------------ Задание */
+
+/*
+ * Карточка задания — та же, что в разборе (.brief в global.css): край слева
+ * цветом акцента, рукописная подпись, источник капсом, дословная постановка.
+ * Висит над полотном в левом верхнем углу и не уходит при прокрутке схемы.
+ */
+.pg-brief {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 6;
+  width: min(24rem, calc(100% - 1.5rem));
+  max-height: calc(100% - 7rem);
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  background: var(--pg-panel);
+  border: 1px solid var(--pg-border);
+  border-left: 3px solid var(--pg-accent);
+  border-radius: var(--radius, 10px);
+  box-shadow: 0 4px 18px var(--shadow, rgba(16, 18, 22, 0.12));
+}
+
+.pg-brief.is-collapsed {
+  width: auto;
+}
+
+.pg-brief__head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.7rem 0.5rem 0.35rem 1rem;
+}
+
+.pg-brief.is-collapsed .pg-brief__head {
+  padding-bottom: 0.55rem;
+}
+
+.pg-brief__label {
+  font-family: var(--font-note, 'Caveat', 'Segoe Script', 'Bradley Hand', cursive);
+  font-size: 1.4rem;
+  line-height: 1;
+  color: var(--pg-accent);
+}
+
+.pg-brief__source {
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--pg-muted);
+}
+
+.pg-brief__badge {
+  font-size: 0.74rem;
+  color: #b7861b;
+}
+
+.pg-brief__toggle {
+  margin-left: auto;
+  align-self: center;
+}
+
+.pg-brief__toggle:hover {
+  color: var(--pg-accent);
+  background: var(--pg-accent-soft);
+}
+
+.pg-brief__body {
+  overflow-y: auto;
+  padding: 0 1rem 0.9rem;
+}
+
+.pg-brief__text {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.pg-brief__text p {
+  margin: 0 0 0.6rem;
+  white-space: pre-line;
+}
+
+.pg-brief__text ul {
+  margin: 0 0 0.6rem;
+  padding-left: 1.1rem;
+}
+
+.pg-brief__text > :last-child {
+  margin-bottom: 0;
+}
+
+/* Открытые интервьюером подсказки — под условием, отдельным тоном: это уже
+   не постановка, а помощь, и на оценке это видно. */
+.pg-brief__hints {
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 6px;
+  background: color-mix(in srgb, #d4a106 14%, transparent);
+  font-size: 0.8rem;
+}
+
+.pg-brief__hints-label {
+  font-weight: 600;
+  color: #9a6f12;
+}
+
+.pg-brief__hints ol {
+  margin: 0.3rem 0 0;
+  padding-left: 1.1rem;
+}
+
+@media (max-width: 760px) {
+  .pg-brief {
+    max-height: 45%;
+  }
+}
+
+/* ------------------------------------------------ Документ требований */
+
+/*
+ * Требования документом — как таблица в разборе (.req-board): строка пути
+ * моноширинным, под ней таблицы ФТ и НФТ. Номер — в цвете своего вида.
+ */
+.pg-req-view {
+  display: flex;
+  margin: 0.85rem 0.85rem 0;
+}
+
+.pg-req-view button {
+  flex: 1;
+}
+
+.pg-doc {
+  border: 1px solid var(--pg-border);
+  border-radius: var(--radius, 10px);
+  background: var(--pg-panel);
+  overflow: hidden;
+}
+
+.pg-doc__path {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.45rem 0.8rem;
+  border-bottom: 1px solid var(--pg-border);
+  background: var(--pg-bg);
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.72rem;
+  color: var(--pg-muted);
+}
+
+.pg-doc__actions {
+  display: inline-flex;
+  gap: 0.75rem;
+}
+
+.pg-doc__action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--pg-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.pg-doc__action:hover {
+  color: var(--pg-accent);
+}
+
+.pg-doc__body {
+  padding: 0.9rem 1rem 1rem;
+}
+
+.pg-doc__section + .pg-doc__section {
+  margin-top: 1.25rem;
+}
+
+.pg-doc__title {
+  margin: 0 0 0.45rem;
+  font-size: 0.9rem;
+}
+
+.pg-doc__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.pg-doc__table th {
+  padding: 0.3rem 0.45rem;
+  border-bottom: 1px solid var(--pg-border);
+  font-size: 0.64rem;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--pg-muted);
+  text-align: left;
+}
+
+.pg-doc__table td {
+  padding: 0.4rem 0.45rem;
+  border-bottom: 1px solid var(--pg-border);
+  vertical-align: top;
+}
+
+.pg-doc__table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.pg-doc__table td:first-child {
+  white-space: nowrap;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--pg-accent);
+}
+
+.pg-doc__section--nfr td:first-child {
+  color: #7a5cc4;
+}
+
+.pg-doc__target {
+  font-weight: 600;
+}
+
+.pg-doc__category {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.7rem;
+  color: var(--pg-muted);
+}
+
+.pg-doc__none {
+  color: var(--pg-muted);
+}
+
+.pg-doc__empty td {
+  padding: 0.8rem;
+  color: var(--pg-muted) !important;
+  font-family: inherit !important;
+  font-weight: 400 !important;
+  text-align: center;
+}
+
+.pg-doc__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+}
+
+.pg-doc__block {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0 0.35rem;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--pg-border) 55%, transparent);
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+.pg-doc__block .codicon {
+  font-size: 12px;
+}
+
+.pg-doc__route {
+  /* Цвет метода берётся от классов .pg-api--post и соседей, GET — по умолчанию. */
+  padding: 0 0.35rem;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--method, #3b82c4) 12%, transparent);
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.66rem;
+  white-space: nowrap;
+}
+
+.pg-doc__route b {
+  color: var(--method, #3b82c4);
+}
+
+/*
+ * В боковой панели четыре колонки не помещаются: остаются три самые нужные —
+ * у ФТ без колонки API, у НФТ без блоков. Всё целиком — в развёрнутом виде.
+ */
+.pg-side .pg-doc:not(.pg-doc--wide) .pg-doc__table th:nth-child(4),
+.pg-side .pg-doc:not(.pg-doc--wide) .pg-doc__table td:nth-child(4) {
+  display: none;
+}
+
+.pg-side .pg-doc:not(.pg-doc--wide) .pg-doc__table th:nth-child(2),
+.pg-side .pg-doc:not(.pg-doc--wide) .pg-doc__table td:nth-child(2) {
+  width: 55%;
+}
+
+.pg-side .pg-doc:not(.pg-doc--wide) .pg-doc__block {
+  white-space: normal;
+}
+
+/* Развёрнутый документ — во всю ширину окна: тут колонкам просторно. */
+.pg-doc--wide {
+  width: min(72rem, 100%);
+}
+
+.pg-doc--wide .pg-doc__scroll {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.pg-doc--wide .pg-doc__body {
+  padding: 1.25rem 1.5rem 1.5rem;
+}
+
+.pg-doc--wide .pg-doc__table {
+  font-size: 0.86rem;
+}
+
+.pg-doc--wide .pg-doc__table td {
+  padding: 0.55rem 0.6rem;
+}
+
+/* Номер требования — ручка перетаскивания на блок схемы. */
+.pg-req__grip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+  cursor: grab;
+  border-radius: 4px;
+}
+
+.pg-req__grip .codicon {
+  font-size: 12px;
+  color: var(--pg-muted);
+  opacity: 0.5;
+}
+
+.pg-req__grip:hover .codicon {
+  opacity: 1;
+}
+
+.pg-req__grip:active {
+  cursor: grabbing;
+}
+
+.pg-doc__row--drag {
+  cursor: grab;
+}
+
+.pg-doc__row--drag:hover td {
+  background: color-mix(in srgb, var(--pg-accent-soft) 60%, transparent);
+}
+
+/* ------------------------------------------------------------ Сигналы */
+
+/* Кандидат видит, что запись идёт: красная точка, как у записи экрана. */
+.pg-recording {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  background: var(--pg-bad-soft);
+  color: var(--pg-bad);
+  font-size: 0.74rem;
+  cursor: help;
+}
+
+.pg-recording .codicon {
+  font-size: 9px;
+  animation: pg-blink 1.6s ease-in-out infinite;
+}
+
+@keyframes pg-blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pg-recording .codicon {
+    animation: none;
+  }
+}
+
+.pg-sig-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+  margin: 0 0 1rem;
+}
+
+.pg-sig-stats > div {
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--pg-border);
+  border-radius: 6px;
+  background: var(--pg-bg);
+}
+
+.pg-sig-stats > div.is-warn {
+  border-color: var(--pg-bad);
+  background: var(--pg-bad-soft);
+}
+
+.pg-sig-stats dt {
+  font-size: 0.72rem;
+  color: var(--pg-muted);
+}
+
+.pg-sig-stats dd {
+  margin: 0;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.pg-sig-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+
+.pg-sig-bar .pg-toggle {
+  padding: 0;
+  font-size: 0.78rem;
+}
+
+.pg-signals {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.pg-signal {
+  display: grid;
+  grid-template-columns: 3.6rem 1rem minmax(0, 1fr);
+  gap: 0.4rem;
+  align-items: start;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid var(--pg-border);
+  border-left: 3px solid var(--pg-border);
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+
+.pg-signal.is-notable {
+  border-left-color: var(--pg-bad);
+  background: color-mix(in srgb, var(--pg-bad-soft) 60%, transparent);
+}
+
+.pg-signal__time {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.72rem;
+  color: var(--pg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.pg-signal__icon {
+  font-size: 14px !important;
+  color: var(--pg-muted);
+}
+
+.pg-signal.is-notable .pg-signal__icon {
+  color: var(--pg-bad);
+}
+
+.pg-signal__body {
+  min-width: 0;
+}
+
+.pg-signal__toggle {
+  margin-left: 0.4rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--pg-accent);
+  font: inherit;
+  font-size: 0.74rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.pg-signal__text {
+  margin: 0.35rem 0 0;
+  padding: 0.4rem 0.5rem;
+  max-height: 12rem;
+  overflow: auto;
+  border-radius: 4px;
+  background: var(--pg-bg);
+  border: 1px solid var(--pg-border);
+  font-size: 0.72rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------ История */
+
+.pg-history {
+  display: inline-flex;
+  gap: 0.1rem;
+}
+
+.pg-history .pg-icon-button:hover:not(:disabled) {
+  color: var(--pg-accent);
+  background: var(--pg-accent-soft);
+}
+
+.pg-history .pg-icon-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.pg-history .pg-icon-button:disabled:hover {
+  color: var(--pg-muted);
+  background: none;
+}

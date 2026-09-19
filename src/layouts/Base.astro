@@ -85,6 +85,13 @@ const canonical = new URL(localePath(lang, path), Astro.site);
     <header class="site-header">
       <div class="wrap site-header__inner">
         <a class="site-header__brand" href={localePath(lang)}>{t('site.title')}</a>
+        <a
+          class="site-header__link"
+          href={localePath(lang, 'playground')}
+          aria-current={path === 'playground' ? 'page' : undefined}
+        >
+          {t('nav.playground')}
+        </a>
         <span class="site-header__spacer"></span>
         {/* role="switch" вместо простой кнопки: у переключателя есть состояние,
             и скринридер должен назвать его. aria-checked проставляет скрипт —

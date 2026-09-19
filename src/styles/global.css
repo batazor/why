@@ -262,6 +262,17 @@ main:focus {
   letter-spacing: -0.02em;
 }
 
+.site-header__link {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.site-header__link:hover,
+.site-header__link[aria-current='page'] {
+  color: var(--fg);
+}
+
 .site-header__spacer {
   flex: 1;
 }
