@@ -5,11 +5,11 @@ description: >-
   time an item spends there — and what follows from it for pool size and queue
   thresholds.
 problem: >-
-  How many items are in the system, how fast they arrive and how long each one
-  stays there are tied quantities: any two of them give the third. In practice
-  they get discussed apart and each one guessed — pool size from the user
-  count, the queue threshold from how much is too much, and waiting time not
-  computed at all.
+  The arrival rate and the time an item spends in the system are on every
+  dashboard. The third quantity — how many items are in the system — is the
+  product of those two, yet it usually gets estimated separately and
+  approximately. Hence pools sized by the user count, and queue-depth
+  thresholds that say nothing about waiting time.
 tags: [system-design, queues, capacity]
 order: 13
 deck: littles-law
@@ -21,11 +21,8 @@ comments:
 labels:
   law.inputs: Known quantities
   law.result: What follows from them
-  law.formula: 'λ = {arrivals} items/s, W = {timeInSystem} s → {inSystem} items in the system'
-  law.split: 'The same law on service: {arrivals} × {serviceSeconds} = {inService}. The other {waiting} are waiting.'
-  law.verdict.impossible: >-
-    Service time exceeds time in the system. W is waiting plus service, so it
-    cannot be smaller than one of its own parts.
+  law.formula: 'W = {queueSeconds} + {serviceSeconds} = {timeInSystem} s, so L = λW = {inSystem} items'
+  law.split: 'The same law on service: λS = {arrivals} × {serviceSeconds} = {inService}. The other {waiting} are in the queue.'
   law.verdict.smooth: >-
     There is no queue: every item in the system is in service, and L = λS.
   law.verdict.queue: >-
@@ -36,20 +33,20 @@ labels:
     holds, faster service still shortens the queue.
   law.arrivals: Arrival rate λ
   law.arrivals.unit: items/s
-  law.timeInSystem: Time in system W
-  law.timeInSystem.unit: s
+  law.queueSeconds: Time in the queue
+  law.queueSeconds.unit: s
   law.serviceSeconds: Service time S
   law.serviceSeconds.unit: s
   law.perServer: Items per server
   law.perServer.unit: items
+  law.out.timeInSystem: Time in system W
+  law.out.timeInSystem.unit: s
   law.out.inSystem: Items in system L
   law.out.inSystem.unit: items
   law.out.inService: In service λS
   law.out.inService.unit: items
-  law.out.waiting: Queueing L − λS
+  law.out.waiting: In the queue λWq
   law.out.waiting.unit: items
-  law.out.waitSeconds: Wait per item W − S
-  law.out.waitSeconds.unit: s
   law.out.servers: Servers needed
   law.out.servers.unit: servers
 terms:
@@ -109,14 +106,16 @@ steps:
       The calculator is on the right. λ and W enter the product symmetrically:
       doubling the rate and doubling the time in the system give one result.
 
-      A practical consequence: halving service time does the same thing to L as
-      halving the arrival rate. If an item is processed in ten seconds instead of
-      twenty, there are half as many in the system and the pool is half the size
-      — at the same user count and the same number of requests.
+      W itself has no slider — it is waiting plus service. So cutting service
+      time brings down W, L and the number of servers together: λS falls with S.
+      The other way round, an external service that became three times slower
+      raises W, L and the infrastructure bill, without a single quantity on our
+      own side changing.
 
-      The converse holds too, and it is usually the one that gets noticed. An
-      external service became three times slower, L grew threefold, and the
-      infrastructure bill with it. Not one quantity on our own side changed.
+      Waiting stays an input, and that is not a simplification. By how much the
+      queue shortens when service speeds up is something Little's law does not
+      say — it has neither distributions nor utilisation in its conditions. That
+      belongs to queueing theory, and the step on limits says so.
   - id: split
     title: Queue length as a difference
     narration: |-

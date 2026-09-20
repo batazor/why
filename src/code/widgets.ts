@@ -226,6 +226,11 @@ export type WidgetSpec = Record<string, WidgetStep>;
  * Калькулятор закона Литтла: те же ползунки, что у калькулятора нагрузки, но
  * без предметной области. Формула одна на всё — очередь, пул, зал ожидания, —
  * и урок про неё показывает её саму, а не частный случай со скрейпингом.
+ *
+ * Ползунками заданы ожидание и обслуживание, а время пребывания W считается
+ * их суммой. Обратная раскладка — ползунок на W и ожидание как разность —
+ * врёт: уменьшаешь время обслуживания, и ожидание растёт само собой, хотя
+ * причины расти у него нет.
  */
 export type LittlesLawData = { inputs: LoadInput[] };
 
@@ -234,10 +239,10 @@ export type LittlesLawData = { inputs: LoadInput[] };
  * сначала сколько всего внутри, потом из чего это число состоит.
  */
 export const LAW_OUTPUTS = [
+  'timeInSystem',
   'inSystem',
   'inService',
   'waiting',
-  'waitSeconds',
   'servers',
 ] as const;
 
@@ -284,7 +289,6 @@ export function widgetLabelKeys(step: WidgetStep): string[] {
         'law.result',
         'law.formula',
         'law.split',
-        'law.verdict.impossible',
         'law.verdict.smooth',
         'law.verdict.queue',
         'law.verdict.balanced',

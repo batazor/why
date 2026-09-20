@@ -6,9 +6,8 @@ import { LAW_OUTPUTS, type LittlesLawData, type LoadInput } from '../../code/wid
  *
  * Врезка не считает за читателя — умножение он сделает и в уме. Она показывает
  * то, что из формулы на бумаге не видно: закон применяется не к системе
- * целиком, а к любому её куску, и разница между двумя применениями — к системе
- * и к одному обслуживанию — и есть очередь. Ползунок «время внутри» двигает
- * ожидание, не трогая обслуживание, и число ожидающих меняется само.
+ * целиком, а к любому её куску, и каждое применение даёт своё число — заявки
+ * в системе, заявки на обслуживании, заявки в очереди.
  *
  * Устроена как калькулятор нагрузки: разметка и классы у них общие, вся проза
  * приходит из `labels` локали.
@@ -54,56 +53,52 @@ export default function LittlesLaw({ lang, data, labels }: Props) {
   );
 
   const out = useMemo(() => {
-    const { arrivals, timeInSystem, serviceSeconds, perServer } = values;
-
-    // Сам закон: поток, умноженный на время внутри.
-    const inSystem = arrivals * timeInSystem;
+    const { arrivals, queueSeconds, serviceSeconds, perServer } = values;
 
     /**
-     * Тот же закон, применённый к меньшему ящику — к обслуживанию.
-     *
-     * Время внутри короче обслуживания не бывает: ползунки друг о друге не
-     * знают, и без зажима калькулятор показывал бы отрицательную очередь.
-     * Поэтому здесь `min`, а несуразное положение ползунков называет вердикт.
+     * Время пребывания — сумма ожидания и обслуживания, а не отдельный
+     * ползунок. Так уменьшение обслуживания уменьшает W, а за ним и L; в
+     * обратной раскладке оно вместо этого надувало бы очередь.
      */
-    const service = Math.min(serviceSeconds, timeInSystem);
-    const inService = arrivals * service;
+    const timeInSystem = queueSeconds + serviceSeconds;
 
-    const waiting = inSystem - inService;
-    const waitSeconds = timeInSystem - service;
+    // Сам закон.
+    const inSystem = arrivals * timeInSystem;
 
-    // Минимум обслуживающих: столько нужно, чтобы поток вообще проходил.
+    // Он же, применённый к меньшим ящикам: к обслуживанию и к очереди.
+    const inService = arrivals * serviceSeconds;
+    const waiting = arrivals * queueSeconds;
+
+    // Минимум обслуживающих приборов: ожидающие заявки их не занимают.
     const servers = Math.ceil(inService / perServer);
 
-    return { inSystem, inService, waiting, waitSeconds, servers };
+    return { timeInSystem, inSystem, inService, waiting, servers };
   }, [values]);
 
-  const impossible = values.serviceSeconds > values.timeInSystem;
-
-  const verdict = impossible
-    ? text('law.verdict.impossible')
-    : out.waitSeconds === 0
+  const verdict =
+    out.waiting === 0
       ? text('law.verdict.smooth')
       : out.waiting > out.inService
         ? text('law.verdict.queue')
         : text('law.verdict.balanced');
 
   const formula = text('law.formula')
-    .replace('{arrivals}', number(values.arrivals))
-    .replace('{timeInSystem}', number(values.timeInSystem))
+    .replace('{queueSeconds}', number(values.queueSeconds))
+    .replace('{serviceSeconds}', number(values.serviceSeconds))
+    .replace('{timeInSystem}', number(out.timeInSystem))
     .replace('{inSystem}', number(out.inSystem));
 
   const split = text('law.split')
     .replace('{arrivals}', number(values.arrivals))
-    .replace('{serviceSeconds}', number(Math.min(values.serviceSeconds, values.timeInSystem)))
+    .replace('{serviceSeconds}', number(values.serviceSeconds))
     .replace('{inService}', number(out.inService))
     .replace('{waiting}', number(out.waiting));
 
   const shown: Record<string, string> = {
+    timeInSystem: number(out.timeInSystem),
     inSystem: number(out.inSystem),
     inService: number(out.inService),
     waiting: number(out.waiting),
-    waitSeconds: number(out.waitSeconds),
     servers: number(out.servers),
   };
 
@@ -151,7 +146,7 @@ export default function LittlesLaw({ lang, data, labels }: Props) {
           ))}
         </dl>
         <p className="calc__law">{formula}</p>
-        {!impossible && <p className="calc__law">{split}</p>}
+        <p className="calc__law">{split}</p>
         <p className="calc__verdict">{verdict}</p>
       </div>
     </div>
