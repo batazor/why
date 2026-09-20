@@ -27,14 +27,14 @@ API бывают медленные и ненадёжные, поэтому дж
 };
 
 const NODES: Array<[string, string, Text, number, number, Text?, string?]> = [
-  ['user', 'user', { en: 'User / script', ru: 'Пользователь / скрипт' }, 0, 430],
-  ['gateway', 'gateway', { en: 'API gateway', ru: 'API-шлюз' }, 330, 430],
+  ['user', 'user', { en: 'User / script', ru: 'Пользователь / скрипт' }, 0, 250],
+  ['gateway', 'gateway', { en: 'API gateway', ru: 'API-шлюз' }, 270, 250],
   [
     'command',
     'service',
     { en: 'job-command', ru: 'job-command' },
-    680,
-    170,
+    550,
+    60,
     {
       en: 'The only writer of a job. Never calls the targets: a slow target must not slow intake down.',
       ru: 'Единственный, кто пишет джобу. В цели не ходит никогда: медленная цель не должна замедлять приём.',
@@ -44,8 +44,8 @@ const NODES: Array<[string, string, Text, number, number, Text?, string?]> = [
     'reader',
     'service',
     { en: 'job-query', ru: 'job-query' },
-    680,
-    680,
+    550,
+    440,
     {
       en: 'Status and attempt history. Reads happen an order of magnitude more often than writes.',
       ru: 'Статусы и история попыток. Читают на порядок чаще, чем пишут.',
@@ -55,8 +55,8 @@ const NODES: Array<[string, string, Text, number, number, Text?, string?]> = [
     'db',
     'sql',
     { en: 'jobs-pg', ru: 'jobs-pg' },
-    1030,
-    420,
+    830,
+    250,
     {
       en: 'Jobs and attempts. The job row is its own outbox: published_at marks what has not reached the bus yet.',
       ru: 'Джобы и попытки. Строка джобы сама служит outbox: published_at показывает, что ещё не ушло в шину.',
@@ -67,8 +67,8 @@ const NODES: Array<[string, string, Text, number, number, Text?, string?]> = [
     'publisher',
     'worker',
     { en: 'job-publisher', ru: 'job-publisher' },
-    1030,
-    0,
+    1110,
+    60,
     {
       en: 'Reads unpublished rows and puts them on the bus. Nobody else writes to the queue, so there is no dual write.',
       ru: 'Читает неопубликованные строки и кладёт их в шину. Больше в очередь не пишет никто — двойной записи нет.',
@@ -78,8 +78,8 @@ const NODES: Array<[string, string, Text, number, number, Text?, string?]> = [
     'mq',
     'queue',
     { en: 'MQ: jobs.high / normal / low', ru: 'MQ: jobs.high / normal / low' },
-    1390,
-    0,
+    1380,
+    60,
     {
       en: 'Three queues by priority, taken with weights 6 : 3 : 1. An empty queue gives its share to the rest.',
       ru: 'Три очереди по приоритету, разбираются с весами 6 : 3 : 1. Пустая очередь отдаёт долю остальным.',
@@ -90,19 +90,19 @@ const NODES: Array<[string, string, Text, number, number, Text?, string?]> = [
     'worker',
     'worker',
     { en: 'scrape-worker', ru: 'scrape-worker' },
-    1760,
-    0,
+    1650,
+    60,
     {
       en: 'Takes a job under a lease, calls the target, saves the result, moves the status.',
       ru: 'Берёт джобу под аренду, ходит в цель, складывает результат, двигает статус.',
     },
   ],
-  ['targets', 'external', { en: 'Target APIs', ru: 'Целевые API' }, 1790, 300],
+  ['targets', 'external', { en: 'Target APIs', ru: 'Целевые API' }, 1650, -150],
   [
     'results',
     'object',
     { en: 'results-s3', ru: 'results-s3' },
-    1390,
+    1650,
     330,
     {
       en: 'Terabytes that have no place in a state database. The client downloads by a presigned URL.',
@@ -114,8 +114,8 @@ const NODES: Array<[string, string, Text, number, number, Text?, string?]> = [
     'scheduler',
     'cron',
     { en: 'job-scheduler', ru: 'job-scheduler' },
-    1030,
-    740,
+    830,
+    500,
     {
       en: 'Returns jobs with expired leases, plans retries with backoff, decides when attempts are exhausted.',
       ru: 'Возвращает джобы с истёкшей арендой, планирует ретраи с backoff, решает, когда попытки кончились.',
@@ -135,7 +135,6 @@ const EDGES: Array<[string, string, Text, 'sync' | 'async']> = [
   ['worker', 'targets', { en: 'fetch, per-domain limit', ru: 'запрос, лимит домена' }, 'sync'],
   ['worker', 'results', { en: 'payload', ru: 'результат' }, 'sync'],
   ['worker', 'db', { en: 'status, lease', ru: 'статус, аренда' }, 'sync'],
-  ['results', 'user', { en: 'presigned URL', ru: 'подписанная ссылка' }, 'sync'],
   ['scheduler', 'db', { en: 'leases, retries', ru: 'аренда, ретраи' }, 'sync'],
 ];
 

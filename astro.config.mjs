@@ -79,6 +79,7 @@ export default defineConfig({
         'motion',
         // Палитра песочницы анимируется React-обёрткой motion — она отдельный вход.
         'motion/react',
+        '@tisoap/react-flow-smart-edge',
       ],
     },
   },

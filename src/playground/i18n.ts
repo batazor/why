@@ -44,6 +44,7 @@ const en = {
   'palette.expand': 'Expand the palette',
   'palette.nothing': 'No such block.',
 
+  'canvas.arrange': 'Arrange',
   'canvas.empty': 'Drag blocks here from the left. Pull from a dot on one block to another to connect them.',
 
   'cat.client': 'Clients',
@@ -486,6 +487,7 @@ const ru: Record<Key, string> = {
   'palette.expand': 'Развернуть палитру',
   'palette.nothing': 'Такого блока нет.',
 
+  'canvas.arrange': 'Разложить',
   'canvas.empty': 'Перетащите сюда блоки слева. Чтобы связать два блока, тяните от точки на одном к другому.',
 
   'cat.client': 'Клиенты',

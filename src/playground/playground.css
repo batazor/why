@@ -301,6 +301,9 @@ body:has(.pg) .site-footer {
 
 .pg-palette {
   width: 13.5rem;
+  /* Колонка в сетке ужимается по содержимому: без нижней границы палитра
+     в узком окне схлопывалась в полоску с переносами по слогам. */
+  min-width: 13.5rem;
   overflow-y: auto;
   padding: 0.75rem;
   border-right: 1px solid var(--pg-border);
@@ -383,6 +386,7 @@ body:has(.pg) .site-footer {
 /* Свёрнутая палитра: полоса значков категорий, она же кнопка «раскрыть». */
 .pg-palette--rail {
   width: 3rem;
+  min-width: 3rem;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -915,6 +919,7 @@ body:has(.pg) .site-footer {
   .pg-palette--rail {
     order: 2;
     width: auto;
+    min-width: 0;
     border-right: 0;
     border-top: 1px solid var(--pg-border);
     max-height: 14rem;
@@ -2998,4 +3003,14 @@ body:has(.pg) .site-footer {
 .pg-note--warn {
   background: var(--pg-bad-soft);
   color: var(--pg-bad);
+}
+
+/* Кнопка автораскладки — в углу полотна, рядом с миникартой и зумом. */
+.pg-arrange {
+  box-shadow: 0 1px 4px var(--shadow, rgba(16, 18, 22, 0.12));
+}
+
+.pg-arrange:disabled {
+  opacity: 0.6;
+  cursor: progress;
 }

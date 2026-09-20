@@ -9,6 +9,7 @@ import {
   Handle,
   MarkerType,
   MiniMap,
+  Panel,
   Position,
   ReactFlow,
   useReactFlow,
@@ -24,6 +25,7 @@ import { blockSpec } from './catalog';
 import { techName } from './competency';
 import { ROUTE_DRAG, assignRoute } from './api-templates';
 import FloatingEdge from './FloatingEdge';
+import { autoLayout } from './layout';
 import { REQ_DRAG, coverRequirement, uid, type Design, type DesignEdge, type DesignNode } from './model';
 import type { T } from './i18n';
 
@@ -260,6 +262,35 @@ export default function Canvas({ design, update, onSelect, t, addRef, readOnly =
     routeTarget.current = element;
   };
 
+  /**
+   * Разложить схему: ELK расставляет блоки по слоям слева направо и сам
+   * уменьшает число пересечений. Размеры берутся замеренные — карточки
+   * разной высоты, и раскладка по номиналу разъехалась бы.
+   */
+  const [laying, setLaying] = useState(false);
+  const arrange = async () => {
+    setLaying(true);
+    try {
+      const sizes = new Map(
+        nodes
+          .filter((node) => node.measured?.width && node.measured?.height)
+          .map((node) => [node.id, { width: node.measured!.width!, height: node.measured!.height! }]),
+      );
+      const placed = await autoLayout(design.nodes, design.edges, sizes);
+      if (placed.size) {
+        update((current) => ({
+          ...current,
+          nodes: current.nodes.map((node) => ({ ...node, ...(placed.get(node.id) ?? {}) })),
+        }));
+        // Схема переехала целиком: показываем её заново, иначе человек
+        // смотрит в пустое место, где блоки были раньше.
+        setTimeout(() => flow.fitView({ padding: 0.12, maxZoom: 1, minZoom: 0.3, duration: 400 }), 60);
+      }
+    } finally {
+      setLaying(false);
+    }
+  };
+
   const onDragOver = (event: DragEvent) => {
     if (readOnly) return;
     const types = event.dataTransfer.types;
@@ -328,10 +359,23 @@ export default function Canvas({ design, update, onSelect, t, addRef, readOnly =
         snapToGrid
         snapGrid={[10, 10]}
         fitView
-        fitViewOptions={{ padding: 0.3, maxZoom: 1 }}
+        /**
+         * Нижняя граница подгонки: широкую схему можно вписать целиком, но в
+         * масштабе 20% на ней не прочитать ни подписи, ни номера требований.
+         * Лучше открыть читаемой и дать сдвинуть, чем показать ковёр.
+         */
+        fitViewOptions={{ padding: 0.12, maxZoom: 1, minZoom: 0.55 }}
         minZoom={0.2}
         proOptions={{ hideAttribution: true }}
       >
+        {!readOnly && design.nodes.length > 1 && (
+          <Panel position="top-right">
+            <button type="button" className="pg-button pg-arrange" onClick={arrange} disabled={laying}>
+              <i className={`codicon codicon-${laying ? 'sync' : 'type-hierarchy'}`} aria-hidden="true" />{' '}
+              {t('canvas.arrange')}
+            </button>
+          </Panel>
+        )}
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
         <Controls showInteractive={false} />
         <MiniMap pannable zoomable className="pg-minimap" />
