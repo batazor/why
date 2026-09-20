@@ -21,7 +21,7 @@ labels:
   calc.inputs: What we know
   calc.result: What follows from it
   calc.law: "Little's law: {peak} jobs/s × {seconds} s = {inFlight} jobs in flight"
-  calc.reads: 'Polling every {poll} s means {perJob} reads per job: {readPeak} requests a second at peak against {peak} writes.'
+  calc.reads: 'Polling every {poll} s means {perJob} reads per job: {readPeak} reads a second at peak against {peak} writes.'
   calc.verdict.single: 'One machine with a pool of goroutines can handle this flow. The queue is there so the user does not wait for an answer; there is nothing to scale yet.'
   calc.verdict.pool: 'This needs a worker pool that scales separately from intake. A queue between them is required.'
   calc.verdict.shard: 'One queue is not enough at this flow. It has to be split: by target host, so a third-party API is not overloaded, and by user, so one of them cannot take the whole pool.'
@@ -33,7 +33,7 @@ labels:
   calc.jobSeconds.unit: s
   calc.peakFactor: Peak above average by
   calc.peakFactor.unit: ×
-  calc.pollSeconds: Client asks for status every
+  calc.pollSeconds: Status polling interval
   calc.pollSeconds.unit: s
   calc.perWorker: Jobs per worker at once
   calc.perWorker.unit: jobs
@@ -47,10 +47,10 @@ labels:
   calc.out.average.unit: jobs/s
   calc.out.peak: Peak rate
   calc.out.peak.unit: jobs/s
-  calc.out.readAverage: Reads on average
-  calc.out.readAverage.unit: req/s
+  calc.out.readAverage: Average read rate
+  calc.out.readAverage.unit: reads/s
   calc.out.readPeak: Reads at peak
-  calc.out.readPeak.unit: req/s
+  calc.out.readPeak.unit: reads/s
   calc.out.inFlight: In flight at once
   calc.out.inFlight.unit: jobs
   calc.out.workers: Workers needed
@@ -156,7 +156,7 @@ labels:
   req.text.NFR-11: 'Temporary target failures do not fail the job'
   req.note.NFR-11: 'a job fails because of a one-second 503'
   req.goal.NFR-11: 'up to 5 attempts, exponential backoff with jitter'
-  req.text.NFR-13: 'The read flow does not land on the intake database'
+  req.text.NFR-13: 'Status reads do not load the intake database'
   req.note.NFR-13: 'status polling takes down the database intake writes to, and NFR-1 with it'
   req.goal.NFR-13: '139 reads/s at peak against 28 writes/s; a cache in front of jobs-pg, reads scale separately'
   req.text.NFR-14: 'A finished job is visible at once'
