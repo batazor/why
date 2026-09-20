@@ -14,6 +14,8 @@
   --pg-accent-soft: var(--accent-soft, #eaf0fd);
   --pg-bad: var(--bad, #b42318);
   --pg-bad-soft: var(--bad-soft, #fdeceb);
+  --pg-good: var(--good, #2f7d32);
+  --pg-good-soft: var(--good-soft, #ecf6ec);
   --pg-radius: 8px;
 
   /* Оттенки категорий блоков: по цвету видно, где хранилища, а где вычисления. */
@@ -3013,4 +3015,137 @@ body:has(.pg) .site-footer {
 .pg-arrange:disabled {
   opacity: 0.6;
   cursor: progress;
+}
+
+/* ----------------------------------------------------- Тренировка */
+
+.pg-train {
+  display: grid;
+  gap: 0.9rem;
+  align-content: start;
+}
+
+/* Шаги полосой: видно и где человек сейчас, и сколько осталось. */
+.pg-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.pg-step {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+  color: var(--pg-muted);
+}
+
+.pg-step__num {
+  display: grid;
+  place-items: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border: 1px solid var(--pg-border);
+  border-radius: 50%;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pg-step.is-on {
+  background: var(--pg-accent-soft);
+  color: var(--pg-accent);
+  font-weight: 600;
+}
+
+.pg-step.is-on .pg-step__num {
+  border-color: currentColor;
+}
+
+.pg-step.is-done {
+  color: var(--pg-good);
+}
+
+.pg-step.is-done .pg-step__num {
+  border-color: currentColor;
+  background: var(--pg-good-soft);
+}
+
+/* Пропущенный шаг не прячется: он попадёт в отчёт, и человек знает об этом. */
+.pg-step.is-skipped {
+  color: var(--pg-bad);
+  text-decoration: line-through;
+}
+
+.pg-checks {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.pg-checks li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--pg-border);
+  border-radius: 6px;
+  background: var(--pg-bg);
+  color: var(--pg-muted);
+}
+
+.pg-checks li > span:first-of-type {
+  flex: 1;
+}
+
+.pg-checks li.is-done {
+  border-color: var(--pg-good);
+  background: var(--pg-good-soft);
+  color: var(--pg-fg);
+}
+
+.pg-checks li.is-done .codicon {
+  color: var(--pg-good);
+}
+
+/* Вводная — то, что ломает уже сделанное: карточка должна бросаться в глаза. */
+.pg-twist {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--pg-bad);
+  border-radius: var(--pg-radius);
+  background: var(--pg-bad-soft);
+}
+
+.pg-twist p {
+  margin: 0.35rem 0 0;
+}
+
+.pg-train__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.pg-button--wide {
+  flex: 1;
+  justify-content: center;
+}
+
+.pg-hint--warn {
+  color: var(--pg-bad);
+}
+
+.pg-report {
+  display: grid;
+  gap: 0.9rem;
+  align-content: start;
+}
+
+/* Снятая автором проверка остаётся в списке, но видно, что она не считается. */
+.pg-checklist li.is-off {
+  opacity: 0.55;
 }

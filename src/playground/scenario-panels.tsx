@@ -1,4 +1,5 @@
 import { ESTIMATE_MODES, uid, totalScore, type Design, type EstimateMode, type Scenario, type ScenarioItem, type Session } from './model';
+import { deriveChecks, mergeChecks, type Check } from './checks';
 import type { T } from './i18n';
 
 type Update = (fn: (design: Design) => Design) => void;
@@ -87,6 +88,73 @@ function ItemList({ design, update, t, list }: Props & { list: ListKey }) {
   );
 }
 
+/**
+ * Проверки тренировки: список, выведенный из эталона.
+ *
+ * Редактора правил здесь нет намеренно. Автор уже нарисовал решение — из него
+ * всё и выводится; его дело — снять то, что в этой задаче не принципиально, и
+ * поднять вес тому, без чего ответ не считается ответом.
+ */
+function ChecksEditor({ design, update, t }: Props) {
+  const checks = design.scenario.checks ?? [];
+  const set = (next: Check[]) => patchScenario(update, { checks: next });
+  const on = checks.filter((check) => !check.off).length;
+
+  return (
+    <section className="pg-req">
+      <header className="pg-req__head">
+        <h3 className="pg-heading">
+          {t('scenario.checks')}{' '}
+          <span className="pg-count">{t('scenario.checksCount', { on: String(on), all: String(checks.length) })}</span>
+        </h3>
+        <button
+          type="button"
+          className="pg-button pg-button--small"
+          disabled={!design.scenario.reference.nodes.length}
+          onClick={() => set(mergeChecks(checks, deriveChecks(design.scenario, t)))}
+        >
+          <i className="codicon codicon-refresh" aria-hidden="true" /> {t('scenario.checksDerive')}
+        </button>
+      </header>
+      <p className="pg-hint">{t('scenario.checksHint')}</p>
+      {!checks.length && <p className="pg-hint pg-hint--empty">{t('scenario.checksEmpty')}</p>}
+      <ol className="pg-checklist">
+        {checks.map((check) => (
+          <li key={check.id} className={check.off ? 'is-off' : ''}>
+            <label className="pg-checklist__check">
+              <input
+                type="checkbox"
+                checked={!check.off}
+                onChange={(event) => {
+                  const off = !event.currentTarget.checked;
+                  set(checks.map((other) => (other.id === check.id ? { ...other, off } : other)));
+                }}
+              />
+              <span>{check.text}</span>
+            </label>
+            <select
+              className="pg-input pg-select pg-weight"
+              aria-label={t('scenario.weight')}
+              value={check.weight}
+              disabled={check.off}
+              onChange={(event) => {
+                const weight = Number(event.currentTarget.value);
+                set(checks.map((other) => (other.id === check.id ? { ...other, weight } : other)));
+              }}
+            >
+              {[1, 2, 3].map((weight) => (
+                <option key={weight} value={weight}>
+                  ×{weight}
+                </option>
+              ))}
+            </select>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
 /* ---------------------------------------------------------- Автор */
 
 export function ScenarioPanel({ design, update, t }: Props) {
@@ -134,6 +202,7 @@ export function ScenarioPanel({ design, update, t }: Props) {
       </label>
       <ItemList design={design} update={update} t={t} list="hints" />
       <ItemList design={design} update={update} t={t} list="rubric" />
+      <ChecksEditor design={design} update={update} t={t} />
       <ItemList design={design} update={update} t={t} list="questions" />
     </div>
   );

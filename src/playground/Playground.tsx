@@ -8,6 +8,7 @@ import { CalcPanel, ChecksPanel, RequirementsPanel, TaskPanel, useFindings } fro
 import { InspectorPanel } from './inspector';
 import { ApiPanel } from './api-panel';
 import { ConductPanel, ScenarioPanel, ScorePanel, elapsed } from './scenario-panels';
+import { TrainPanel } from './train-panel';
 import { BriefCard } from './brief';
 import { RequirementsDoc } from './req-doc';
 import { useIntegrity, isNotable } from './integrity';
@@ -266,11 +267,13 @@ export default function Playground({ lang, repository }: Props) {
   const banner =
     role === 'author'
       ? t('role.authorBanner')
-      : role === 'interviewer'
-        ? board === 'reference'
-          ? t('view.reference')
-          : t('role.interviewerBanner')
-        : undefined;
+      : role === 'trainee'
+        ? t('role.traineeBanner')
+        : role === 'interviewer'
+          ? board === 'reference'
+            ? t('view.reference')
+            : t('role.interviewerBanner')
+          : undefined;
 
   const timer = elapsed(design.session, now);
   const notableSignals = design.session.signals.filter((signal) => isNotable(signal, now)).length;
@@ -531,6 +534,18 @@ export default function Playground({ lang, repository }: Props) {
             {activeTab === 'conduct' && <ConductPanel design={design} update={update} t={t} />}
             {activeTab === 'score' && <ScorePanel design={design} update={update} t={t} />}
             {activeTab === 'signals' && <IntegrityPanel design={design} t={t} lang={lang} />}
+            {activeTab === 'train' && (
+              <TrainPanel
+                design={design}
+                update={update}
+                t={t}
+                now={now}
+                onReset={() => {
+                  setSelection({});
+                  setCanvasKey((key) => key + 1);
+                }}
+              />
+            )}
             {activeTab === 'req' && (
               <>
                 {/* Интервьюер только читает — ему сразу документ, без переключателя. */}

@@ -6,10 +6,21 @@
  * интерфейс с сервером не разъедутся.
  */
 
-export const ROLES = ['author', 'interviewer', 'candidate'] as const;
+export const ROLES = ['author', 'interviewer', 'candidate', 'trainee'] as const;
 export type Role = (typeof ROLES)[number];
 
-export type Tab = 'task' | 'scenario' | 'conduct' | 'score' | 'signals' | 'req' | 'api' | 'calc' | 'inspect' | 'check';
+export type Tab =
+  | 'task'
+  | 'scenario'
+  | 'conduct'
+  | 'score'
+  | 'signals'
+  | 'train'
+  | 'req'
+  | 'api'
+  | 'calc'
+  | 'inspect'
+  | 'check';
 
 export interface Permissions {
   /** Какую доску показывает полотно: эталон автора или ответ кандидата. */
@@ -49,6 +60,21 @@ export const PERMISSIONS: Record<Role, Permissions> = {
     manageProjects: false,
     compare: false,
     tabs: ['req', 'api', 'calc', 'inspect', 'check'],
+  },
+  /**
+   * Тренировка: тот же кандидат, но интервьюера играет песочница.
+   *
+   * Задачу выбирает сам — отсюда manageProjects; эталон не показывается до
+   * конца прохождения — отсюда compare: false. Вкладки «Проверки» нет: её
+   * место занимает «Тренировка», а два списка замечаний рядом только путают.
+   */
+  trainee: {
+    board: 'answer',
+    editBoard: true,
+    editTask: false,
+    manageProjects: true,
+    compare: false,
+    tabs: ['train', 'req', 'api', 'calc', 'inspect'],
   },
 };
 

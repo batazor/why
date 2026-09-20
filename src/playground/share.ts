@@ -1,4 +1,4 @@
-import { emptyBoard, emptyScenario, emptySession, migrate, pickBoard, type Design } from './model';
+import { emptyBoard, emptyScenario, emptySession, emptyTraining, migrate, pickBoard, type Design, type Scenario } from './model';
 import type { Role } from './roles';
 
 /**
@@ -24,6 +24,23 @@ export interface ShareOptions {
   board: boolean;
 }
 
+/**
+ * Сценарий без эталона.
+ *
+ * Тренировке эталон не нужен: проверки из него уже выведены, а сами проверки
+ * ответом не являются — это задание, его и показывают. Подсказки и вопросы
+ * едут: подсказку человек открывает сам и платит за неё очками.
+ */
+function forTraining(design: Design): Scenario {
+  return {
+    ...emptyScenario(),
+    allowChecks: design.scenario.allowChecks,
+    hints: design.scenario.hints,
+    questions: design.scenario.questions,
+    ...(design.scenario.checks ? { checks: design.scenario.checks } : {}),
+  };
+}
+
 /** Что уедет по ссылке: копия проекта без того, чего этой роли видеть нельзя. */
 export function shared(design: Design, options: ShareOptions): Design {
   return {
@@ -31,10 +48,13 @@ export function shared(design: Design, options: ShareOptions): Design {
     ...(options.board ? pickBoard(design) : emptyBoard()),
     scenario: options.scenario
       ? design.scenario
-      : // Настройки остаются: без них кандидат не получит ни калькулятор, ни проверки.
-        { ...emptyScenario(), allowChecks: design.scenario.allowChecks },
+      : options.role === 'trainee'
+        ? forTraining(design)
+        : // Настройки остаются: без них кандидат не получит ни калькулятор, ни проверки.
+          { ...emptyScenario(), allowChecks: design.scenario.allowChecks },
     // Сессия — про одно прохождение: оценки, подсказки и сигналы чужие.
     session: emptySession(),
+    training: emptyTraining(),
   };
 }
 

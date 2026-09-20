@@ -15,6 +15,8 @@ import type { T } from './i18n';
 
 const DEFAULTS: Record<Role, Pick<ShareOptions, 'scenario' | 'board'>> = {
   candidate: { scenario: false, board: false },
+  // Тренировке едут проверки и подсказки, но не эталон: их собирает `shared`.
+  trainee: { scenario: false, board: false },
   interviewer: { scenario: true, board: true },
   author: { scenario: true, board: true },
 };
@@ -60,7 +62,7 @@ export function ShareDialog({ design, t, lang, onClose }: { design: Design; t: T
 
   const tooLong = link.length > LINK_LIMIT;
   const size = new Intl.NumberFormat(lang).format(Math.round(link.length / 102.4) / 10);
-  const leaks = role === 'candidate' && options.scenario;
+  const leaks = (role === 'candidate' || role === 'trainee') && options.scenario;
 
   return (
     <div className="pg-dialog" role="dialog" aria-modal="true" aria-label={t('share.title')} onClick={onClose}>
