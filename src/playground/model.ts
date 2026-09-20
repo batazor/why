@@ -8,6 +8,7 @@
  */
 
 import type { DbTable } from './schema';
+import type { Check } from './checks';
 
 export const SCHEMA_VERSION = 1;
 
@@ -176,6 +177,12 @@ export interface Scenario {
   questions: ScenarioItem[];
   /** Показывать ли кандидату проверки схемы: они подсказывают. */
   allowChecks: boolean;
+  /**
+   * Проверки для тренировки: по ним прохождение в одиночку понимает, что шаг
+   * закрыт. Пусто у сценария, написанного до тренировки, — тогда список
+   * выводится из эталона при первом заходе.
+   */
+  checks?: Check[];
   /** Заметки автора для интервьюера: на что смотреть, где обычно ошибаются. */
   guide: string;
 }
@@ -227,6 +234,33 @@ export interface Session {
   estimateSnapshot?: string;
 }
 
+/**
+ * Шаги прохождения. Порядок один и тот же в любой задаче: сначала требования,
+ * потом контракт, потом схема, потом числа, потом слабые места. Считать до
+ * того, как сформулированы требования, — считать наугад.
+ */
+export const TRAIN_STEPS = ['req', 'api', 'design', 'estimate', 'harden'] as const;
+export type TrainStep = (typeof TRAIN_STEPS)[number];
+
+/** Прохождение в одиночку: где человек сейчас и что с ним уже случилось. */
+export interface Training {
+  /** Текущий шаг. Пройденность шагов не хранится — она считается по проверкам. */
+  step: TrainStep;
+  /** Категории уже прилетевших вводных. */
+  twists: string[];
+  /** Шаги, которые человек закрыл кнопкой «Пропустить», не выполнив проверки. */
+  skipped: TrainStep[];
+  /** Прикидка на момент вводной: пока текст не изменился, он считается старым. */
+  estimateMark?: string;
+  /** Итог на финише: счёт и снимок проверок, чтобы отчёт не менялся задним числом. */
+  score?: number;
+  passed?: Record<string, boolean>;
+}
+
+export function emptyTraining(): Training {
+  return { step: 'req', twists: [], skipped: [] };
+}
+
 /** Что из оценок кандидат видит сейчас: режим автора плюс то, что открыл интервьюер. */
 export function candidateEstimates(design: Design): EstimateMode {
   return design.calc.mode === 'text' && design.session.calcUnlockedAt ? 'calc' : design.calc.mode;
@@ -247,6 +281,7 @@ export interface Design extends Board {
   calc: CalcState;
   scenario: Scenario;
   session: Session;
+  training: Training;
   createdAt: string;
   updatedAt: string;
 }
@@ -290,6 +325,7 @@ export function emptyDesign(title: string): Design {
     calc: { mode: 'off', values: {} },
     scenario: emptyScenario(),
     session: emptySession(),
+    training: emptyTraining(),
     createdAt: now,
     updatedAt: now,
   };
@@ -361,6 +397,20 @@ function migrateBoard(data: Partial<Board> | undefined): Board {
 
 const list = <T,>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : []);
 
+/** Прохождения могло не быть вовсе: тренировка появилась позже формата. */
+function migrateTraining(data: Partial<Training> | undefined): Training {
+  const base = emptyTraining();
+  if (!data) return base;
+  return {
+    step: TRAIN_STEPS.includes(data.step as TrainStep) ? (data.step as TrainStep) : base.step,
+    twists: list(data.twists),
+    skipped: list<TrainStep>(data.skipped).filter((step) => TRAIN_STEPS.includes(step)),
+    estimateMark: typeof data.estimateMark === 'string' ? data.estimateMark : undefined,
+    score: typeof data.score === 'number' ? data.score : undefined,
+    passed: data.passed && typeof data.passed === 'object' ? { ...data.passed } : undefined,
+  };
+}
+
 export function migrate(raw: unknown): Design {
   if (!raw || typeof raw !== 'object') throw new Error('not a design');
   const data = raw as Partial<Design>;
@@ -380,6 +430,7 @@ export function migrate(raw: unknown): Design {
       questions: list(scenario.questions),
       allowChecks: Boolean(scenario.allowChecks),
       guide: typeof scenario.guide === 'string' ? scenario.guide : '',
+      ...(Array.isArray(scenario.checks) ? { checks: scenario.checks } : {}),
     },
     session: {
       revealed: list(session.revealed),
@@ -392,6 +443,7 @@ export function migrate(raw: unknown): Design {
       calcUnlockedAt: session.calcUnlockedAt,
       estimateSnapshot: session.estimateSnapshot,
     },
+    training: migrateTraining(data.training),
     calc: {
       // Первая версия хранила флаг enabled: включённый — это калькулятор.
       mode: ESTIMATE_MODES.includes(data.calc?.mode as EstimateMode)
