@@ -205,7 +205,7 @@ export default function NoisyNeighbour({ data, labels }: Props) {
    */
   const [flow, setFlow] = useState<ReactFlowInstance | null>(null);
   const stage = useRef<HTMLDivElement>(null);
-  const refitTimer = useRef<ReturnType<typeof setTimeout>>();
+  const refitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   /**
    * Подгонка откладывается на такт, а не зовётся сразу.

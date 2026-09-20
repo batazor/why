@@ -192,7 +192,7 @@ const railTo = midY(levels.length - 1);
             animate(
               step.querySelectorAll<HTMLElement>('.levels__head, .levels__text'),
               { opacity: [0, 1], transform: ['translateY(12px)', 'translateY(0px)'] },
-              { duration: 0.46, delay: stagger(0.07), easing: [0.22, 0.9, 0.24, 1] },
+              { duration: 0.46, delay: stagger(0.07), ease: [0.22, 0.9, 0.24, 1] },
             );
           }
         },

@@ -95,7 +95,7 @@ const t = useTranslations(lang);
   // В общий столбик кружков на правом краю — рядом с заданием и таблицей.
   fabRail().append(fab);
   fab.hidden = false;
-  fab.addEventListener('click', () => setOpen(panel.hidden));
+  fab.addEventListener('click', () => setOpen(Boolean(panel.hidden)));
   close.addEventListener('click', () => {
     setOpen(false);
     fab.focus();

@@ -336,7 +336,10 @@ export default function Canvas({ design, update, onSelect, t, addRef, readOnly =
       onDragOver={onDragOver}
       onDrop={onDrop}
       onDragLeave={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) markTarget(null);
+        // `Node` в этом файле — узел схемы из @xyflow/react; здесь нужен узел
+        // DOM, поэтому имя берётся из глобальной области явно.
+        if (!event.currentTarget.contains(event.relatedTarget as globalThis.Node | null))
+          markTarget(null);
       }}
     >
       <ReactFlow
