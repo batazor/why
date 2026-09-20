@@ -55,7 +55,7 @@ labels:
   calc.out.inFlight.unit: jobs
   calc.out.workers: Workers needed
   calc.out.workers.unit: workers
-  calc.out.backlog: Backlog after five minutes of peak
+  calc.out.backlog: Backlog over 5 min of peak, pool sized for the average
   calc.out.backlog.unit: jobs
   calc.out.perDayBytes: Data per day
   calc.out.perDayBytes.unit: ''
@@ -577,6 +577,12 @@ steps:
       peak against 28. The pool is sized by writes, but the database lives under
       reads, and the second number gets lost more often than the first. What to do
       about it is the step on caching.
+
+      The last row of the table answers what a queue is for at all. It computes a
+      different case: a pool sized for the average flow, where five minutes of
+      peak pile up nearly seven thousand jobs. The gap between average and peak
+      does not go anywhere, it accumulates. A pool sized for the peak does not
+      accumulate it, but costs more and idles most of the day.
 
       Try changing the duration. At two seconds a pool of fifty jobs and one machine
       are enough. At thirty, almost a thousand jobs run at once: that needs a
