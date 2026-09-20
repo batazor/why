@@ -39,6 +39,7 @@ export const likec4: LikeC4Spec = {
     'c2-lease': 'scrape_lease',
     'c2-results': 'scrape_results',
     'c2-view': 'scrape_read',
+    cache: 'scrape_cache',
     'c2-full': 'scrape_full',
     'seq-submit': 'scrape_submit_seq',
     'seq-read': 'scrape_read_seq',
@@ -111,6 +112,11 @@ const requirements: RequirementsData = {
     { id: 'NFR-9', kind: 'nfr', step: 'concurrency', goal: 'concurrency' },
     { id: 'NFR-10', kind: 'nfr', step: 'storage', goal: 'storage' },
     { id: 'NFR-11', kind: 'nfr', step: 'retries', goal: 'retries' },
+    // Чтение. Строка приходит на шаге расчёта, где впервые видно, что запросов
+    // статуса на порядок больше, чем принятых джоб; число к ней — на шаге про
+    // кеш, где решено, куда этот поток девать.
+    { id: 'NFR-13', kind: 'nfr', step: 'load', goal: 'cache' },
+    { id: 'NFR-14', kind: 'nfr', step: 'cache', goal: 'cache' },
     // Требование, пришедшее после основного разбора: приоритет джобы.
     { id: 'FR-9', kind: 'fr', step: 'priority' },
     { id: 'NFR-12', kind: 'nfr', step: 'priority', goal: 'priority' },
@@ -180,6 +186,7 @@ export const widgets: WidgetSpec = {
         { key: 'outbox', fits: ['NFR-3'] },
         { key: 'lease', fits: ['NFR-3'] },
         { key: 'query', fits: ['FR-2', 'FR-3'] },
+        { key: 'cache', fits: ['NFR-13', 'NFR-14'] },
         { key: 'results', fits: ['FR-4', 'NFR-10'] },
         { key: 'cancel', fits: ['FR-5'] },
         { key: 'rerun', fits: ['FR-6'] },
@@ -221,6 +228,10 @@ export const widgets: WidgetSpec = {
         // медленный чужой API — за минуту.
         { key: 'jobSeconds', min: 1, max: 300, scale: 'log', value: 20 },
         { key: 'peakFactor', min: 1, max: 20, value: 6 },
+        // Как часто клиент спрашивает «ну что там». Отсюда берётся поток
+        // чтения: он не равен потоку джоб и в норме на порядок больше него.
+        // Секунда — опрос в цикле без паузы, две минуты — «проверю попозже».
+        { key: 'pollSeconds', min: 1, max: 120, scale: 'log', value: 5 },
         { key: 'perWorker', min: 1, max: 100, scale: 'log', value: 20 },
         { key: 'resultKb', min: 1, max: 20_000, scale: 'log', value: 200 },
         { key: 'retentionDays', min: 1, max: 365, value: 30 },
@@ -365,8 +376,11 @@ const deck: CodeDeck = [
   { id: 'c2-transaction' },
   { id: 'c2-workers' },
   { id: 'c2-lease' },
-  // Сначала читающая сторона, потом получение результата поверх неё.
+  // Сначала читающая сторона, потом кеш под ней — поток чтения посчитан на
+  // шаге `load`, и без кеша он упирается в ту же базу, что и приём, — и только
+  // потом получение результата поверх всего этого.
   { id: 'c2-view' },
+  { id: 'cache' },
   { id: 'c2-results' },
   { id: 'c2-full' },
 

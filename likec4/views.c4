@@ -485,6 +485,36 @@ views {
   }
 
   /**
+   * Экран `cache`: кеш под читающей стороной.
+   *
+   * Рядом с базой — шина: без неё не видно, чем сбрасывается ключ. Пишущей
+   * стороны на кадре нет, её линии увели бы взгляд от того, что кеш стоит
+   * ровно на одном пути — от `job-query` к базе.
+   */
+  view scrape_cache {
+    title 'Cache on the read side'
+
+    include
+      scrapeUser,
+      scraper,
+      scraper.gateway,
+      scraper.reader,
+      scraper.cache,
+      scraper.jobs_db,
+      scraper.mq
+
+    // Кадр про чтение: от пользователя — только линия чтения.
+    exclude scrapeUser -> * where kind is write
+
+    // Шина здесь — только источник сброса: публикация в неё разобрана раньше.
+    exclude
+      scraper.publisher -> scraper.mq,
+      * -> * where kind is enqueue or kind is dequeue
+
+    autoLayout LeftRight
+  }
+
+  /**
    * Экраны `seq-submit` и `seq-read`: запросы по шагам.
    *
    * Схема C2 говорит, кто с кем связан, но не в каком порядке. Динамический
@@ -514,7 +544,12 @@ views {
 
     scrapeUser -> scraper.gateway 'GET /jobs/{id}'
     scraper.gateway -> scraper.reader 'status'
+    // Промах: он показывает всех участников. На попадании последовательность
+    // заканчивается на второй строке, и база в ней не участвует.
+    scraper.reader -> scraper.cache 'GET job:{id}'
+    scraper.cache -> scraper.reader 'miss'
     scraper.jobs_db -> scraper.reader 'status, link'
+    scraper.reader -> scraper.cache 'SET job:{id}'
     scraper.gateway <- scraper.reader 'done + presigned URL'
     scrapeUser <- scraper.gateway '200 + presigned URL'
     scraper.results -> scrapeUser 'result by presigned URL'
@@ -570,6 +605,7 @@ view scrape_full {
       scraper.worker,
       scraper.scheduler,
       scraper.jobs_db,
+      scraper.cache,
       scraper.results,
       scraper.mq,
       targets
@@ -582,6 +618,8 @@ view scrape_full {
       scraper.gateway -> scraper.reader with { color gray },
       scraper.command -> scraper.jobs_db with { color gray },
       scraper.jobs_db -> scraper.reader with { color gray },
+      scraper.cache -> scraper.reader with { color gray; tail normal },
+      scraper.mq -> scraper.reader with { color gray },
       scraper.publisher -> scraper.jobs_db with { color gray; tail normal },
       scraper.publisher -> scraper.mq with { color gray },
       scraper.mq -> scraper.worker with { color gray },

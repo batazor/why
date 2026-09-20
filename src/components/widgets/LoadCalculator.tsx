@@ -57,12 +57,33 @@ export default function LoadCalculator({ lang, data, labels }: Props) {
   );
 
   const out = useMemo(() => {
-    const { users, jobsPerUser, jobSeconds, peakFactor, perWorker, resultKb, retentionDays } =
-      values;
+    const {
+      users,
+      jobsPerUser,
+      jobSeconds,
+      peakFactor,
+      perWorker,
+      pollSeconds,
+      resultKb,
+      retentionDays,
+    } = values;
 
     const perDay = users * jobsPerUser;
     const average = perDay / 86_400;
     const peak = average * peakFactor;
+
+    /**
+     * Чтения. Их поток задаёт не число джоб, а то, как часто о джобе
+     * спрашивают: пока она выполняется, клиент опрашивает статус, и ещё один
+     * запрос уходит за самим результатом.
+     *
+     * Отсюда берётся то, чего в разборе легко не заметить: чтений всегда
+     * больше записей, и растут они вместе с длительностью джобы — чем дольше
+     * цель отвечает, тем дольше её статус опрашивают.
+     */
+    const readsPerJob = jobSeconds / pollSeconds + 1;
+    const readAverage = average * readsPerJob;
+    const readPeak = peak * readsPerJob;
 
     // Закон Литтла: сколько джоб находится в работе одновременно — это поток,
     // умноженный на время одной джобы. Отсюда и берётся размер пула.
@@ -80,7 +101,19 @@ export default function LoadCalculator({ lang, data, labels }: Props) {
     const perDayBytes = perDay * resultKb * 1024;
     const stored = perDayBytes * retentionDays;
 
-    return { perDay, average, peak, inFlight, workers, backlog, perDayBytes, stored };
+    return {
+      perDay,
+      average,
+      peak,
+      readsPerJob,
+      readAverage,
+      readPeak,
+      inFlight,
+      workers,
+      backlog,
+      perDayBytes,
+      stored,
+    };
   }, [values]);
 
   /** Объём показывается в той единице, в которой его произносят вслух. */
@@ -107,10 +140,18 @@ export default function LoadCalculator({ lang, data, labels }: Props) {
     .replace('{seconds}', number(values.jobSeconds))
     .replace('{inFlight}', number(out.inFlight));
 
+  const reads = text('calc.reads')
+    .replace('{poll}', number(values.pollSeconds))
+    .replace('{perJob}', number(out.readsPerJob))
+    .replace('{readPeak}', number(out.readPeak))
+    .replace('{peak}', number(out.peak));
+
   const shown: Record<string, string> = {
     perDay: number(out.perDay),
     average: number(out.average),
     peak: number(out.peak),
+    readAverage: number(out.readAverage),
+    readPeak: number(out.readPeak),
     inFlight: number(out.inFlight),
     workers: number(out.workers),
     backlog: number(out.backlog),
@@ -174,6 +215,7 @@ export default function LoadCalculator({ lang, data, labels }: Props) {
           ))}
         </dl>
         <p className="calc__law">{law}</p>
+        <p className="calc__law">{reads}</p>
         <p className="calc__verdict">{verdict}</p>
       </div>
     </div>

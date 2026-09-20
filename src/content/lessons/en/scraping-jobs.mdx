@@ -21,6 +21,7 @@ labels:
   calc.inputs: What we know
   calc.result: What follows from it
   calc.law: "Little's law: {peak} jobs/s × {seconds} s = {inFlight} jobs in flight"
+  calc.reads: 'Polling every {poll} s means {perJob} reads per job: {readPeak} requests a second at peak against {peak} writes.'
   calc.verdict.single: 'One machine with a pool of goroutines can handle this flow. The queue is there so the user does not wait for an answer; there is nothing to scale yet.'
   calc.verdict.pool: 'This needs a worker pool that scales separately from intake. A queue between them is required.'
   calc.verdict.shard: 'One queue is not enough at this flow. It has to be split: by target host, so a third-party API is not overloaded, and by user, so one of them cannot take the whole pool.'
@@ -32,6 +33,8 @@ labels:
   calc.jobSeconds.unit: s
   calc.peakFactor: Peak above average by
   calc.peakFactor.unit: ×
+  calc.pollSeconds: Client asks for status every
+  calc.pollSeconds.unit: s
   calc.perWorker: Jobs per worker at once
   calc.perWorker.unit: jobs
   calc.resultKb: Result size
@@ -44,6 +47,10 @@ labels:
   calc.out.average.unit: jobs/s
   calc.out.peak: Peak rate
   calc.out.peak.unit: jobs/s
+  calc.out.readAverage: Reads on average
+  calc.out.readAverage.unit: req/s
+  calc.out.readPeak: Reads at peak
+  calc.out.readPeak.unit: req/s
   calc.out.inFlight: In flight at once
   calc.out.inFlight.unit: jobs
   calc.out.workers: Workers needed
@@ -149,6 +156,12 @@ labels:
   req.text.NFR-11: 'Temporary target failures do not fail the job'
   req.note.NFR-11: 'a job fails because of a one-second 503'
   req.goal.NFR-11: 'up to 5 attempts, exponential backoff with jitter'
+  req.text.NFR-13: 'The read flow does not land on the intake database'
+  req.note.NFR-13: 'status polling takes down the database intake writes to, and NFR-1 with it'
+  req.goal.NFR-13: '139 reads/s at peak against 28 writes/s; a cache in front of jobs-pg, reads scale separately'
+  req.text.NFR-14: 'A finished job is visible at once'
+  req.note.NFR-14: 'the job is done, the client reads "running" from the cache and keeps polling'
+  req.goal.NFR-14: 'unfinished: TTL 2 s; finished: until retention ends, with the finish event dropping the key'
   req.text.FR-9: 'Set a job priority: high, normal or low'
   req.note.FR-9: 'person, script'
   req.text.NFR-12: 'Urgent jobs go faster, low priority does not starve'
@@ -214,6 +227,9 @@ labels:
   match.card.query: 'job-query'
   match.card.query.text: 'A separate read side: state by id and a filtered list'
   match.why.query: 'Reading state and lists. It scales apart from writes because reads outnumber them.'
+  match.card.cache: 'jobs-cache in front of the database'
+  match.card.cache.text: 'The answer to GET /jobs/{id}; the finish event drops the key'
+  match.why.cache: 'About the read flow: status polling never reaches the database intake writes to, and a finished job is visible at once.'
   match.card.results: 'Result in S3'
   match.card.results.text: 'Data in object storage, the client gets a signed link, files expire by rule'
   match.why.results: 'About serving and keeping the result: large volumes bypass the API, retention is a storage rule.'
@@ -367,6 +383,13 @@ terms:
   presigned: >-
     A time-limited signed link to a file in object storage. The data travels
     straight from storage, and the link cannot be shared forever.
+  Little's law: >-
+    How much work is inside a system at once: the flow multiplied by the time
+    one unit of work spends in it. Queues, pools and waiting time all follow
+    from this one formula.
+  cache: >-
+    A copy of an answer kept next to whoever serves it. It takes load off the
+    source at the price of the copy being able to fall behind it.
   CQRS: >-
     Command Query Responsibility Segregation: writes and reads are served by
     different models and components that scale independently.
@@ -534,9 +557,17 @@ steps:
       average. The load is uneven: more people come in the morning and evening,
       and a sixfold peak gives 28 jobs a second.
 
-      The number of jobs running at once follows Little's law: the flow multiplied
-      by the time one job takes. 28 jobs a second at 20 seconds each is 556 jobs at
-      once. The pool size depends on this number, not on the number of users.
+      The number of jobs running at once follows [[Little's law|Little's law]]:
+      the flow multiplied by the time one job takes. 28 jobs a second at 20 seconds
+      each is 556 jobs at once. The pool size depends on this number, not on the
+      number of users.
+
+      Writes are not the whole flow. While a job runs, people ask about it: polled
+      every five seconds, a twenty-second job collects four status requests, and one
+      more comes for the result. Five reads per write is 139 requests a second at
+      peak against 28. This is the number lost more often than any other, and it
+      decides no less: the pool is sized by writes, the database by reads. What to
+      do about it comes in the step on caching.
 
       Try changing the duration. At two seconds a pool of fifty jobs and one machine
       are enough. At thirty, almost a thousand jobs run at once: that needs a
@@ -734,6 +765,52 @@ steps:
     added:
       - element: scraper.reader
         role: 'Answers what state a job is in and what happened to it. Scales separately from writes: there are more reads.'
+  - id: cache
+    title: 'The cache: where the read flow goes'
+    narration: |-
+      "There are more reads" means 139 requests a second at peak against 28 writes.
+      All of them go to `jobs-pg`. The same database intake writes to, and the
+      availability of intake is NFR-1. So a stubborn polling loop in someone's
+      script takes down job intake it has nothing to do with.
+
+      That is why `jobs-cache` goes between `job-query` and the database. What is
+      cached is the answer to `GET /jobs/{id}`: state, link to the result,
+      timestamps. The key is the job itself, `job:{id}`.
+
+      **The job list is not cached.** `GET /jobs?status=` has its own answer for
+      every filter, sort order and page, and any other job of the same user spoils
+      it. Many keys, few hits, frequent invalidation. What gets cached is what is
+      asked most often and answered identically — one job by id.
+
+      Then comes the part a cache is discussed separately for: it lies. The job has
+      finished, the client reads "running" and keeps polling — the cache did not
+      remove load, it added latency to it. So a job has two lifetimes, not one.
+
+      **While it is unfinished — TTL of two seconds.** That does not save a single
+      poller: at one request every five seconds it misses every time. It saves us
+      from something else — a job usually has more than one reader. An open tab, a
+      script and a page refresh produce several requests within one second, and only
+      one of them reaches the database.
+
+      **Once it is finished — until retention ends.** A final state never changes
+      again, and such a job is read for a long time: people come for the result link
+      an hour later. Those reads never touch the database at all.
+
+      The switch between the two is an event. The fact that a job finished is
+      already travelling through the bus — `job-publisher` publishes it for the
+      webhook. The read side subscribes to the same queue and deletes the key; the
+      next request goes to the database once and puts the final state into the
+      cache. A final state is set once, so there is one message.
+
+      The short TTL is still not redundant, even with invalidation in place. An event
+      can be lost, an expiry cannot: TTL here is the safety net, not the mechanism.
+
+      How many requests the cache actually removes depends on how many readers there
+      are per job. That is measured, not assumed — exactly like the number of jobs
+      per worker.
+    added:
+      - element: scraper.cache
+        role: 'The answer to GET /jobs/{id}: state and link. It sits in front of the database so that status polling never reaches it.'
   - id: c2-results
     title: Getting the result
     note: 'The result goes to the client directly, past api-gateway'

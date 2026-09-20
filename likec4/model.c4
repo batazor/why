@@ -219,6 +219,18 @@ model {
       low = broker 'jobs.low'
     }
 
+    /**
+     * Кеш читающей стороны: статус джобы и ссылка на результат.
+     *
+     * Появляется из расчёта, а не из вкуса: запросов статуса на порядок
+     * больше, чем принятых джоб, и все они шли бы в ту же базу, что и приём.
+     * Держит только то, что отдаёт `GET /jobs/{id}`; списка джоб в нём нет —
+     * он свой у каждого фильтра и протухает от любой чужой джобы.
+     */
+    cache = store 'jobs-cache' {
+      technology 'redis'
+    }
+
     /** Результаты: терабайты, которым нечего делать в базе состояний. */
     results = store 'results-s3' {
       technology 's3'
@@ -248,6 +260,15 @@ model {
 
   scraper.command -[write]-> scraper.jobs_db 'job, published_at = null'
   scraper.jobs_db -[read]-> scraper.reader 'status, attempts'
+
+  /*
+   * Кеш статуса. Читается первым, наполняется на промахе, а сбрасывается не по
+   * таймеру, а по факту: событие о завершении джобы уже едет в шине ради
+   * вебхука, и читающая сторона слушает ту же очередь.
+   */
+  scraper.cache -[read]-> scraper.reader 'cached status'
+  scraper.reader -[write]-> scraper.cache 'fill on miss'
+  scraper.mq -[read]-> scraper.reader 'job finished: drop key'
 
   // Публикатор — единственный, кто пишет в шину: оба события берутся из строк
   // jobs, где отметка публикации ещё пустая.

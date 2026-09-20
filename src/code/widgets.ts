@@ -225,6 +225,11 @@ export const LOAD_OUTPUTS = [
   'perDay',
   'average',
   'peak',
+  // Чтение идёт сразу за записью: на одну принятую джобу приходится несколько
+  // запросов статуса, и порядок этих двух чисел — главное, что калькулятор
+  // должен показать рядом.
+  'readAverage',
+  'readPeak',
   'inFlight',
   'workers',
   'backlog',
@@ -245,6 +250,7 @@ export function widgetLabelKeys(step: WidgetStep): string[] {
         'calc.inputs',
         'calc.result',
         'calc.law',
+        'calc.reads',
         'calc.verdict.single',
         'calc.verdict.pool',
         'calc.verdict.shard',
