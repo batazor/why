@@ -4,9 +4,10 @@ description: >-
   One equality for three questions: how many workers are needed, why the queue
   is growing, and how long a message waits in it.
 problem: >-
-  Pool size gets guessed from the user count, the queue threshold gets set at
-  "how much is too much", and waiting time is never computed at all. All three
-  numbers are tied by one equality, and what goes into it is already measured.
+  The queue is growing, the pool was doubled, it keeps growing. Monitoring has
+  one figure for it: forty thousand messages. That number says neither how long
+  a client waits nor how many machines should have gone in — though both answers
+  sit in the panel beside it, where the arrival rate and the time per task are.
 tags: [system-design, queues, capacity]
 order: 13
 deck: littles-law
@@ -66,13 +67,12 @@ steps:
   - id: problem
     title: How many are in there
     narration: |-
-      "How many workers do we need" is usually settled by a guess: take the user
-      count, divide it by something, round up. "Why is the queue growing" gets
-      closed with a line about load. And "how long does a message wait in the
-      queue" tends not to be asked at all — it is not clear where to look.
+      One number sits behind both questions: how much work is inside the system
+      right now. It does not have to be guessed — it comes out of two others, the
+      arrival flow and the time one unit of work spends inside. Both are usually
+      measured already, just never put together.
 
-      All three come down to one number, and it does not have to be guessed. John
-      Little proved this in 1961, in a five-page paper.
+      John Little proved this in 1961, in a five-page paper.
   - id: law
     title: 'L = λ × W'
     narration: |-
