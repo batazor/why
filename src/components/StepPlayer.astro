@@ -547,9 +547,10 @@ const shikiOptions = {
   };
 
 
-          const panel = (i: number) =>
-            !tree &&
-            merged[i].panel?.code && (
+          const panel = (i: number) => {
+            if (tree || !merged[i].panel?.code) return null;
+
+            const code = (
               <CodePanel
                 lang={lang}
                 caption={merged[i].panel!.caption}
@@ -562,6 +563,17 @@ const shikiOptions = {
               />
             );
 
+            /**
+             * В раскладке с кадрами внутри шагов у шага одна колонка, и код в
+             * ней вставал под текстом, сжатый до его ширины строки. Колонка
+             * рядом при этом пустует: кадр есть не у каждого шага.
+             *
+             * Поэтому код встаёт туда же, куда схема и врезка. Коду ширина
+             * нужна даже больше, чем им: строка в нём не переносится.
+             */
+            return sideBySide ? <div class="step__aside">{code}</div> : code;
+          };
+
           if (solo) {
             const i = group[0];
             return (
@@ -570,7 +582,10 @@ const shikiOptions = {
                   'step',
                   !merged[i].panel?.code && 'step--text',
                   wideSteps.has(merged[i].id) && 'step--wide',
-                  inlineSteps.has(merged[i].id) && !wideSteps.has(merged[i].id) && 'step--aside',
+                  !wideSteps.has(merged[i].id) &&
+                    (inlineSteps.has(merged[i].id) ||
+                      (sideBySide && !tree && merged[i].panel?.code)) &&
+                    'step--aside',
                   i === 0 && 'is-active',
                 ]}
                 data-step={i}
