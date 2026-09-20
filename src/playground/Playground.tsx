@@ -25,7 +25,9 @@ import {
   type DesignSummary,
 } from './model';
 import { LocalRepository, exportFile, importFile, lastOpened, type DesignRepository } from './storage';
-import { exampleDesign } from './example';
+import { exampleDesign, isUntouched } from './example';
+import { ShareDialog } from './share-dialog';
+import { clearPayload, decodeDesign, payloadFromUrl } from './share';
 import { translator } from './i18n';
 import { PERMISSIONS, ROLES, initialRole, rememberRole, type Role, type Tab } from './roles';
 
@@ -61,6 +63,7 @@ export default function Playground({ lang, repository }: Props) {
   const [status, setStatus] = useState<'saved' | 'saving'>('saved');
   const [canvasKey, setCanvasKey] = useState(0);
   const [now, setNow] = useState(() => Date.now());
+  const [sharing, setSharing] = useState(false);
   /** Требования таблицей или списком на правку. Выбор — удобство смотрящего, живёт в браузере. */
   const [reqView, setReqView] = useState<'table' | 'edit'>(() => {
     try {
@@ -92,20 +95,48 @@ export default function Playground({ lang, repository }: Props) {
     lastOpened.set(next.id);
   }, [load]);
 
-  /** Первый заход: последний открытый проект, иначе пример — пустое полотно ничего не объясняет. */
+  /**
+   * Первый заход: последний открытый проект, иначе пример — пустое полотно
+   * ничего не объясняет.
+   *
+   * Пример, который не правили, заодно обновляется до текущей версии: иначе
+   * сохранённый в браузере старый сценарий пережил бы любые правки песочницы,
+   * и человек считал бы, что ничего не изменилось.
+   */
   useEffect(() => {
     (async () => {
+      /**
+       * Присланная ссылка сильнее всего: её открыли, чтобы посмотреть именно
+       * этот сценарий. Но если по нему уже есть работа, она важнее ссылки.
+       */
+      const payload = payloadFromUrl();
+      if (payload) {
+        try {
+          const incoming = await decodeDesign(payload);
+          clearPayload();
+          const mine = await repo.load(incoming.id);
+          if (!mine || isUntouched(mine)) await repo.save(incoming);
+          setProjects(await repo.list());
+          return open(mine && !isUntouched(mine) ? mine : incoming);
+        } catch {
+          // Ссылка битая или обрезанная — открываем песочницу как обычно.
+          clearPayload();
+        }
+      }
+
+      const fresh = exampleDesign(lang);
+      const stored = await repo.load(fresh.id);
+      if (!stored || isUntouched(stored)) await repo.save(fresh);
+
       const list = await repo.list();
       setProjects(list);
       const id = lastOpened.get() ?? list[0]?.id;
       const found = id ? await repo.load(id) : null;
-      if (found) return open(found);
-      const example = exampleDesign(lang);
-      await repo.save(example);
-      await refresh();
-      open(example);
+      // Нетронутый проект терять нечего: если в нём не было ни одной правки
+      // (например, это пример прошлой версии), открывается свежий пример.
+      open(found && !isUntouched(found) ? found : fresh);
     })();
-  }, [repo, lang, open, refresh]);
+  }, [repo, lang, open]);
 
   /**
    * Полотно, требования и калькулятор работают с «доской» — верхними полями
@@ -374,6 +405,12 @@ export default function Playground({ lang, repository }: Props) {
           </>
         )}
 
+        {role !== 'candidate' && (
+          <button type="button" className="pg-button" onClick={() => setSharing(true)}>
+            <i className="codicon codicon-link" aria-hidden="true" /> {t('share.button')}
+          </button>
+        )}
+
         {perms.manageProjects && (
           <>
             <button type="button" className="pg-button" onClick={() => exportFile(design)}>
@@ -448,6 +485,8 @@ export default function Playground({ lang, repository }: Props) {
           {t(status === 'saved' ? 'pg.saved' : 'pg.saving')}
         </span>
       </div>
+
+      {sharing && <ShareDialog design={design} t={t} lang={lang} onClose={() => setSharing(false)} />}
 
       <div className={`pg-body ${readOnly ? 'pg-body--no-palette' : ''}`}>
         {!readOnly && <Palette t={t} onAdd={(kind) => adder.current(kind)} />}

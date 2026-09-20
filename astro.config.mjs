@@ -77,6 +77,8 @@ export default defineConfig({
         '@vscode-elements/elements/dist/vscode-tree-item/index.js',
         '@xyflow/react',
         'motion',
+        // Палитра песочницы анимируется React-обёрткой motion — она отдельный вход.
+        'motion/react',
       ],
     },
   },

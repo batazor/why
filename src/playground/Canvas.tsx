@@ -23,6 +23,7 @@ import '@xyflow/react/dist/style.css';
 import { blockSpec } from './catalog';
 import { techName } from './competency';
 import { ROUTE_DRAG, assignRoute } from './api-templates';
+import FloatingEdge from './FloatingEdge';
 import { REQ_DRAG, coverRequirement, uid, type Design, type DesignEdge, type DesignNode } from './model';
 import type { T } from './i18n';
 
@@ -76,36 +77,18 @@ function BlockNode({ data, selected }: NodeProps) {
 }
 
 const nodeTypes = { block: BlockNode };
+const edgeTypes = { floating: FloatingEdge };
 
 function toFlowNode(node: DesignNode, t: T, reqs: string[]): Node {
   return { id: node.id, type: 'block', position: { x: node.x, y: node.y }, data: { node, t, reqs } };
 }
 
-/** Размер блока для выбора сторон: совпадает с шириной и высотой .pg-block. */
-const BLOCK = { w: 180, h: 56 };
-
-/**
- * Стороны, к которым цепляется связь, выбираются по взаимному положению
- * блоков, а не по ручке, от которой её тянули: блоки двигают, и связь,
- * прибитая к верхней стороне, после этого петляет вокруг блока.
- */
-function sides(from?: DesignNode, to?: DesignNode): [string, string] {
-  if (!from || !to) return ['r', 'l'];
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  // Горизонталь выигрывает с запасом: блок шире, чем выше.
-  if (Math.abs(dx) * (BLOCK.h / BLOCK.w) * 2 >= Math.abs(dy)) return dx >= 0 ? ['r', 'l'] : ['l', 'r'];
-  return dy >= 0 ? ['b', 't'] : ['t', 'b'];
-}
-
-function toFlowEdge(edge: DesignEdge, nodes: Map<string, DesignNode>): Edge {
-  const [sourceHandle, targetHandle] = sides(nodes.get(edge.source), nodes.get(edge.target));
+function toFlowEdge(edge: DesignEdge): Edge {
   return {
     id: edge.id,
+    type: 'floating',
     source: edge.source,
     target: edge.target,
-    sourceHandle,
-    targetHandle,
     label: edge.label || undefined,
     // Асинхронная связь бежит пунктиром: сообщение ушло, отправитель не ждёт.
     animated: edge.mode === 'async',
@@ -166,12 +149,11 @@ export default function Canvas({ design, update, onSelect, t, addRef, readOnly =
   }, [design.nodes, design.requirements, t]);
 
   useEffect(() => {
-    const nodes = new Map(design.nodes.map((node) => [node.id, node]));
     setEdges((previous) => {
       const byId = new Map(previous.map((edge) => [edge.id, edge]));
-      return design.edges.map((edge) => ({ ...byId.get(edge.id), ...toFlowEdge(edge, nodes) }));
+      return design.edges.map((edge) => ({ ...byId.get(edge.id), ...toFlowEdge(edge) }));
     });
-  }, [design.edges, design.nodes]);
+  }, [design.edges]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -330,6 +312,7 @@ export default function Canvas({ design, update, onSelect, t, addRef, readOnly =
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}

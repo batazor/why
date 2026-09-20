@@ -293,31 +293,156 @@ body:has(.pg) .site-footer {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 13.5rem minmax(0, 1fr) 25rem;
+  /* Ширину палитры задаёт она сама: развёрнутая — колонка, свёрнутая — полоса. */
+  grid-template-columns: auto minmax(0, 1fr) 25rem;
 }
 
 /* ------------------------------------------------------------- Палитра */
 
 .pg-palette {
+  width: 13.5rem;
   overflow-y: auto;
   padding: 0.75rem;
   border-right: 1px solid var(--pg-border);
   background: var(--pg-panel);
+  transition: width 0.18s ease;
 }
 
-.pg-palette__filter {
-  margin-top: 0.5rem;
+.pg-palette__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+/* Поиск со значком внутри поля: строка ввода и так узкая. */
+.pg-palette__search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.pg-palette__search .codicon {
+  position: absolute;
+  left: 0.45rem;
+  font-size: 13px;
+  color: var(--pg-muted);
+  pointer-events: none;
+}
+
+.pg-palette__search .pg-input {
+  padding-left: 1.65rem;
+  border-radius: 999px;
 }
 
 .pg-palette__group {
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.4rem;
 }
 
+/* Заголовок группы — кнопка: по нему сворачивают категорию. */
 .pg-palette__category {
-  margin: 0 0 0.3rem;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: 100%;
+  margin: 0 0 0.25rem;
+  padding: 0.25rem 0.2rem;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  font: inherit;
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--pg-muted);
+  cursor: pointer;
+}
+
+.pg-palette__category:hover {
+  background: var(--pg-bg);
+  color: var(--pg-fg);
+}
+
+.pg-palette__category .pg-count {
+  margin-left: auto;
+}
+
+.pg-palette__chevron {
+  font-size: 13px;
+  transition: transform 0.18s ease;
+}
+
+.pg-palette__category.is-open .pg-palette__chevron {
+  transform: rotate(90deg);
+}
+
+.pg-palette__cat-icon {
+  font-size: 13px;
+  color: var(--pg-tint);
+}
+
+/* Свёрнутая палитра: полоса значков категорий, она же кнопка «раскрыть». */
+.pg-palette--rail {
+  width: 3rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.6rem 0.4rem;
+  /* Меню категории выезжает за пределы полосы, поэтому обрезать нельзя. */
+  overflow: visible;
+}
+
+.pg-rail__slot {
+  position: relative;
+}
+
+/* Список категории рядом с полосой: те же строки, что в развёрнутой палитре. */
+.pg-rail__flyout {
+  position: absolute;
+  top: -0.35rem;
+  left: 2.5rem;
+  z-index: 20;
+  width: 13rem;
+  padding: 0.5rem;
+  border: 1px solid var(--pg-border);
+  border-radius: var(--pg-radius);
+  background: var(--pg-panel);
+  box-shadow: 0 8px 26px var(--shadow, rgba(16, 18, 22, 0.12));
+}
+
+.pg-rail__flyout-title {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-bottom: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--pg-muted);
+}
+
+.pg-palette__rail-item {
+  cursor: grab;
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border: 1px solid var(--pg-border);
+  border-radius: 8px;
+  background: var(--pg-bg);
+  color: var(--pg-tint);
+  cursor: pointer;
+}
+
+.pg-palette__rail-item:hover {
+  border-color: var(--pg-tint);
+  background: var(--pg-panel);
+}
+
+.pg-palette__toggle:hover {
+  color: var(--pg-accent);
+  background: var(--pg-accent-soft);
 }
 
 .pg-palette__list {
@@ -325,7 +450,8 @@ body:has(.pg) .site-footer {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.25rem;
+  gap: 0.2rem;
+  overflow: hidden;
 }
 
 .pg-palette__item {
@@ -343,10 +469,34 @@ body:has(.pg) .site-footer {
   border-radius: 6px;
   padding: 0.3rem 0.5rem;
   cursor: grab;
+  transition: border-color 0.12s ease, background-color 0.12s ease;
 }
 
+/* Наведение — только цвет: строку двигать незачем, её и так берут мышью. */
 .pg-palette__item:hover {
   border-color: var(--pg-tint);
+  background: color-mix(in srgb, var(--pg-tint) 8%, var(--pg-bg));
+}
+
+/* Плюс проявляется на наведении: щелчок по строке тоже добавляет блок. */
+.pg-palette__add {
+  margin-left: auto;
+  font-size: 12px !important;
+  color: var(--pg-muted);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.pg-palette__item:hover .pg-palette__add {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pg-palette,
+  .pg-palette__item,
+  .pg-palette__chevron {
+    transition: none;
+  }
 }
 
 .pg-palette__item:active {
@@ -388,13 +538,23 @@ body:has(.pg) .site-footer {
   --xy-connectionline-stroke: var(--pg-accent);
 }
 
-.pg-canvas .react-flow__edge-textbg {
-  fill: var(--pg-panel);
+/* Подпись связи — плашка поверх схемы, а не текст под блоками. */
+.pg-edge-label {
+  position: absolute;
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--pg-border);
+  border-radius: 5px;
+  background: var(--pg-panel);
+  color: var(--pg-muted);
+  font-size: 0.68rem;
+  line-height: 1.5;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
-.pg-canvas .react-flow__edge-text {
-  font-size: 11px;
-  fill: var(--pg-fg);
+.pg-edge-label.is-selected {
+  border-color: var(--pg-accent);
+  color: var(--pg-accent);
 }
 
 .pg-canvas .react-flow__edge.selected .react-flow__edge-path {
@@ -751,8 +911,10 @@ body:has(.pg) .site-footer {
     height: 60vh;
   }
 
-  .pg-palette {
+  .pg-palette,
+  .pg-palette--rail {
     order: 2;
+    width: auto;
     border-right: 0;
     border-top: 1px solid var(--pg-border);
     max-height: 14rem;
@@ -2812,4 +2974,28 @@ body:has(.pg) .site-footer {
 
 .pg-schema__grid {
   grid-template-columns: repeat(auto-fill, minmax(24rem, 1fr));
+}
+
+/* ------------------------------------------------------------ Поделиться */
+
+.pg-share {
+  width: min(34rem, 100%);
+}
+
+.pg-share__body {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.9rem 1rem 1.1rem;
+}
+
+.pg-share__link {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.72rem;
+  overflow-wrap: anywhere;
+  resize: none;
+}
+
+.pg-note--warn {
+  background: var(--pg-bad-soft);
+  color: var(--pg-bad);
 }
