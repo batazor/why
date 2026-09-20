@@ -62,6 +62,7 @@ export default function LoadCalculator({ lang, data, labels }: Props) {
       jobsPerUser,
       jobSeconds,
       peakFactor,
+      queueSeconds,
       perWorker,
       pollSeconds,
       resultKb,
@@ -73,21 +74,31 @@ export default function LoadCalculator({ lang, data, labels }: Props) {
     const peak = average * peakFactor;
 
     /**
-     * Чтения. Их поток задаёт не число джоб, а то, как часто о джобе
-     * спрашивают: пока она выполняется, клиент опрашивает статус, и ещё один
-     * запрос уходит за самим результатом.
-     *
-     * Отсюда берётся то, чего в разборе легко не заметить: чтений всегда
-     * больше записей, и растут они вместе с длительностью джобы — чем дольше
-     * цель отвечает, тем дольше её статус опрашивают.
+     * Время от приёма до результата: ожидание в очереди плюс выполнение.
+     * Обещание пользователю даётся про него целиком, а пул считается только по
+     * второму слагаемому — ждущая джоба воркера не занимает.
      */
-    const readsPerJob = jobSeconds / pollSeconds + 1;
+    const timeInSystem = queueSeconds + jobSeconds;
+
+    /**
+     * Чтения. Их поток задаёт не число джоб, а то, как часто о джобе
+     * спрашивают: клиент получил идентификатор и опрашивает статус, пока джоба
+     * не готова, а потом делает ещё один запрос за результатом.
+     *
+     * Опрос идёт и пока джоба стоит в очереди, поэтому здесь время целиком, а
+     * не одно выполнение. Отсюда связь, которой в разборе легко не заметить:
+     * выросшая очередь сама по себе добавляет базе чтений.
+     */
+    const readsPerJob = timeInSystem / pollSeconds + 1;
     const readAverage = average * readsPerJob;
     const readPeak = peak * readsPerJob;
 
-    // Закон Литтла: сколько джоб находится в работе одновременно — это поток,
-    // умноженный на время одной джобы. Отсюда и берётся размер пула.
+    /**
+     * Закон Литтла: поток, умноженный на время. На выполнении он даёт число
+     * одновременно работающих джоб, на ожидании — длину очереди.
+     */
     const inFlight = peak * jobSeconds;
+    const queued = peak * queueSeconds;
     const workers = Math.ceil(inFlight / perWorker);
 
     /**
@@ -108,7 +119,9 @@ export default function LoadCalculator({ lang, data, labels }: Props) {
       readsPerJob,
       readAverage,
       readPeak,
+      timeInSystem,
       inFlight,
+      queued,
       workers,
       backlog,
       perDayBytes,
@@ -152,7 +165,9 @@ export default function LoadCalculator({ lang, data, labels }: Props) {
     peak: number(out.peak),
     readAverage: number(out.readAverage),
     readPeak: number(out.readPeak),
+    timeInSystem: number(out.timeInSystem),
     inFlight: number(out.inFlight),
+    queued: number(out.queued),
     workers: number(out.workers),
     backlog: number(out.backlog),
     perDayBytes: bytes(out.perDayBytes),

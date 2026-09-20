@@ -33,6 +33,8 @@ labels:
   calc.jobSeconds.unit: s
   calc.peakFactor: Peak above average by
   calc.peakFactor.unit: ×
+  calc.queueSeconds: A job waits in the queue
+  calc.queueSeconds.unit: s
   calc.pollSeconds: Status polling interval
   calc.pollSeconds.unit: s
   calc.perWorker: Jobs per worker at once
@@ -51,8 +53,12 @@ labels:
   calc.out.readAverage.unit: reads/s
   calc.out.readPeak: Reads at peak
   calc.out.readPeak.unit: reads/s
+  calc.out.timeInSystem: Accepted to result
+  calc.out.timeInSystem.unit: s
   calc.out.inFlight: In flight at once
   calc.out.inFlight.unit: jobs
+  calc.out.queued: Queued at peak
+  calc.out.queued.unit: jobs
   calc.out.workers: Workers needed
   calc.out.workers.unit: workers
   calc.out.backlog: Backlog over 5 min of peak, pool sized for the average
@@ -158,7 +164,7 @@ labels:
   req.goal.NFR-11: 'up to 5 attempts, exponential backoff with jitter'
   req.text.NFR-13: 'Status reads do not load the intake database'
   req.note.NFR-13: 'status polling takes down the database intake writes to, and NFR-1 with it'
-  req.goal.NFR-13: '139 reads/s at peak against 28 writes/s; a cache in front of jobs-pg, reads scale separately'
+  req.goal.NFR-13: '167 reads/s at peak against 28 writes/s; a cache in front of jobs-pg, reads scale separately'
   req.text.NFR-14: 'A finished job is visible at once'
   req.note.NFR-14: 'the job is done, the client reads "running" from the cache and keeps polling'
   req.goal.NFR-14: 'unfinished: TTL 2 s; finished: until retention ends, with the finish event dropping the key'
@@ -571,12 +577,20 @@ steps:
       each is 556 jobs at once. The pool size depends on this number, not on the
       number of users.
 
-      Writes are not the whole flow. While a job runs, people ask about it: polled
-      every five seconds, a twenty-second job collects four status requests, and one
-      more comes for the result. Five reads per write is 139 requests a second at
-      peak against 28. The pool is sized by writes, but the database lives under
-      reads, and the second number gets lost more often than the first. What to do
-      about it is the step on caching.
+      Writes are not the whole flow. People ask about a job, and they start asking
+      the minute it is accepted. Five seconds in the queue plus twenty of running,
+      polled every five seconds, is five status requests and one more for the
+      result. Six reads per write, that is 167 reads a second at peak against 28
+      writes. The pool is sized by writes, but the database lives under reads, and
+      the second number gets lost more often than the first. What to do about it is
+      the step on caching.
+
+      Waiting is a slider here rather than a result: what it will be is not
+      something Little's law says. What it does is turn it into jobs — 139 of them
+      queued at peak — and let NFR-8 be checked. While the average wait is five
+      seconds the promise that "95% of jobs start within the first minute" holds;
+      move the slider towards a minute and it breaks, and the read flow grows with
+      it.
 
       The last row of the table answers what a queue is for at all. It computes a
       different case: a pool sized for the average flow, where five minutes of
@@ -783,7 +797,7 @@ steps:
   - id: cache
     title: A cache on the read side
     narration: |-
-      139 reads a second at peak against 28 writes, and all 139 land on
+      167 reads a second at peak against 28 writes, and all 167 land on
       `jobs-pg` — the same database intake writes to. The availability of intake
       is NFR-1, so a polling loop in someone's script can take down job intake it
       has nothing to do with.
