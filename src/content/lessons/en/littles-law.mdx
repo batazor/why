@@ -1,12 +1,12 @@
 ---
 title: "Little's law"
 description: >-
-  Three quantities, one equality, and answers to three questions at once: how
-  many workers, why the queue is growing, and how long a message waits.
+  One equality for three questions: how many workers are needed, why the queue
+  is growing, and how long a message waits in it.
 problem: >-
-  Pool size gets named after the user count, queue depth gets a "how much is
-  too much" threshold, and waiting time is never computed at all. All three
-  numbers are tied by one equality, and what goes into it is already known.
+  Pool size gets guessed from the user count, the queue threshold gets set at
+  "how much is too much", and waiting time is never computed at all. All three
+  numbers are tied by one equality, and what goes into it is already measured.
 tags: [system-design, queues, capacity]
 order: 13
 deck: littles-law
@@ -16,12 +16,6 @@ comments:
   poolFromService: 'The pool is sized by service: waiting items do not hold a worker.'
   solvedForTime: 'W = L / lambda — the same equality, solved for time.'
 labels:
-  kindFlow: flow
-  kindSystem: system
-  arrivals: What comes in
-  system: What is inside
-  howMany: how many are in there?
-  guessed: named by eye
   law.inputs: What we know
   law.result: What follows from it
   law.formula: '{arrivals} /s × {timeInSystem} s = {inSystem} inside at any moment'
@@ -71,153 +65,151 @@ terms:
 steps:
   - id: problem
     title: How many are in there
-    narration: >-
-      "How many workers do we need?" — "Well, fifty thousand users, let's say
-      twenty machines." "Why is the queue growing?" — "Load went up." "How long
-      does a message wait?" — that one usually gets no answer at all, because
-      nobody knows where to look. Three conversations, three guesses. It is one
-      question, and its answer is not guessed: it follows from two numbers both
-      people already have at that moment.
+    narration: |-
+      "How many workers do we need" is usually settled by a guess: take the user
+      count, divide it by something, round up. "Why is the queue growing" gets
+      closed with a line about load. And "how long does a message wait in the
+      queue" tends not to be asked at all — it is not clear where to look.
+
+      All three come down to one number, and it does not have to be guessed. John
+      Little proved this in 1961, in a five-page paper.
   - id: law
     title: 'L = λ × W'
     narration: |-
-      Take any system that things enter and leave: a message queue, a worker
-      pool, a supermarket till, an emergency room. How many units of work are
-      inside it at once is the arrival flow multiplied by the time one unit
-      spends inside.
+      Take anything work enters and leaves: a message queue, a worker pool, a
+      supermarket till, an emergency room. How many units of work are inside is
+      the arrival flow multiplied by the time one unit spends there.
 
       [[L]] = [[λ]] × [[W]]. Ten requests a second, each living inside for thirty
-      seconds — three hundred are always inside. The units work out on their own:
-      items per second multiplied by seconds gives items.
+      seconds — three hundred are always inside. The dimensions work out on their
+      own: items per second times seconds gives items.
 
-      What is remarkable about the law is not what it requires but what it does
-      **not**. It does not care how units arrive: in a steady stream, Poisson, in
-      bursts of a thousand. It does not care in what order they are served: in
-      turn, from the back, by priority, at random. It does not care how many
-      servers there are or whether they are equally fast. There is no
-      distribution to plug in.
+      The formula was in use before Little, but as a rule of thumb. He proved it,
+      and along the way showed what the proof needs: stationary processes and
+      finite means for all three quantities. Nothing about how arrivals are
+      distributed, in what order things are served, or how many servers there are.
 
-      That is why it works where ordinary queueing theory already fails: queueing
-      theory needs to know how arrivals are distributed, and that data is not
-      always there. The equality is not an approximation and not a model. Under
-      one condition, covered in the step on stability, it holds exactly.
+      That is what makes it useful. Queueing theory needs to know the arrival
+      distribution — Poisson, deterministic, something else; without it there is
+      nothing to compute. Little does not care. Steady arrivals, bursts of a
+      thousand, service in order, from the back or by priority — the equality
+      holds.
   - id: calc
     title: Three quantities, move any of them
     narration: |-
-      The calculator is on the right. Move "arrives per second" and the number
-      inside moves with it. Move "stays inside" and it moves exactly the same
-      way. The law is symmetric: doubling the flow and doubling the time give one
-      and the same result.
+      The calculator is on the right. Move the flow and the number inside moves.
+      Move the time and it moves the same way. The two factors are equals.
 
-      From this comes the consequence it is most often recalled for: **making
-      service faster is the same thing as reducing load.** If a job takes ten
-      seconds instead of twenty, half as many are inside, and the pool halves —
-      at the same flow and the same users. Optimising one request and switching
-      off half the clients do the same thing to pool size.
+      Which gives the conclusion the formula is remembered for: halving service
+      time is the same thing as halving the load. A job that takes ten seconds
+      instead of twenty means half as many inside and half the pool. Same users,
+      same requests.
 
-      And the other way round: a slow third-party dependency raises our hardware
-      bill without touching a single number of ours. Same flow, same users, three
-      times as many inside, because the target started answering three times
-      slower.
+      It works the other way round too, and that direction is usually noticed
+      first. A third-party API got three times slower and the hardware bill
+      tripled. Not one of our own numbers changed.
   - id: split
     title: The queue is a difference
     narration: |-
-      The law applies not only to the system as a whole. It holds for any part of
-      it that has an entrance and an exit — and this is where it starts answering
-      the questions worth knowing it for.
+      The box can be anything with an entrance and an exit. So the law applies to
+      a part of the system as well — and that is where it starts answering the
+      questions worth knowing it for.
 
-      Apply it twice. To the whole system: λ × W, everything inside. To service
-      alone: λ × S, where S is the service time without waiting. The first number
-      is every unit inside, the second is the ones actually being worked on. The
-      difference between them is the queue.
+      Apply it twice. To the whole system: λ × W, everything inside. To service:
+      λ × S, where S is service time without the waiting. The difference is the
+      queue.
 
       Ten a second, thirty seconds inside, ten of them service. Three hundred
-      inside, a hundred being served, two hundred waiting. Not because we decided
-      so — because otherwise the equality does not hold.
+      inside, a hundred being served, two hundred waiting. Those two hundred are
+      not the output of a simulation; the equality does not balance otherwise.
 
-      That gives the answer about the pool. **Size it by service, not by
-      everything inside.** A waiting unit sits in the queue and holds no
-      resource: a hundred servers are enough for three hundred units inside.
-      Sizing the pool by λ × W means buying three times more machines than needed
-      and letting them idle.
+      What matters next is not mixing up which of the two numbers the pool is
+      sized by. A waiting unit sits in the queue and holds no worker, so the
+      figure to use is λ × S. Sizing by λ × W buys three times more machines than
+      the work needs.
+
+      Brian Goetz writes a related form of this in Java Concurrency in Practice:
+      threads = cores × target utilisation × (1 + wait time / service time). The
+      ratio in brackets is the same wait-to-service split, and it is why a pool
+      needs more threads than the machine has cores.
   - id: inverse
     title: 'The other direction: how long the wait is'
     narration: |-
-      The same equality solved for time: W = L / λ. How many units are inside,
-      divided by the flow, is how long a unit spends inside.
+      The same equality solved for W: W = L / λ.
 
-      This is how monitoring is read. "Forty thousand messages in the queue"
-      means nothing by itself: it can be a normal working state or an outage.
-      Divide it by the drain rate. Two hundred a second — forty thousand take two
-      hundred seconds. Now it is clear: the threshold "depth above forty
-      thousand" is really the threshold "a message waits more than three
-      minutes".
+      This is how queue charts are read. "Forty thousand messages" says nothing on
+      its own — it can be a working state or an outage. Divide by the drain rate:
+      two hundred a second means two hundred seconds. The threshold "depth above
+      forty thousand" actually reads "a message waits more than three minutes".
 
-      Hence a rule often stated without explanation: **alert on the age of the
-      oldest item, not on queue depth.** Age is W, the very thing promised to the
-      user. Depth is L, a number that means nothing without λ: a thousand
-      messages drained at ten thousand a second is harmless, a hundred drained at
-      one a second is already an outage.
+      Hence the advice usually handed over without explanation: alert on the age
+      of the oldest message, not on depth. Age is W, the thing promised to the
+      user. Depth without λ means nothing: a thousand messages drained at ten
+      thousand a second is a tenth of a second, while a hundred messages drained
+      at one a second is over a minute and a half.
   - id: stable
     title: The one condition
     narration: |-
-      The law has one condition: the system must be [[stable|stable system]].
-      Over a long enough window, as much leaves it as enters.
+      There is exactly one condition: the system has to be
+      [[stable system|stable]]. Over a long enough window, as much leaves it as
+      enters. Little states it more strictly — stationary processes and finite L,
+      λ and W — but this is what gets checked in practice.
 
-      If the flow exceeds what the system manages to serve, there is no
-      stability. The queue grows, the time inside grows with it, and no "average
-      W" exists — it increases every minute. The law does not break here: it
-      still holds and honestly reports that L is growing. There is simply nothing
-      to predict with it. What has to be computed in that situation is not W but
-      the gap between flow and capacity — and then fixed.
+      When the flow is larger than the system manages to serve, there is no
+      stability. The queue grows, the time inside grows with it, and no average W
+      exists: it goes up every minute. The equality does not break, it honestly
+      reports that L is growing. There is just nothing to predict with it, and
+      what has to be computed is not W but the gap between flow and capacity.
 
-      Capacity comes out of the same numbers: servers divided by service time. A
-      hundred servers at ten seconds each is exactly ten units a second. At a flow
-      of ten a second utilisation is a hundred per cent, and that is not "it
-      worked out perfectly" but the state in which any unevenness turns into a
-      growing queue.
+      Capacity comes from the same two numbers: servers divided by service time.
+      A hundred servers at ten seconds each is exactly ten units a second. If the
+      flow is also ten, utilisation is a hundred per cent. That is not "it worked
+      out perfectly" but the state where any spike turns into a queue that will
+      not drain again.
 
-      The second thing easy to forget: the window has to be long compared with W.
-      For a job a minute long the law answers about tens of minutes, not about
-      what happens inside one of them.
+      And about the window. It has to be long relative to W. For a job a minute
+      long the law answers about half an hour, not about what happened in one
+      particular minute.
   - id: traps
     title: What it does not promise
     narration: |-
-      The law is exact, but it answers exactly what it was asked. Three things it
-      does not say, and all three get attributed to it regularly.
+      The law is exact, which is exactly why it is easy to stretch over things it
+      says nothing about.
 
-      **It is not about peaks.** All three quantities are averages. Three hundred
-      inside on average can mean a steady three hundred, or zero one moment and
-      three thousand the next. A pool sized by the average will not hold at peak,
-      which is where the separate unevenness multiplier in estimates comes from.
+      Its quantities are averages. Three hundred inside can mean a steady three
+      hundred, or zero for half a day and three thousand at the evening peak. A
+      pool sized by the average will not hold at peak; that is where the separate
+      unevenness multiplier in estimates comes from.
 
-      **It is not about spread.** The law does not say how long the unluckiest
-      unit waits. An average wait of twenty seconds is compatible with one per
-      cent waiting ten minutes. That is exactly why promises to users are written
-      in percentiles rather than averages.
+      It says nothing about spread either. An average wait of twenty seconds sits
+      comfortably with one per cent of requests waiting ten minutes. Which is why
+      promises to users are written as percentiles and never as averages.
 
-      **It is not about what happens as load grows.** A capacity of ten units a
-      second does not imply that nine is fine. The closer utilisation gets to one,
-      the longer the queue, and it grows sharply rather than linearly. How
-      sharply is queueing theory, and there distributions are unavoidable.
-      Little's law tells you how many are inside at a given W; it does not tell
-      you what W becomes as λ grows.
+      And it does not answer what happens when load grows. A capacity of ten units
+      a second does not mean nine is fine. The closer utilisation gets to one, the
+      longer the queue, and it grows with acceleration rather than linearly. By
+      how much is queueing theory, and there distributions are unavoidable. Little
+      tells you how many are inside at a given W. What W becomes as λ grows, he
+      does not.
   - id: answer
     title: What to do with it
     narration: |-
-      One question in three shapes, and every answer is a substitution into the
-      equality.
+      Three substitutions into one equality:
 
-      - **How many servers.** λ × S ÷ what one of them holds. Sized by service,
-        not by everything inside.
-      - **How many are queueing.** λ × W − λ × S. Waiting is the difference
-        between two applications of one law.
-      - **How long one unit waits.** L ÷ λ. This is how queue depth in monitoring
-        turns into a number worth showing to the product.
+      - how many servers — λ × S divided by what one of them holds;
+      - how many are queueing — λ × W minus λ × S;
+      - how long one unit waits — L divided by λ.
 
-      Start not with the formula but with the question: what is the box here,
-      what enters it, and how long does a unit stay inside. The multiplication
-      comes after.
+      Outside engineering the same law is spoken in other words. Kanban writes it
+      as "cycle time = WIP / throughput", and work-in-progress limits are an
+      attempt to hold L down so that W does not run away. Different box, same
+      formula.
+
+      None of it starts with the formula. It starts with the question of what the
+      box is here, what enters it, and how long a unit stays inside. The
+      multiplication comes after. The [scraping jobs walkthrough](../scraping-jobs/)
+      sizes its pool this way — there you can watch one multiplication turn into
+      an architecture decision.
 quiz:
   - question: >-
       The job flow has not changed, but the target API became twice as slow. What
@@ -229,8 +221,8 @@ quiz:
       - It depends on how jobs arrive
     answer: 1
     explanation: >-
-      L = λ × W. Same flow, twice the time inside, so twice as many inside. How
-      exactly jobs arrive is something the law does not care about.
+      L = λ × W. The flow did not change, the time inside doubled, so the number
+      inside doubled. How jobs arrive is something the law does not care about.
   - question: >-
       There are twenty thousand messages in the queue and consumers drain a
       thousand a second. How long does a message arriving right now wait?
@@ -241,8 +233,8 @@ quiz:
       - It cannot be computed from this
     answer: 0
     explanation: >-
-      W = L / λ: 20,000 / 1,000 = 20 seconds. That is an average — an unlucky
-      message waits longer, but the order of magnitude comes from here.
+      W = L / λ: 20,000 / 1,000 = 20 seconds. An average: an unlucky message gets
+      more than that, and how much more the law does not say.
   - question: >-
       Three hundred units are inside on average: a hundred being served, two
       hundred waiting. How many servers are needed if one holds one unit?
@@ -253,6 +245,6 @@ quiz:
       - As many as the budget allows
     answer: 2
     explanation: >-
-      A waiting unit sits in the queue and holds no server. The pool is sized by
-      λ × S — by service, not by everything inside.
+      The two hundred waiting sit in the queue and hold no server. The pool is
+      sized by λ × S, that is, by service.
 ---

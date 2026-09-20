@@ -299,6 +299,38 @@ def interview():
     )
 
 
+def littles_law():
+    """Поток измерен, время измерено, а сколько работы внутри — берут на глаз."""
+    return (
+        bloom((104, 152, 88, 96, '#d3e3ee'), (300, 158, 140, 112, '#f3e8cc'), (544, 158, 86, 92, '#d4e6dc'))
+        # Поток на входе измерен: труба и капли с ровным шагом.
+        + wash(rect(14, 126, 64, 52, SKY, op=0.8))
+        + brush('M32 144 h28 M32 160 h18', color=INK, opacity=0.55)
+        + wash(circle(102, 152, 9, SKY_D, 0.9), circle(132, 152, 7, SKY_D, 0.7), circle(158, 152, 5, SKY_D, 0.5))
+        + brush(*arrow(86, 152, 178, 152), color=INK, width=2.2, opacity=0.5)
+        # Время внутри тоже измерено: песочные часы двумя треугольниками.
+        + wash(path('M276 30 L326 30 L301 58 Z', BUTTER, 0.9), path('M276 86 L326 86 L301 58 Z', BUTTER, 0.9))
+        + brush('M272 30 h58', 'M272 86 h58', color=INK_WARM, width=2.6, opacity=0.75)
+        + brush('M301 62 v16', color=INK_WARM, width=1.6, opacity=0.45, dash='3 4')
+        # Ящик: границы известны, число внутри — нет. Карточки под вопросом
+        # бледные: работа там есть, а сколько её — как раз и не посчитано.
+        + wash(rect(190, 104, 216, 144, CREAM, op=0.75))
+        + wash(rect(212, 128, 46, 30, BUTTER, op=0.3), rect(212, 170, 46, 30, BUTTER, op=0.3),
+               rect(340, 128, 46, 30, BUTTER, op=0.3), rect(340, 192, 46, 30, BUTTER, op=0.3))
+        + brush('M190 104 h216 v144 h-216 z', color=INK_ROSE, width=2.2, opacity=0.5, dash='9 8')
+        + brush('M280 158 q0 -30 25 -30 q27 0 27 25 q0 19 -25 27 v12', color=INK_ROSE, width=5.5, opacity=0.8)
+        + wash(circle(308, 218, 5, ROSE, 0.95))
+        # Выходит столько же, сколько вошло.
+        + brush(*arrow(414, 172, 490, 172), color=INK, width=2.2, opacity=0.5)
+        # Пул, названный на глаз: две машины по делу, третья — лишняя.
+        + wash(rect(506, 102, 58, 46, SAGE, op=0.85), rect(506, 156, 58, 46, SAGE, op=0.85))
+        + brush('M520 122 h30 M520 176 h30', color=INK_SAGE, width=2, opacity=0.6)
+        + brush('M506 210 h58 v46 h-58 z', color=INK_SAGE, width=2, opacity=0.45, dash='6 7')
+        + brush('M524 226 l18 16 M542 226 l-18 16', color=INK_SAGE, width=2, opacity=0.4)
+        + splashes((166, 264, 3, PEACH), (612, 66, 3, SAGE), (228, 44, 3, SKY))
+    )
+
+
 COVERS = {
     'circuit-breaker': (circuit_breaker, 'Ретраи долбят упавший сервис, рубильник между ними разомкнут.'),
     'discount-floor': (discount_floor, 'Две акции тянут цену ниже пола, доказательство держит её.'),
@@ -312,6 +344,7 @@ COVERS = {
     'why-ddd-specification': (ddd_specification, 'Одно правило вместо трёх копий.'),
     'why-ddd-transport': (ddd_transport, 'JSON через адаптер в домен, cmd/ собирает процесс.'),
     'system-design-interview': (interview, 'Задание, доска кандидата и рубрика интервьюера.'),
+    'littles-law': (littles_law, 'Поток и время измерены, а число внутри взято на глаз.'),
 }
 
 if __name__ == '__main__':

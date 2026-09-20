@@ -1,7 +1,5 @@
 import type { CodeDeck } from './types';
 import type { WidgetSpec } from './widgets';
-// Расширение обязательно: колоду импортирует ещё и node-скрипт проверки.
-import posterSpec from './littles-law.poster.ts';
 
 /**
  * Закон Литтла: L = λ × W.
@@ -20,8 +18,8 @@ import posterSpec from './littles-law.poster.ts';
  * значит только английские. Проза — в `narration` локализованного урока.
  */
 
-/** Постер: суть проблемы одной схемой — карточка каталога и блок «Проблема». */
-export const poster = posterSpec;
+/** Обложка в каталоге: акварель, public/covers/littles-law.svg (scripts/covers/build.py). */
+export const cover = 'covers/littles-law.svg';
 
 export const widgets: WidgetSpec = {
   /**

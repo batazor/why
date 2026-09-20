@@ -565,9 +565,9 @@ steps:
       Writes are not the whole flow. While a job runs, people ask about it: polled
       every five seconds, a twenty-second job collects four status requests, and one
       more comes for the result. Five reads per write is 139 requests a second at
-      peak against 28. This is the number lost more often than any other, and it
-      decides no less: the pool is sized by writes, the database by reads. What to
-      do about it comes in the step on caching.
+      peak against 28. The pool is sized by writes, but the database lives under
+      reads, and the second number gets lost more often than the first. What to do
+      about it is the step on caching.
 
       Try changing the duration. At two seconds a pool of fifty jobs and one machine
       are enough. At thirty, almost a thousand jobs run at once: that needs a
@@ -768,46 +768,47 @@ steps:
   - id: cache
     title: 'The cache: where the read flow goes'
     narration: |-
-      "There are more reads" means 139 requests a second at peak against 28 writes.
-      All of them go to `jobs-pg`. The same database intake writes to, and the
-      availability of intake is NFR-1. So a stubborn polling loop in someone's
-      script takes down job intake it has nothing to do with.
+      139 requests a second at peak against 28 writes — and all 139 land on
+      `jobs-pg`. The same database intake writes to, and the availability of intake
+      is NFR-1. A stubborn polling loop in someone's script takes down job intake it
+      has nothing to do with.
 
-      That is why `jobs-cache` goes between `job-query` and the database. What is
-      cached is the answer to `GET /jobs/{id}`: state, link to the result,
-      timestamps. The key is the job itself, `job:{id}`.
+      `jobs-cache` goes between `job-query` and the database. It holds the answer to
+      `GET /jobs/{id}` — state, link to the result, timestamps — under the key
+      `job:{id}`.
 
-      **The job list is not cached.** `GET /jobs?status=` has its own answer for
-      every filter, sort order and page, and any other job of the same user spoils
-      it. Many keys, few hits, frequent invalidation. What gets cached is what is
-      asked most often and answered identically — one job by id.
+      The job list is not cached, and that is a decision rather than an omission.
+      `GET /jobs?status=` has its own answer for every filter, sort order and page,
+      and any other job of the same user spoils it. Many keys, few hits, frequent
+      invalidation. What goes into the cache is what gets asked most often and
+      answered identically: one job by id.
 
-      Then comes the part a cache is discussed separately for: it lies. The job has
-      finished, the client reads "running" and keeps polling — the cache did not
-      remove load, it added latency to it. So a job has two lifetimes, not one.
+      Then comes the part a cache is discussed separately for. It lies. The job has
+      finished, the client reads "running" and keeps polling — the cache removed no
+      load and added latency. So an entry has two lifetimes rather than one.
 
-      **While it is unfinished — TTL of two seconds.** That does not save a single
-      poller: at one request every five seconds it misses every time. It saves us
-      from something else — a job usually has more than one reader. An open tab, a
-      script and a page refresh produce several requests within one second, and only
-      one of them reaches the database.
+      While the job is unfinished, the TTL is two seconds. Such a TTL does not save a
+      single poller: at one request every five seconds it misses every time. The bet
+      is elsewhere. A job rarely has only one reader — an open tab, a script and a
+      page refresh produce several requests within one second, and one of them
+      reaches the database.
 
-      **Once it is finished — until retention ends.** A final state never changes
-      again, and such a job is read for a long time: people come for the result link
-      an hour later. Those reads never touch the database at all.
+      Once it is finished, until retention ends. A final state never changes again,
+      and such a job is read for a long time: people come for the result link an hour
+      later. Those reads do not reach the database at all.
 
-      The switch between the two is an event. The fact that a job finished is
-      already travelling through the bus — `job-publisher` publishes it for the
-      webhook. The read side subscribes to the same queue and deletes the key; the
-      next request goes to the database once and puts the final state into the
-      cache. A final state is set once, so there is one message.
+      What switches between the two modes is an event. The fact that a job finished
+      already travels through the bus, published by `job-publisher` for the webhook.
+      The read side subscribes to the same queue and deletes the key; the next
+      request goes to the database once and puts the final state into the cache. That
+      state is set once, so there is one message.
 
-      The short TTL is still not redundant, even with invalidation in place. An event
-      can be lost, an expiry cannot: TTL here is the safety net, not the mechanism.
+      The short TTL stays even with invalidation in place. An event can be lost, an
+      expiry cannot: TTL here is the safety net, not the mechanism.
 
       How many requests the cache actually removes depends on how many readers there
-      are per job. That is measured, not assumed — exactly like the number of jobs
-      per worker.
+      are per job. That number gets measured — like the number of jobs one worker
+      holds.
     added:
       - element: scraper.cache
         role: 'The answer to GET /jobs/{id}: state and link. It sits in front of the database so that status polling never reaches it.'
