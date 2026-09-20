@@ -14,6 +14,7 @@
 
 export type WidgetName =
   | 'load-calculator'
+  | 'littles-law'
   | 'requirement-sort'
   | 'noisy-neighbour'
   | 'requirements'
@@ -208,6 +209,7 @@ export type ApiCardsData = { endpoints: ApiEndpoint[] };
 
 export type WidgetStep =
   | { widget: 'load-calculator'; wide?: boolean; data: LoadCalculatorData }
+  | { widget: 'littles-law'; wide?: boolean; data: LittlesLawData }
   | { widget: 'requirement-sort'; wide?: boolean; data: RequirementSortData }
   | { widget: 'noisy-neighbour'; wide?: boolean; data: NoisyNeighbourData }
   | { widget: 'requirements'; wide?: boolean; data: RequirementsData }
@@ -219,6 +221,25 @@ export type WidgetStep =
 
 /** Шаг разбора → врезка, которая на нём стоит. */
 export type WidgetSpec = Record<string, WidgetStep>;
+
+/**
+ * Калькулятор закона Литтла: те же ползунки, что у калькулятора нагрузки, но
+ * без предметной области. Формула одна на всё — очередь, пул, зал ожидания, —
+ * и урок про неё показывает её саму, а не частный случай со скрейпингом.
+ */
+export type LittlesLawData = { inputs: LoadInput[] };
+
+/**
+ * Итоги закона. Порядок задаёт порядок в таблице и заодно порядок разбора:
+ * сначала сколько всего внутри, потом из чего это число состоит.
+ */
+export const LAW_OUTPUTS = [
+  'inSystem',
+  'inService',
+  'waiting',
+  'waitSeconds',
+  'servers',
+] as const;
 
 /** Итоги калькулятора: порядок здесь же задаёт порядок в таблице. */
 export const LOAD_OUTPUTS = [
@@ -256,6 +277,19 @@ export function widgetLabelKeys(step: WidgetStep): string[] {
         'calc.verdict.shard',
         ...step.data.inputs.flatMap((input) => [`calc.${input.key}`, `calc.${input.key}.unit`]),
         ...LOAD_OUTPUTS.flatMap((key) => [`calc.out.${key}`, `calc.out.${key}.unit`]),
+      ];
+    case 'littles-law':
+      return [
+        'law.inputs',
+        'law.result',
+        'law.formula',
+        'law.split',
+        'law.verdict.impossible',
+        'law.verdict.smooth',
+        'law.verdict.queue',
+        'law.verdict.balanced',
+        ...step.data.inputs.flatMap((input) => [`law.${input.key}`, `law.${input.key}.unit`]),
+        ...LAW_OUTPUTS.flatMap((key) => [`law.out.${key}`, `law.out.${key}.unit`]),
       ];
     case 'requirement-sort':
       return [

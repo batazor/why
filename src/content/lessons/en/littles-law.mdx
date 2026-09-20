@@ -1,0 +1,258 @@
+---
+title: "Little's law"
+description: >-
+  Three quantities, one equality, and answers to three questions at once: how
+  many workers, why the queue is growing, and how long a message waits.
+problem: >-
+  Pool size gets named after the user count, queue depth gets a "how much is
+  too much" threshold, and waiting time is never computed at all. All three
+  numbers are tied by one equality, and what goes into it is already known.
+tags: [system-design, queues, capacity]
+order: 13
+deck: littles-law
+comments:
+  formula: 'L = lambda * W'
+  smallerBox: 'The same law on a smaller box: service only.'
+  poolFromService: 'The pool is sized by service: waiting items do not hold a worker.'
+  solvedForTime: 'W = L / lambda — the same equality, solved for time.'
+labels:
+  kindFlow: flow
+  kindSystem: system
+  arrivals: What comes in
+  system: What is inside
+  howMany: how many are in there?
+  guessed: named by eye
+  law.inputs: What we know
+  law.result: What follows from it
+  law.formula: '{arrivals} /s × {timeInSystem} s = {inSystem} inside at any moment'
+  law.split: 'The same law on service: {arrivals} /s × {serviceSeconds} s = {inService}. The other {waiting} are waiting.'
+  law.verdict.impossible: >-
+    Service takes longer than the whole stay inside, which cannot happen. Time
+    inside is waiting plus service; it cannot be less than one of its own parts.
+  law.verdict.smooth: >-
+    Nobody waits: everything inside is being served. There is no queue, and the
+    pool is sized straight off the number inside.
+  law.verdict.queue: >-
+    More items are waiting than are being served. Waiting is the bulk of the time
+    inside, and that is what to cut — not the speed of service.
+  law.verdict.balanced: >-
+    There is a queue, but service is still a visible part of it. Speeding up
+    service still helps here; once waiting outweighs it, it stops helping.
+  law.arrivals: Arrives per second
+  law.arrivals.unit: items/s
+  law.timeInSystem: An item stays inside
+  law.timeInSystem.unit: s
+  law.serviceSeconds: Of that, being served
+  law.serviceSeconds.unit: s
+  law.perServer: One server holds
+  law.perServer.unit: items
+  law.out.inSystem: Inside at once
+  law.out.inSystem.unit: items
+  law.out.inService: Of them being served
+  law.out.inService.unit: items
+  law.out.waiting: Of them waiting
+  law.out.waiting.unit: items
+  law.out.waitSeconds: One item waits
+  law.out.waitSeconds.unit: s
+  law.out.servers: Servers needed
+  law.out.servers.unit: servers
+terms:
+  λ: >-
+    The arrival flow: how many units of work enter the system per second. Lambda
+    in the notation of Little's law.
+  W: >-
+    The time one unit of work spends inside the system: waiting plus service.
+  L: >-
+    How many units of work are inside the system at once. The number the law is
+    computed for in the first place.
+  stable system: >-
+    A system where, over a long enough window, as much leaves as enters. Its
+    queue fluctuates around some level instead of growing without bound.
+steps:
+  - id: problem
+    title: How many are in there
+    narration: >-
+      "How many workers do we need?" — "Well, fifty thousand users, let's say
+      twenty machines." "Why is the queue growing?" — "Load went up." "How long
+      does a message wait?" — that one usually gets no answer at all, because
+      nobody knows where to look. Three conversations, three guesses. It is one
+      question, and its answer is not guessed: it follows from two numbers both
+      people already have at that moment.
+  - id: law
+    title: 'L = λ × W'
+    narration: |-
+      Take any system that things enter and leave: a message queue, a worker
+      pool, a supermarket till, an emergency room. How many units of work are
+      inside it at once is the arrival flow multiplied by the time one unit
+      spends inside.
+
+      [[L]] = [[λ]] × [[W]]. Ten requests a second, each living inside for thirty
+      seconds — three hundred are always inside. The units work out on their own:
+      items per second multiplied by seconds gives items.
+
+      What is remarkable about the law is not what it requires but what it does
+      **not**. It does not care how units arrive: in a steady stream, Poisson, in
+      bursts of a thousand. It does not care in what order they are served: in
+      turn, from the back, by priority, at random. It does not care how many
+      servers there are or whether they are equally fast. There is no
+      distribution to plug in.
+
+      That is why it works where ordinary queueing theory already fails: queueing
+      theory needs to know how arrivals are distributed, and that data is not
+      always there. The equality is not an approximation and not a model. Under
+      one condition, covered in the step on stability, it holds exactly.
+  - id: calc
+    title: Three quantities, move any of them
+    narration: |-
+      The calculator is on the right. Move "arrives per second" and the number
+      inside moves with it. Move "stays inside" and it moves exactly the same
+      way. The law is symmetric: doubling the flow and doubling the time give one
+      and the same result.
+
+      From this comes the consequence it is most often recalled for: **making
+      service faster is the same thing as reducing load.** If a job takes ten
+      seconds instead of twenty, half as many are inside, and the pool halves —
+      at the same flow and the same users. Optimising one request and switching
+      off half the clients do the same thing to pool size.
+
+      And the other way round: a slow third-party dependency raises our hardware
+      bill without touching a single number of ours. Same flow, same users, three
+      times as many inside, because the target started answering three times
+      slower.
+  - id: split
+    title: The queue is a difference
+    narration: |-
+      The law applies not only to the system as a whole. It holds for any part of
+      it that has an entrance and an exit — and this is where it starts answering
+      the questions worth knowing it for.
+
+      Apply it twice. To the whole system: λ × W, everything inside. To service
+      alone: λ × S, where S is the service time without waiting. The first number
+      is every unit inside, the second is the ones actually being worked on. The
+      difference between them is the queue.
+
+      Ten a second, thirty seconds inside, ten of them service. Three hundred
+      inside, a hundred being served, two hundred waiting. Not because we decided
+      so — because otherwise the equality does not hold.
+
+      That gives the answer about the pool. **Size it by service, not by
+      everything inside.** A waiting unit sits in the queue and holds no
+      resource: a hundred servers are enough for three hundred units inside.
+      Sizing the pool by λ × W means buying three times more machines than needed
+      and letting them idle.
+  - id: inverse
+    title: 'The other direction: how long the wait is'
+    narration: |-
+      The same equality solved for time: W = L / λ. How many units are inside,
+      divided by the flow, is how long a unit spends inside.
+
+      This is how monitoring is read. "Forty thousand messages in the queue"
+      means nothing by itself: it can be a normal working state or an outage.
+      Divide it by the drain rate. Two hundred a second — forty thousand take two
+      hundred seconds. Now it is clear: the threshold "depth above forty
+      thousand" is really the threshold "a message waits more than three
+      minutes".
+
+      Hence a rule often stated without explanation: **alert on the age of the
+      oldest item, not on queue depth.** Age is W, the very thing promised to the
+      user. Depth is L, a number that means nothing without λ: a thousand
+      messages drained at ten thousand a second is harmless, a hundred drained at
+      one a second is already an outage.
+  - id: stable
+    title: The one condition
+    narration: |-
+      The law has one condition: the system must be [[stable|stable system]].
+      Over a long enough window, as much leaves it as enters.
+
+      If the flow exceeds what the system manages to serve, there is no
+      stability. The queue grows, the time inside grows with it, and no "average
+      W" exists — it increases every minute. The law does not break here: it
+      still holds and honestly reports that L is growing. There is simply nothing
+      to predict with it. What has to be computed in that situation is not W but
+      the gap between flow and capacity — and then fixed.
+
+      Capacity comes out of the same numbers: servers divided by service time. A
+      hundred servers at ten seconds each is exactly ten units a second. At a flow
+      of ten a second utilisation is a hundred per cent, and that is not "it
+      worked out perfectly" but the state in which any unevenness turns into a
+      growing queue.
+
+      The second thing easy to forget: the window has to be long compared with W.
+      For a job a minute long the law answers about tens of minutes, not about
+      what happens inside one of them.
+  - id: traps
+    title: What it does not promise
+    narration: |-
+      The law is exact, but it answers exactly what it was asked. Three things it
+      does not say, and all three get attributed to it regularly.
+
+      **It is not about peaks.** All three quantities are averages. Three hundred
+      inside on average can mean a steady three hundred, or zero one moment and
+      three thousand the next. A pool sized by the average will not hold at peak,
+      which is where the separate unevenness multiplier in estimates comes from.
+
+      **It is not about spread.** The law does not say how long the unluckiest
+      unit waits. An average wait of twenty seconds is compatible with one per
+      cent waiting ten minutes. That is exactly why promises to users are written
+      in percentiles rather than averages.
+
+      **It is not about what happens as load grows.** A capacity of ten units a
+      second does not imply that nine is fine. The closer utilisation gets to one,
+      the longer the queue, and it grows sharply rather than linearly. How
+      sharply is queueing theory, and there distributions are unavoidable.
+      Little's law tells you how many are inside at a given W; it does not tell
+      you what W becomes as λ grows.
+  - id: answer
+    title: What to do with it
+    narration: |-
+      One question in three shapes, and every answer is a substitution into the
+      equality.
+
+      - **How many servers.** λ × S ÷ what one of them holds. Sized by service,
+        not by everything inside.
+      - **How many are queueing.** λ × W − λ × S. Waiting is the difference
+        between two applications of one law.
+      - **How long one unit waits.** L ÷ λ. This is how queue depth in monitoring
+        turns into a number worth showing to the product.
+
+      Start not with the formula but with the question: what is the box here,
+      what enters it, and how long does a unit stay inside. The multiplication
+      comes after.
+quiz:
+  - question: >-
+      The job flow has not changed, but the target API became twice as slow. What
+      happens to the number of jobs running at once?
+    options:
+      - 'Nothing: the flow is the same'
+      - It doubles
+      - It quadruples
+      - It depends on how jobs arrive
+    answer: 1
+    explanation: >-
+      L = λ × W. Same flow, twice the time inside, so twice as many inside. How
+      exactly jobs arrive is something the law does not care about.
+  - question: >-
+      There are twenty thousand messages in the queue and consumers drain a
+      thousand a second. How long does a message arriving right now wait?
+    options:
+      - Twenty seconds
+      - Twenty milliseconds
+      - Twenty minutes
+      - It cannot be computed from this
+    answer: 0
+    explanation: >-
+      W = L / λ: 20,000 / 1,000 = 20 seconds. That is an average — an unlucky
+      message waits longer, but the order of magnitude comes from here.
+  - question: >-
+      Three hundred units are inside on average: a hundred being served, two
+      hundred waiting. How many servers are needed if one holds one unit?
+    options:
+      - Three hundred
+      - Two hundred
+      - One hundred
+      - As many as the budget allows
+    answer: 2
+    explanation: >-
+      A waiting unit sits in the queue and holds no server. The pool is sized by
+      λ × S — by service, not by everything inside.
+---

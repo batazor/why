@@ -14,6 +14,7 @@ import type { LikeC4Spec } from '../code/likec4';
 import type { FileTreeSpec } from '../code/tree';
 import { requirementsAt, type WidgetSpec } from '../code/widgets';
 import LoadCalculator from './widgets/LoadCalculator';
+import LittlesLaw from './widgets/LittlesLaw';
 import RequirementSort from './widgets/RequirementSort';
 import NoisyNeighbour from './widgets/NoisyNeighbour';
 import RequirementsBoard from './widgets/RequirementsBoard';
@@ -509,6 +510,9 @@ const shikiOptions = {
       <div class={wideSteps.has(merged[i].id) ? 'step__wide' : 'step__aside'}>
         {widget.widget === 'load-calculator' && (
           <LoadCalculator client:visible lang={lang} data={widget.data} labels={labels} />
+        )}
+        {widget.widget === 'littles-law' && (
+          <LittlesLaw client:visible lang={lang} data={widget.data} labels={labels} />
         )}
         {widget.widget === 'requirement-sort' && (
           <RequirementSort client:visible data={widget.data} labels={labels} />

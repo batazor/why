@@ -15,7 +15,7 @@ brief:
     no reason. Also, we expect this to be used by a lot of people, so it should
     be able to handle a lot of jobs at once.
 tags: [system-design, async, queues]
-order: 13
+order: 14
 deck: scraping-jobs
 labels:
   calc.inputs: What we know
@@ -839,11 +839,13 @@ steps:
       steps.
 
       On the left are the entry point and the two sides, write and read, which scale
-      independently. In the middle is the database: job state with publish marks,
-      which keep writes and publishing consistent. Only the publisher writes to the
-      bus. On the right are the worker
+      independently; the read side has its own cache so that status polling never
+      reaches the database. In the middle is the database: job state with publish
+      marks, which keep writes and publishing consistent. Only the publisher writes
+      to the bus. On the right are the worker
       pool, the only element that calls third-party APIs, and the result storage.
-      The bus carries two queues: work to do and completion events.
+      The bus carries two queues: work to do and completion events — and the second
+      one is listened to not only by the webhook but by the cache.
 
       Three things are not on the diagram yet and come next: how a worker tells a
       temporary failure from a permanent one, where the per-domain limit comes
@@ -861,10 +863,14 @@ steps:
   - id: seq-read
     title: Reading, step by step
     narration: |-
-      Getting the result is shorter. The gateway asks `job-query`, which reads the
-      status and the link from `jobs-pg`. If the job is done, the client gets a
-      presigned URL and collects the data from `results-s3` itself, bypassing our
-      services.
+      Getting the result is shorter. The gateway asks `job-query`, which goes to
+      `jobs-cache` first and to `jobs-pg` only on a miss. If the job is done, the
+      client gets a presigned URL and collects the data from `results-s3` itself,
+      bypassing our services.
+
+      The frame draws a miss, because a miss shows every participant. On a hit the
+      sequence ends at the second arrow and the database is not in it at all — and
+      by the numbers from the caching step, that is most of the requests.
   - id: c3-scheduler
     title: 'C3: inside job-scheduler'
     narration: |-
