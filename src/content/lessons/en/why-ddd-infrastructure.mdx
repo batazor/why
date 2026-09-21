@@ -208,7 +208,8 @@ steps:
     narration: |-
       The use case changed in one place: the save and the publish moved inside
       `Do`. The order of the steps is the same; the boundary changed — it is one
-      operation now.
+      operation now. Payment and overdue moved into `Do` the same way: the tree
+      marks them.
 
       The implementation puts the transaction into `ctx`, and the adapters take
       it from there with that same `conn` function. So the use case passes no

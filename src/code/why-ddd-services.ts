@@ -1,6 +1,5 @@
 import type { CodeDeck } from './types';
 import type { FileTreeSpec } from './tree';
-import { eventsWithPenalty } from './why-ddd-seed.ts';
 import posterSpec from './why-ddd-services.poster.ts';
 
 /**
@@ -159,7 +158,39 @@ func (Paid) FactName() string { return "invoice.paid" }
       edits: [
         {
           from: 'applying',
-          code: eventsWithPenalty,
+          code: `package events
+
+import "billing/invoice/domains/invoice/vo"
+
+// {{eventWhat}}
+type Event interface {
+	FactName() string
+}
+
+// {{eventIssued}}
+type Issued struct {
+	Number   string
+	Customer string
+	Total    vo.Money
+}
+
+func (Issued) FactName() string { return "invoice.issued" }
+
+// {{eventPaid}}
+type Paid struct {
+	Number string
+}
+
+func (Paid) FactName() string { return "invoice.paid" }
+
+// {{eventPenalty}}
+type PenaltyCharged struct {
+	Number string
+	Amount vo.Money
+}
+
+func (PenaltyCharged) FactName() string { return "invoice.penalty_charged" }
+`,
         },
       ],
     },

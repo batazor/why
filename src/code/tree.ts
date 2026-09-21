@@ -125,3 +125,55 @@ export type FileTreeSpec = {
   /** Каталоги, которые появляются сами по себе, без файлов внутри. */
   dirs?: TreeDir[];
 };
+
+/** Каким глава оставила файл: код после последней правки. */
+export const finalCode = (file: TreeFile): string | undefined =>
+  file.edits?.length ? file.edits[file.edits.length - 1].code : file.code;
+
+/** Код без строк-аннотаций `// {{key}}`: то, что в файле на самом деле написано. */
+const withoutNotes = (code: string): string =>
+  code
+    .split('\n')
+    .filter((line) => !/^\s*\/\/ \{\{\w+\}\}\s*$/.test(line))
+    .join('\n');
+
+/**
+ * Наследство главы: дерево, каким его оставила предыдущая.
+ *
+ * Серия ведёт один сервис, и глава обязана начинать с того, чем закончилась
+ * прошлая. Копия файлов в каждой колоде это правило не держит: стоит поправить
+ * файл в одной главе, и следующая показывает уже другой сервис. Поэтому
+ * наследство не переписывают, а берут у предыдущей колоды.
+ *
+ * `edits` — правки унаследованных файлов в этой главе, по пути.
+ *
+ * `notes` — тот же файл с другими аннотациями: глава вправе подписать в старом
+ * коде то, о чём говорит она. Менять при этом сам код нельзя — за этим следит
+ * проверка ниже.
+ */
+export function inherit(
+  prev: FileTreeSpec,
+  edits: Record<string, NonNullable<TreeFile['edits']>> = {},
+  notes: Record<string, string> = {},
+): TreeFile[] {
+  const known = new Set(prev.files.map((file) => file.path));
+  for (const path of [...Object.keys(edits), ...Object.keys(notes)]) {
+    if (!known.has(path)) throw new Error(`inherit: в наследстве нет файла ${path}`);
+  }
+
+  return prev.files.map((file) => {
+    const left = finalCode(file);
+    const noted = notes[file.path];
+    if (noted !== undefined && withoutNotes(noted) !== withoutNotes(left ?? '')) {
+      throw new Error(`inherit: ${file.path} — аннотации меняют код, а не подписи`);
+    }
+
+    return {
+      path: file.path,
+      seed: true,
+      lang: file.lang,
+      code: noted ?? left,
+      edits: edits[file.path],
+    };
+  });
+}

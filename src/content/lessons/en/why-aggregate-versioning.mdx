@@ -67,7 +67,6 @@ comments:
   portUoW: 'port: run the work as a whole or do not run it'
   moneyMinor: the amount in minor units
   ucTxDeps: the dependencies are domain ports and nothing else
-  ucIssueRun: 'the order of the operation: build, save, tell'
   ucPayRun: 'load, call the method, save, tell — as one operation'
   ucAttempts: how many times to try on a conflict
   ucRetryRun: retries the whole attempt while someone else is changing the invoice
@@ -104,6 +103,38 @@ comments:
   ucOverdueCall: the rule computes the amount from the invoice, the rate and the calendar
   ucOverdueApply: only the invoice itself can charge the fee to the invoice
   eventPenalty: the invoice was charged a late fee
+  handleCmd: one argument — the command, and it checks its own shape
+  dtoWhat: 'the request body: what the data crosses the boundary in'
+  dtoLine: an invoice line the way it is sent
+  dtoValidate: 'the shape of the request is checked, not the rules of the domain'
+  dtoDomain: 'what the use case needs from the request, already in domain types'
+  dtoToDomain: translates the request body into domain types
+  hWhat: the handler owns the use case and nothing else
+  hIssue: 'POST /invoices: parse, translate, call'
+  hDecode: the body does not parse — that is the client's error
+  hToDomain: translating into domain types is the dto package's job
+  hCommand: 'the transport builds the command — it travels on, not a handful of arguments'
+  hCall: the use case gets domain entities, not a request
+  hFail: a separate function turns a domain error into a status code
+  hCreated: '201 and an empty body: the client sent the number itself'
+  errWhat: turns a domain error into a status code
+  errRule: 'a broken domain rule is the request''s error, not the server''s'
+  errUnknown: 'the cause stays in the log, the code goes out'
+  routeWhat: the module declares the address of its own handler
+  mainWired: the assembly moved into a generated function
+  wireSet: 'the set of adapters: one for all applications of the service'
+  wireBind: which implementation stands behind the port
+  wireInject: 'what to assemble — stated by the result type'
+  wireStub: 'a stub body: the real one is written by the generator'
+  cmdWhat: 'the command: what to do and with what data'
+  cmdValidate: the shape is checked here, not the domain rules
+  cardWhat: an invoice card for the screen, not an aggregate
+  queryWhat: 'the query: what is asked for, named as a type'
+  cardPort: 'the read port: hands out a ready card'
+  cardsSQL: 'the query returns exactly what the screen shows'
+  cardsWhat: 'the read port implemented: one query, no aggregate'
+  cardsRead: reads an invoice card by its number
+  cardsScan: 'the columns land straight in the projection'
 steps:
   - id: lost
     title: Two calls, one invoice

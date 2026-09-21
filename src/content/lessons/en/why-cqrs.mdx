@@ -34,7 +34,6 @@ terms:
     A structure of plain fields in which data crosses a boundary: a request
     body, a table row, a message on the bus. It has no behaviour.
 comments:
-  ucDeps: dependencies are domain ports and nothing else
   handleCmd: one argument — the command, and it checks its own shape
   cmdWhat: 'the command: what to do and with what data'
   cmdValidate: the shape is checked here, not the domain rules
@@ -57,9 +56,7 @@ comments:
   moneyMinor: 'an amount in cents'
   portPublisher: 'the port: where facts are sent'
   portRepo: 'the port: how an invoice reaches storage and comes back'
-  ucIssueRun: 'the order of the operation: build, save, tell'
   ucPayRun: 'load, call the method, save, tell'
-  ucPublish: 'facts leave after the save, not before'
   aggCharge: puts the fee on the invoice; a paid invoice takes none
   svcCalendar: 'the working calendar: part of the model, not a storage port'
   svcPenalty: 'the rule: an invoice, a rate and a calendar — an amount out'
@@ -75,6 +72,44 @@ comments:
   ucOverdueCall: the rule computes the amount from the invoice, the rate and the calendar
   ucOverdueApply: only the invoice itself can charge the fee to the invoice
   eventPenalty: the invoice was charged a late fee
+  ucTxDeps: the dependencies are domain ports and nothing else
+  ucTxRun: 'the same order, a different boundary'
+  ucTxDo: 'the save and the facts happen inside one operation'
+  aggRestore: rebuilds the invoice from what was in the database
+  portUoW: 'port: run the work as a whole or do not run it'
+  repoWhat: the storage port implemented on Postgres
+  repoLoad: loads the invoice and rebuilds the aggregate
+  repoRestore: rebuilding the aggregate is the domain's job
+  repoSave: writes the invoice and its lines
+  uowWhat: 'the unit of work implemented as a Postgres transaction'
+  uowDo: all of the work inside one transaction
+  uowRollback: an error inside — rolled back as a whole
+  uowConn: 'the transaction from ctx, if the operation has already begun'
+  outboxWhat: 'publishing implemented as rows in the database'
+  outboxPublish: writes the facts into the same transaction
+  outboxRow: the fact name and the message body
+  dtoWhat: 'the request body: what the data crosses the boundary in'
+  dtoLine: an invoice line the way it is sent
+  dtoValidate: 'the shape of the request is checked, not the rules of the domain'
+  dtoDomain: 'what the use case needs from the request, already in domain types'
+  dtoToDomain: translates the request body into domain types
+  hWhat: the handler owns the use case and nothing else
+  hIssue: 'POST /invoices: parse, translate, call'
+  hDecode: the body does not parse — that is the client's error
+  hToDomain: translating into domain types is the dto package's job
+  hCall: the use case gets domain entities, not a request
+  hFail: a separate function turns a domain error into a status code
+  hCreated: '201 and an empty body: the client sent the number itself'
+  hCommand: 'the transport builds the command — it travels on, not a handful of arguments'
+  errWhat: turns a domain error into a status code
+  errRule: 'a broken domain rule is the request''s error, not the server''s'
+  errUnknown: 'the cause stays in the log, the code goes out'
+  routeWhat: the module declares the address of its own handler
+  mainWired: the assembly moved into a generated function
+  wireSet: 'the set of adapters: one for all applications of the service'
+  wireBind: which implementation stands behind the port
+  wireInject: 'what to assemble — stated by the result type'
+  wireStub: 'a stub body: the real one is written by the generator'
 steps:
   - id: problem
     title: Five parameters and one aggregate
@@ -110,8 +145,9 @@ steps:
     title: The command handler
     narration: |-
       The same file, with two parameters instead of five: `ctx` and the command.
-      The use case became a handler: it takes the command, checks the shape, hands the work to the
-      domain, saves, publishes the facts.
+      The use case became a handler: it takes the command, checks the shape,
+      hands the work to the domain, saves, publishes the facts. The transport
+      changed by one line: it builds the command and calls `Handle`.
 
       The order has not changed by a single step — what changed is what it is called with.
       That is why CQRS starts neither with two databases nor with a bus, but with
@@ -189,7 +225,9 @@ steps:
       Click a file to read it.
 
       - `applications/issuing/command.go` — the command and its shape check.
-      - `applications/issuing/issue.go` — the handler: one argument.
+      - `applications/issuing/issue.go` — the handler: `ctx` and the command.
+      - `applications/issuing/transport/http/handler.go` — the transport builds
+        the command.
       - `applications/views/card.go` — the projection for the screen and the
         read port.
       - `infrastructure/postgres/cards.go` — the reading itself: one query for

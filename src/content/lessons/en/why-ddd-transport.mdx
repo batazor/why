@@ -56,7 +56,6 @@ comments:
   portUoW: 'port: run the work as a whole or do not run it'
   moneyMinor: the amount in minor units
   ucTxDeps: the dependencies are domain ports and nothing else
-  ucIssueRun: 'the order of the operation: build, save, tell'
   ucPayRun: 'load, call the method, save, tell — as one operation'
   repoWhat: the storage port implemented on Postgres
   repoLoad: loads the invoice and rebuilds the aggregate
@@ -108,6 +107,8 @@ comments:
   ucOverdueCall: the rule computes the amount from the invoice, the rate and the calendar
   ucOverdueApply: only the invoice itself can charge the fee to the invoice
   eventPenalty: the invoice was charged a late fee
+  ucTxRun: 'the same order, a different boundary'
+  ucTxDo: 'the save and the facts happen inside one operation'
 steps:
   - id: entry
     title: Nobody to call it

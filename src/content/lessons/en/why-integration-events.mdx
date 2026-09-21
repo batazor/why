@@ -53,7 +53,6 @@ terms:
     the work to the domain, holds no domain rules and is kept thin.
 comments:
   aggRoot: 'the invoice: the aggregate root'
-  aggIssue: creates the invoice and sums the lines
   aggCopy: 'a copy of the lines: they cannot be changed from outside'
   aggRecord: 'records the fact; sending it is not the aggregate''s job'
   aggEvents: hands the collected facts to the outside
@@ -67,12 +66,7 @@ comments:
   portUoW: 'port: run the work as a whole or do not run it'
   moneyMinor: the amount in minor units
   ucTxDeps: the dependencies are domain ports and nothing else
-  ucIssueRun: 'the order of the operation: build, save, tell'
-  ucPayRun: 'load, call the method, save, tell — as one operation'
   repoWhat: the storage port implemented on Postgres
-  repoLoad: loads the invoice and rebuilds the aggregate
-  repoRestore: rebuilding the aggregate is the domain's job
-  repoSave: writes the invoice and its lines
   uowWhat: 'the unit of work implemented as a Postgres transaction'
   uowDo: all of the work inside one transaction
   uowNested: 'the operation has already begun — run inside it, no second transaction'
@@ -122,6 +116,54 @@ comments:
   ucOverdueCall: the rule computes the amount from the invoice, the rate and the calendar
   ucOverdueApply: only the invoice itself can charge the fee to the invoice
   eventPenalty: the invoice was charged a late fee
+  aggVersion: the number of the state that was read from the database
+  aggIssueVer: 'creates the invoice; the version stays zero — it is not in the database yet'
+  aggVersionGet: 'returns the version; nothing outside can change it'
+  errConflict: the invoice changed between the read and the write
+  portSaveConflict: 'returns ErrConflict if the invoice was changed in the meantime'
+  handleCmd: one argument — the command, and it checks its own shape
+  ucAttempts: how many times to try on a conflict
+  ucRetryRun: retries the whole attempt while someone else is changing the invoice
+  ucRetryConflict: 'a conflict is not a bad call: the data went stale'
+  ucRetryOnce: 'one attempt: load, apply, save, tell'
+  aggRestoreVer: the version arrives together with the data
+  repoLoadVer: loads the invoice together with the row version
+  repoSaveVer: 'writes the invoice if its version in the database is still the same'
+  repoInsert: 'version zero — the invoice is new, so it is inserted'
+  repoUpdateVer: the version check sits inside the UPDATE itself
+  repoNoRows: no rows — the version in the database is a different one
+  dtoWhat: 'the request body: what the data crosses the boundary in'
+  dtoLine: an invoice line the way it is sent
+  dtoValidate: 'the shape of the request is checked, not the rules of the domain'
+  dtoDomain: 'what the use case needs from the request, already in domain types'
+  dtoToDomain: translates the request body into domain types
+  hWhat: the handler owns the use case and nothing else
+  hIssue: 'POST /invoices: parse, translate, call'
+  hDecode: the body does not parse — that is the client's error
+  hToDomain: translating into domain types is the dto package's job
+  hCommand: 'the transport builds the command — it travels on, not a handful of arguments'
+  hCall: the use case gets domain entities, not a request
+  hFail: a separate function turns a domain error into a status code
+  hCreated: '201 and an empty body: the client sent the number itself'
+  errWhat: turns a domain error into a status code
+  errRule: 'a broken domain rule is the request''s error, not the server''s'
+  errUnknown: 'the cause stays in the log, the code goes out'
+  routeWhat: the module declares the address of its own handler
+  mainWired: the assembly moved into a generated function
+  wireSet: 'the set of adapters: one for all applications of the service'
+  wireBind: which implementation stands behind the port
+  wireInject: 'what to assemble — stated by the result type'
+  wireStub: 'a stub body: the real one is written by the generator'
+  wirePublisher: 'the publishing port now sits behind the broker, and the outbox behind its narrow port'
+  cmdWhat: 'the command: what to do and with what data'
+  cmdValidate: the shape is checked here, not the domain rules
+  cardWhat: an invoice card for the screen, not an aggregate
+  queryWhat: 'the query: what is asked for, named as a type'
+  cardPort: 'the read port: hands out a ready card'
+  cardsSQL: 'the query returns exactly what the screen shows'
+  cardsWhat: 'the read port implemented: one query, no aggregate'
+  cardsRead: reads an invoice card by its number
+  cardsScan: 'the columns land straight in the projection'
 steps:
   - id: leak
     title: The domain went onto the bus
@@ -306,6 +348,8 @@ steps:
         else.
       - `applications/payment/transport/consumer/received.go` — receiving a foreign message.
       - `infrastructure/postgres/inbox.go` — the memory of what was handled.
+      - `cmd/api/wire.go` — wiring: the publishing port now sits behind
+        `broker.Publisher`.
 
       The domain did not change by a single line: it still has its own facts and
       its own name for each of them. Everything new landed on the boundary — on
