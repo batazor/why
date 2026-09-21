@@ -22,19 +22,25 @@ export function stepOf(rule: Rule): TrainStep {
   switch (rule.is) {
     case 'reqs':
     case 'numbers':
-    case 'covered':
       return 'req';
     case 'routes':
       return 'api';
     case 'kind':
     case 'path':
     case 'schema':
+    /** Покрытие — про схему, а не про требования: на первом шаге блоков ещё нет. */
+    case 'covered':
       return 'design';
     case 'estimate':
       return 'estimate';
-    /** Своё правило автора и любое отрицание — это уже разбор слабых мест. */
-    default:
-      return 'harden';
+    /**
+     * Составное правило живёт там же, где то, из чего оно сложено: «или кэш,
+     * или реплика» — это по-прежнему про схему.
+     */
+    case 'any':
+      return rule.rules.length ? stepOf(rule.rules[0]) : 'harden';
+    case 'not':
+      return stepOf(rule.rule);
   }
 }
 

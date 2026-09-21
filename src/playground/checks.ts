@@ -136,6 +136,16 @@ export function mergeChecks(previous: Check[], fresh: Check[]): Check[] {
 const OBVIOUS: ReadonlySet<string> = new Set(['user', 'mobile', 'external']);
 
 /**
+ * Сколько требований спросить, если в эталоне их столько.
+ *
+ * Эталон автора — исчерпывающий разбор, и требовать от прохождения столько же
+ * формулировок значит поставить стену на первом же шаге. Берём меньше
+ * половины и не больше пяти: дальше растёт не качество ответа, а объём
+ * печати.
+ */
+const threshold = (count: number) => Math.max(2, Math.min(5, Math.round(count * 0.45)));
+
+/**
  * Связь между блоками интересна, когда она про состояние или про асинхронность:
  * «сервис пишет в очередь», «воркер кладёт результат в хранилище». Связи вида
  * «клиент пришёл в шлюз» рисуют все, и проверять их незачем.
@@ -164,43 +174,78 @@ export function deriveChecks(scenario: Scenario, t: T): Check[] {
   const fr = reference.requirements.filter((item) => item.kind === 'fr' && item.text.trim()).length;
   const nfr = reference.requirements.filter((item) => item.kind === 'nfr' && item.text.trim()).length;
   if (fr) {
-    const min = Math.max(2, Math.ceil(fr * 0.6));
+    const min = threshold(fr);
     add({ is: 'reqs', kind: 'fr', min }, t('check.reqsFr', { n: String(min) }), 2);
   }
   if (nfr) {
-    const min = Math.max(2, Math.ceil(nfr * 0.6));
+    const min = threshold(nfr);
     add({ is: 'reqs', kind: 'nfr', min }, t('check.reqsNfr', { n: String(min) }), 2);
     if (reference.requirements.some((item) => item.kind === 'nfr' && item.target.trim()))
-      add({ is: 'numbers' }, t('check.numbers'), 2);
+      add({ is: 'numbers' }, t('check.numbers'), 3);
   }
   if (reference.requirements.some((item) => item.covers.length)) add({ is: 'covered' }, t('check.covered'), 2);
   if (reference.api.length) add({ is: 'routes' }, t('check.routes'), 1);
 
-  const kinds = new Set(reference.nodes.map((node) => node.kind));
-  for (const kind of kinds) if (!OBVIOUS.has(kind)) add({ is: 'kind', kind }, t('check.kind', { kind: block(kind) }));
-
+  /**
+   * Связи выводятся раньше блоков: связь уже говорит, что оба её конца на
+   * схеме есть, и отдельная проверка «на схеме есть очередь» после «сервис
+   * пишет в очередь» — это одно и то же требование, посчитанное дважды.
+   */
   const kindOf = new Map(reference.nodes.map((node) => [node.id, node.kind]));
+  const paths: Check[] = [];
+  const linked = new Set<string>();
   const seen = new Set<string>();
   for (const edge of reference.edges) {
     const from = kindOf.get(edge.source);
     const to = kindOf.get(edge.target);
     if (!from || !to || from === to) continue;
     if (!worthChecking(to, edge.mode)) continue;
-    const key = `${from}>${to}:${edge.mode}`;
+    /**
+     * Встречные связи одного режима — одна проверка на обе стороны: когда в
+     * эталоне очередь и воркер ходят друг к другу, направление стрелки у
+     * того, кто решает, — дело вкуса, а не ошибка.
+     */
+    const back = reference.edges.some(
+      (other) => kindOf.get(other.source) === to && kindOf.get(other.target) === from && other.mode === edge.mode,
+    );
+    const key = back ? [from, to].sort().join('~') + `:${edge.mode}` : `${from}>${to}:${edge.mode}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    add(
-      { is: 'path', from, to, mode: edge.mode },
-      t(edge.mode === 'async' ? 'check.pathAsync' : 'check.path', { from: block(from), to: block(to) }),
-      2,
+    linked.add(from).add(to);
+    const names = { from: block(from), to: block(to) };
+    paths.push(
+      back
+        ? {
+            id: uid('chk'),
+            text: t('check.pathBoth', names),
+            weight: 2,
+            rule: {
+              is: 'any',
+              rules: [
+                { is: 'path', from, to, mode: edge.mode },
+                { is: 'path', from: to, to: from, mode: edge.mode },
+              ],
+            },
+          }
+        : {
+            id: uid('chk'),
+            text: t(edge.mode === 'async' ? 'check.pathAsync' : 'check.path', names),
+            weight: 2,
+            rule: { is: 'path', from, to, mode: edge.mode },
+          },
     );
   }
+
+  const kinds = new Set(reference.nodes.map((node) => node.kind));
+  for (const kind of kinds)
+    if (!OBVIOUS.has(kind) && !linked.has(kind)) add({ is: 'kind', kind }, t('check.kind', { kind: block(kind) }));
+  checks.push(...paths);
 
   for (const kind of kinds)
     if (STATEFUL_KINDS.has(kind) && reference.nodes.some((node) => node.kind === kind && node.schema?.length))
       add({ is: 'schema', kind }, t('check.schema', { kind: block(kind) }));
 
-  if (reference.estimate.trim()) add({ is: 'estimate' }, t('check.estimate'), 2);
+  if (reference.estimate.trim()) add({ is: 'estimate' }, t('check.estimate'), 3);
 
   return checks;
 }

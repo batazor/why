@@ -201,7 +201,12 @@ export function TrainPanel({ design, update, t, now, onReset }: Props) {
 
       <div className="pg-train__actions">
         {step === 'harden' ? (
-          <button type="button" className="pg-button pg-button--wide" disabled={!done || !running} onClick={finish}>
+          /**
+           * Завершить можно всегда: ворота последнего шага говорят, насколько
+           * хорош ответ, а не разрешают ли выйти. Иначе пропущенный шаг
+           * запирает человека в прохождении, которое нельзя закончить.
+           */
+          <button type="button" className="pg-button pg-button--wide" disabled={!running} onClick={finish}>
             <i className="codicon codicon-check-all" aria-hidden="true" /> {t('train.finish')}
           </button>
         ) : (
@@ -221,7 +226,7 @@ export function TrainPanel({ design, update, t, now, onReset }: Props) {
           </>
         )}
       </div>
-      {!done && <p className="pg-hint">{t('train.locked')}</p>}
+      {!done && <p className="pg-hint">{t(step === 'harden' ? 'train.lockedLast' : 'train.locked')}</p>}
     </div>
   );
 }
