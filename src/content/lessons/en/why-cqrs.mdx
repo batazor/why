@@ -2,7 +2,7 @@
 title: Why CQRS
 description: ''
 problem: >-
-  The scenario takes five parameters, and every call writes its own signature.
+  The use case takes five parameters, and nothing stops a call from mixing them up.
   Reading goes through the same aggregate: to show one row on a screen the
   service loads the whole invoice with all the rules reading does not need.
 tags: [ddd, cqrs]
@@ -28,11 +28,11 @@ terms:
     A model for reading: data laid out the way it is shown, not the way it is
     changed.
   агрегат: >-
-    A cluster of objects that changes as one whole, with a root the outside world
-    goes through. A consistency boundary and a transaction boundary.
+    A cluster of objects that changes as one whole, with a root through which
+    everything outside refers to it. The consistency and transaction boundary.
   DTO: >-
-    A struct of plain fields in which data crosses a boundary: a request body, a
-    table row, a message on a bus. No behaviour in it.
+    A structure of plain fields in which data crosses a boundary: a request
+    body, a table row, a message on the bus. It has no behaviour.
 comments:
   ucDeps: dependencies are domain ports and nothing else
   handleCmd: one argument — the command, and it checks its own shape
@@ -64,23 +64,23 @@ steps:
   - id: problem
     title: Five parameters and one aggregate
     narration: |-
-      On the right is the scenario from the third chapter. It works, and it has
-      two troubles, both visible right in its signature.
+      On the right is the use case from the infrastructure chapter. It works, and
+      it has two problems.
 
-      The first: there are already five parameters and there will be seven. Every
-      call writes them in its own order, nothing stops you from swapping two of
-      the same type, and the call cannot be passed on — into a queue, a log, a
-      retry — because it has no shape.
+      The first is visible right in its signature: there are already five
+      parameters and there will be seven. Every call spells them out again,
+      nothing stops you from swapping two of the same type, and the call cannot
+      be passed on — into a queue, a log, a retry — because it has no shape.
 
-      The second trouble is not visible but it is right there. To show an invoice
-      on a screen the same code loads the whole aggregate: lines, invariants,
+      The second is not visible in the signature, but it is right there. To show
+      an invoice on a screen the same code loads the whole aggregate: lines, invariants,
       transaction. For one card in a list that is expensive and pointless —
       reading needs nothing of what the aggregate exists for.
   - id: command
     title: The command as a type
     narration: |-
       A [[команда|command]] is a request to change state, named by a type. Here
-      it sits next to the scenario, in the same module: the command is invented
+      it sits next to the use case, in the same module: the command is invented
       by whoever carries it out.
 
       What that buys immediately: the call now has a shape. It can be put in a
@@ -94,8 +94,8 @@ steps:
   - id: handler
     title: The command handler
     narration: |-
-      The same file, and one argument in it instead of four. The scenario became
-      a handler: it takes the command, checks the shape, hands the work to the
+      The same file, with two parameters instead of five: `ctx` and the command.
+      The use case became a handler: it takes the command, checks the shape, hands the work to the
       domain, saves, publishes the facts.
 
       The order has not changed by a single step — what changed is what it is called with.
@@ -169,7 +169,7 @@ steps:
       at all: the same database, the same `SELECT` — the split has already done
       the main thing.
   - id: files
-    title: What came out
+    title: What we ended up with
     narration: |-
       Click a file to read it.
 
@@ -185,6 +185,6 @@ steps:
       the wrong place.
 ---
 
-The same service as in the three DDD chapters: the invoice, its modules and its
+The same service as in the DDD chapters: the invoice, its modules and its
 ports. The domain does not change from here on — what changes is how it is
 called and how it is read.

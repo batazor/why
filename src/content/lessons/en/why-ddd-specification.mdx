@@ -3,9 +3,9 @@ title: 'Why DDD: specification'
 description: ''
 problem: >-
   The rule "the invoice is overdue" lives in three places and is named in none:
-  the scenario assumes it from outside, the read projection keeps a field, the
-  database keeps a `WHERE` clause. The first change to the rule reaches only one
-  of the three.
+  a `WHERE` clause in the scheduler, a field in the read projection and the
+  report for accounting. The first change to the rule reaches only one of the
+  three.
 tags: [ddd, pattern]
 order: 7
 deck: why-ddd-specification
@@ -15,7 +15,7 @@ labels:
   rule: "\"Invoice is overdue\""
   ruleParts: due date, calendar, status
   places: Three places
-  placesList: scenario, projection, WHERE
+  placesList: WHERE, projection, report
   threeCopies: one rule, three copies
   onlyOne: one of them gets changed
 terms:
@@ -23,8 +23,8 @@ terms:
     A predicate rule extracted into an object: it answers yes or no about one
     domain object and lives in the domain, not in a query clause.
   агрегат: >-
-    A cluster of objects that changes as one whole, with a root the outside world
-    goes through. A consistency boundary and a transaction boundary.
+    A cluster of objects that changes as one whole, with a root through which
+    everything outside refers to it. The consistency and transaction boundary.
   доменный сервис: >-
     A domain rule that belongs in no aggregate: it is about several of them, or
     about something the aggregate does not have. It does not leave the domain,
@@ -33,8 +33,8 @@ terms:
     A model for reading: data laid out the way it is shown, not the way it is
     changed.
   application: >-
-    The layer that decides what jobs the program does. It hands work to the
-    domain, holds no domain rules and stays thin.
+    The level that defines the jobs the software is supposed to do. It hands
+    the work to the domain, holds no domain rules and is kept thin.
 comments:
   aggCharge: puts the fee on the invoice; a paid invoice takes none
   aggCopy: 'a copy of the lines: unchangeable from outside'
@@ -60,14 +60,14 @@ comments:
   svcFromAggregate: 'the rule takes the due date from the invoice itself, not from the caller'
   ucOverdueCall: the rule computes the amount from the invoice, the rate and the calendar
   ucOverdueApply: only the invoice itself can charge the fee to the invoice
-  ucOverdueDeps: two ports, a calendar and a rate — all the scenario needs
+  ucOverdueDeps: two ports, a calendar and a rate — all the use case needs
   ucOverdueRun: load, calculate, apply, save, tell
-  ucSpecGuard: 'the scenario asks the rule instead of trusting the caller'
+  ucSpecGuard: 'the use case asks the rule instead of trusting the caller'
 steps:
   - id: problem
     title: The predicate that is not in the code
     narration: |-
-      On the right is the overdue scenario from the previous chapter. It charges
+      On the right is the overdue use case from the previous chapter. It charges
       the fee — and nowhere does it ask whether the invoice is overdue: it
       assumes whoever called it has already worked that out.
 
@@ -91,7 +91,7 @@ steps:
       yes or no.
 
       The rule lives in `domains/invoice/rules` — a package of its own, next to
-      `services`. The reason is the same as for the penalty: a rule about the
+      `services`. The reason is the same as for the late fee: a rule about the
       invoice but not from its data — and a separate package keeps it from
       spreading across the domain as files named `*_spec.go`. You call it through
       the package: `rules.NewOverdue(...)`.
@@ -100,9 +100,9 @@ steps:
       see how it behaves on holidays, one call is enough — no database and no
       scheduler are needed for it.
   - id: usage
-    title: The scenario asks instead of assuming
+    title: The use case asks instead of assuming
     narration: |-
-      The same scenario file with one new check in it. Now it does not take the
+      The same use case file with one new check in it. Now it does not take the
       caller's word: it asks the specification and leaves without changes if the
       invoice is not overdue.
 
@@ -110,7 +110,7 @@ steps:
       picked an extra invoice, a retry arrived a day after the payment, someone
       triggered the wrong number by hand — in all three cases no fee is charged.
 
-      Note that the scenario still holds no rule. It **calls** one: the rule is in
+      Note that the use case still holds no rule. It **calls** one: the rule is in
       the domain, the order of the operation in [[application]].
   - id: combine
     title: Combining — and when it is redundant
@@ -155,13 +155,13 @@ steps:
       the more invoices arrive for nothing. That is a question of volume, and it
       is answered by narrowing the clause, not by moving the rule into SQL.
   - id: files
-    title: What came out
+    title: What we ended up with
     narration: |-
       Click a file to read it.
 
       - `domains/invoice/rules/overdue.go` — the predicates: "overdue", "large"
         and their composition.
-      - `applications/overdue/charge.go` — the scenario that asks instead of
+      - `applications/overdue/charge.go` — the use case that asks instead of
         assuming.
 
       The rule is finally named and lives in the domain. Reading still answers

@@ -24,7 +24,7 @@ terms:
     same words and types as the domain. It changes when the domain changes.
   integration event: >-
     The message a service uses to tell its neighbours about a fact. A separate
-    type with a separate schema: strangers read it, so it changes under
+    type with a separate schema: outsiders read it, so it changes under
     compatibility rules.
   envelope: >-
     The wrapper around a message: identifier, type, time, key. The data of the
@@ -193,9 +193,10 @@ steps:
       and without anyone deciding so.
 
       Next to it is whoever calls `Contract`: `broker.Publisher`. It implements
-      the `invoice.Publisher` port the domain declared back in the third
+      the `invoice.Publisher` port the domain declared back in the second
       chapter — translate the fact, serialise it and hand the row over for
-      writing. It sends nothing itself; why — in the next step.
+      writing. It sends nothing itself: the bus is not part of the transaction,
+      as the infrastructure chapter showed.
 
       The row is written not by it but by `Appender` — a narrow one-method port
       declared right here, by the one who uses it. Behind it stands
@@ -262,7 +263,7 @@ steps:
   - id: evolve
     title: How to change a contract
     narration: |-
-      There is one rule, and it is not about code: strangers read this schema,
+      There is one rule, and it is not about code: outsiders read this schema,
       so change it in a way the reader will not notice.
 
       - **Adding an optional field** is fine. An old reader ignores it.
@@ -277,7 +278,7 @@ steps:
       The moment `ChargePenalty` appears in the contract it is no longer a fact
       but a command — and a neighbour starts driving our domain over the bus.
   - id: files
-    title: What came out of it
+    title: What we ended up with
     narration: |-
       Click a file to read it.
 

@@ -2,7 +2,7 @@
 title: 'Why DDD: applications && infrastructure'
 description: ''
 problem: >-
-  The scenario, the storage and the incoming call spread across layers, and what
+  The use case, the storage and the incoming call spread across layers, and what
   each of them knows about the domain gets discovered in production: where the
   transaction started, who sent the fact, and why a subscriber learned about
   something that is not in the database.
@@ -12,7 +12,7 @@ deck: why-ddd-infrastructure
 series: why-ddd
 labels:
   kindStep: step
-  scenario: Scenario
+  scenario: Use case
   scenarioSub: published the fact
   subscriber: Subscriber
   subscriberSub: started packing the parcel
@@ -57,7 +57,7 @@ terms:
     A value with no identity: compared by its contents, never changed after it
     is created, and keeping its own rules inside itself.
   vertical slice: >-
-    A module cut along the scenario rather than the layer: transport, scenario
+    A module cut along the use case rather than the layer: transport, use case
     and the work with the aggregate live together because they change together.
 comments:
   aggCopy: 'a copy of the lines: unchangeable from outside'
@@ -96,19 +96,19 @@ steps:
   - id: issuing
     title: 'Use case: issue an invoice'
     narration: |-
-      The first module finally has code. The scenario takes three steps: build
+      The `issuing` module finally has code. The use case takes three steps: build
       the aggregate, save it, publish the facts.
 
       Not a single domain rule is here — they stayed in `Issue`. Here there is
       only order, and that is what [[application]] is: it hands out work and
       keeps the operation on course.
 
-      The scenario takes what the domain needs as plain parameters. Whatever
+      The use case takes what the domain needs as plain parameters. Whatever
       arrives over HTTP or from the bus does not reach this far: those are
       transport [[DTO|DTOs]], and the transport translates them.
 
       The dependencies are two ports and no implementations. That is why the
-      scenario has one reason to change — the order of the operation: swap the
+      use case has one reason to change — the order of the operation: swap the
       database or the bus, and it stays as it is.
 
       Publishing comes after saving, not before: a subscriber should not learn
@@ -122,7 +122,7 @@ steps:
       call the method, save, publish.
 
       The "already paid" check is not written here — it is in `MarkPaid`. The
-      scenario only passes the error up: were it checking on its own, the rule
+      use case only passes the error up: were it checking on its own, the rule
       would live in two places, and one day one of them would fall behind.
 
       It also shows why the repository hands out the whole aggregate: state is
@@ -166,15 +166,15 @@ steps:
   - id: broken
     title: Saved and published
     narration: |-
-      Back to the scenario. It makes two calls: save and publish. Separately
+      Back to the use case. It makes two calls: save and publish. Separately
       both are right; together they are not.
 
       If `Publish` fails, the invoice is in storage and nobody knows about it:
-      delivery does not start packing, accounting sees no charge. If `Save`
-      fails after a successful `Publish`, it is worse: subscribers know about an
-      invoice that does not exist.
+      delivery does not start packing, accounting sees no charge. Swapping
+      the calls is worse: `Save` fails after a successful `Publish`, and
+      subscribers know about an invoice that does not exist.
 
-      I left a note about this back in the chapter about scenarios. Time to
+      I left a note about this back in the first step. Time to
       close it: there must be one operation, not two.
   - id: uow
     title: Unit of work
@@ -191,12 +191,12 @@ steps:
   - id: transaction
     title: One operation instead of two
     narration: |-
-      The scenario changed in one place: the save and the publish moved inside
+      The use case changed in one place: the save and the publish moved inside
       `Do`. The order of the steps is the same; the boundary changed — it is one
       operation now.
 
       The implementation puts the transaction into `ctx`, and the adapters take
-      it from there with that same `conn` function. So the scenario passes no
+      it from there with that same `conn` function. So the use case passes no
       transaction around and never sees one: what it needs is a boundary, not a
       connection.
 
@@ -218,10 +218,10 @@ steps:
       bus and marks what it sent. It may send twice, so a subscriber has to be
       idempotent — but it cannot send what never happened.
   - id: files
-    title: What came out around the domain
+    title: What we ended up with around the domain
     narration: |-
       The tree shows the whole layout: the domain in `domains/invoice`, the
-      scenarios in `applications`, one module per slice. Click a file to read
+      use cases in `applications`, one module per slice. Click a file to read
       it.
 
       - `applications/issuing/issue.go` — issue an invoice, all inside one unit
@@ -234,8 +234,9 @@ steps:
       - `infrastructure/postgres/outbox.go` — facts as a row in the same
         transaction.
 
-      Over the whole chapter the domain changed by one file — `load.go` — and
-      that one is about rebuilding its own aggregate. Everything else landed
+      Over the whole chapter the domain grew by two files: `load.go`, which is
+      about rebuilding its own aggregate, and `uow.go`, one more port.
+      Everything else landed
       outside, behind the ports the domain declared itself.
 
       What is still missing: the incoming call and the wiring of the
@@ -245,5 +246,5 @@ steps:
 The domain is described and knows nothing about the outside: it has an
 aggregate, values, facts and two ports.
 
-What follows is everything around it: the scenarios, the port implementations,
+What follows is everything around it: the use cases, the port implementations,
 the incoming call and the wiring of the application.

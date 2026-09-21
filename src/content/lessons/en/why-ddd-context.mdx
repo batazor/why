@@ -60,7 +60,7 @@ terms:
     A value with no identity: compared by its contents, never changed after it
     is created, and keeping its own rules inside itself.
   vertical slice: >-
-    A module cut along the scenario rather than the layer: transport, scenario
+    A module cut along the use case rather than the layer: transport, use case
     and the work with the aggregate live together because they change together.
 steps:
   - id: boundary
@@ -229,8 +229,8 @@ steps:
       - **overdue** — chase the late ones: find the invoices whose due date has
         passed.
 
-      What splits them is the scenario, not the layer. Such a module is a
-      [[vertical slice]]: transport, scenario and the work with the aggregate
+      What splits them is the use case, not the layer. Such a module is a
+      [[vertical slice]]: transport, use case and the work with the aggregate
       live inside it together — not "all the handlers here, all the
       repositories there".
 
@@ -294,14 +294,14 @@ This decision comes before the others: until it is said what the context owns an
   ]}
 >
 **<span data-term="DDD">DDD</span>** answers that with a single agreement: a
-service has levels, and each level has exactly one job. Knowledge only
-points down: a level knows the one below it and nothing about the one above.
-That is why the domain depends on neither the database nor the protocol of the
+service has levels, and each level has exactly one job. Knowledge only runs
+from the outside in: the transport, the application and the database know about
+the domain, and the domain knows nothing about them. That is why the domain depends on neither the database nor the protocol of the
 call.
 </Levels>
 
 What follows is a walkthrough of one example. An online shop: the catalogue,
-delivery, customers and billing.
+billing and delivery.
 
 Say "payment" inside it and every department hears its own thing.
 

@@ -4,7 +4,7 @@ description: ''
 problem: >-
   The late fee is calculated from the due date, the daily rate and the working
   calendar. It does not fit in the aggregate — the invoice would start knowing
-  about calendars; it cannot go into the scenario either — the rule would leave
+  about calendars; it cannot go into the use case either — the rule would leave
   the domain, and the next caller would calculate it differently.
 tags: [ddd]
 order: 6
@@ -17,7 +17,7 @@ labels:
   invoice: Invoice
   invoiceKnows: knows only about itself
   notOneAggregate: the rule is not about one aggregate
-  leaksToScenario: in a scenario it leaves the domain
+  leaksToScenario: in a use case it leaves the domain
 terms:
   доменный сервис: >-
     A domain rule that belongs in no aggregate: it is about several of them, or
@@ -27,14 +27,14 @@ terms:
     Data in structs, rules in procedures around them. The DDD words stay in the
     directory names while the domain itself is in someone else's hands.
   агрегат: >-
-    A cluster of objects that changes as one whole, with a root the outside world
-    goes through. A consistency boundary and a transaction boundary.
+    A cluster of objects that changes as one whole, with a root through which
+    everything outside refers to it. The consistency and transaction boundary.
   инвариант: >-
     A statement about state that must hold before and after every change. Not an
     input check but a property the aggregate keeps at all times.
   application: >-
-    The layer that decides what jobs the program does. It hands work to the
-    domain, holds no domain rules and stays thin.
+    The level that defines the jobs the software is supposed to do. It hands
+    the work to the domain, holds no domain rules and is kept thin.
   value object: >-
     A value with no identity: compared by its contents, never changed after it is
     created, and keeping its own rules inside itself.
@@ -58,7 +58,7 @@ comments:
   svcFromAggregate: 'the rule takes the due date from the invoice itself, not from the caller'
   ucOverdueCall: the rule computes the amount from the invoice, the rate and the calendar
   ucOverdueApply: only the invoice itself can charge the fee to the invoice
-  ucOverdueDeps: two ports, a calendar and a rate — all the scenario needs
+  ucOverdueDeps: two ports, a calendar and a rate — all the use case needs
   ucOverdueRun: load, calculate, apply, save, tell
 steps:
   - id: problem
@@ -74,7 +74,7 @@ steps:
       It cannot go into the [[агрегат|aggregate]]: the invoice would start
       knowing about calendars and rates, and neither belongs to it — the rate is
       changed by a directive, the calendar comes from a reference table. It cannot
-      go into the scenario either: the rule would leave the domain for
+      go into the use case either: the rule would leave the domain for
       [[application]], and the next caller — from another module — would
       calculate it differently.
 
@@ -155,20 +155,20 @@ steps:
   - id: scenario
     title: Who calls it
     narration: |-
-      The last empty module is filled: `applications/overdue` — a scheduled
-      scenario. It loads the invoice, calls the service, applies the result
+      The first of the empty modules is filled: `applications/overdue` — a scheduled
+      use case. It loads the invoice, calls the service, applies the result
       through the method, saves and publishes the facts.
 
-      Compare it with the service next to it. The scenario has `ctx`, two ports
+      Compare it with the service next to it. The use case has `ctx`, two ports
       and the order of the operation — and not a single rule. The service has a
       rule — and not a single port. The test that keeps them apart: once `ctx` or
       an interface to storage appears, it is not a domain service any more but
       application.
 
-      The scenario does not touch the due date at all: it hands the rule the
+      The use case does not touch the due date at all: it hands the rule the
       invoice, and the rule takes the date itself. The invoice knows the date
       because the invoice set it itself; the rate and the calendar are not kept on
-      the invoice — the scenario brings those. That is the difference between a
+      the invoice — the use case brings those. That is the difference between a
       field of the aggregate and an input of the rule.
   - id: notneeded
     title: When a service is not needed
@@ -182,14 +182,14 @@ steps:
       - A rule about one value is **a method of a [[value object]]**. Adding
         money is the job of `Money`, not of a service next to it.
       - A rule that needs a repository or a bus is **not a domain service**. It
-        is a scenario, and it lives in `application`.
+        is a use case, and it lives in `application`.
 
       If services appear by default for everything, you get an
       [[анемичный домен|anemic domain]]: structs with fields, procedures around
       them and DDD words in the directory names. That differs from the original
       "everything in one file" only by the number of files.
   - id: files
-    title: What came out
+    title: What we ended up with
     narration: |-
       Click a file to read it.
 
@@ -198,11 +198,12 @@ steps:
       - `domains/invoice/calendar.go` — the working calendar: part of the model. No ports, no `ctx`.
       - `domains/invoice/charged.go` — the aggregate method: applies the amount,
         keeps the invariants, records the fact.
-      - `applications/overdue/charge.go` — the scheduled scenario: load,
+      - `applications/overdue/charge.go` — the scheduled use case: load,
         calculate, apply, save, tell.
 
-      The domain grew by two files and still knows nothing about a database or a
-      schedule. All three modules now have code.
+      The domain grew by three files and still knows nothing about a database or
+      a schedule. Of the three modules only one has code so far: `issuing` and
+      `payment` are waiting for the infrastructure chapter.
 ---
 
 The domain from the second chapter: the aggregate, the values, the facts and two

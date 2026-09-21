@@ -14,7 +14,7 @@ labels:
   first: Payment
   firstDoes: marked the invoice paid
   second: Overdue
-  secondDoes: charged a penalty
+  secondDoes: charged a late fee
   sameState: both read the same state
   lastWins: what stayed is what was written second
 terms:
@@ -97,16 +97,17 @@ steps:
       it: a [[unit of work]], a repository, published facts.
 
       While it is called one at a time, it is correct. Now two calls at once: one
-      takes a payment, the other charges a penalty — the overdue scheduler woke
+      takes a payment, the other charges a late fee — the overdue scheduler woke
       up a second earlier.
 
       Both loaded the invoice in the same state. Both applied their rule to
       their own copy in memory. Both saved. What stayed in the database is
-      whatever was written second: the penalty wiped the payment, or the payment
-      wiped the penalty.
+      whatever was written second: the late fee wiped the payment, or the payment
+      wiped the late fee — as luck would have it.
 
       This is a [[lost update]], and a transaction does not cure it. The
-      transactions never overlapped, each did exactly what it was asked to do,
+      transactions did not get in each other's way: each did exactly what it was
+      asked to do,
       and both committed. Nothing failed, the logs are clean.
   - id: locks
     title: Why not lock the row
@@ -115,7 +116,7 @@ steps:
       call wait for the first. That is [[pessimistic locking]], and it does work.
 
       Here is what it costs. The row stays locked until the transaction ends:
-      while the use case computes a penalty or calls the payment gateway,
+      while the use case computes a late fee or calls the payment gateway,
       everyone else on that invoice waits in line. Two use cases that take rows
       in a different order give you a deadlock.
 
@@ -215,7 +216,7 @@ steps:
       that ties two of them together cannot be held this way — there it is
       either one aggregate, or consistency stretched over time.
   - id: files
-    title: What came out of it
+    title: What we ended up with
     narration: |-
       Click a file to read it.
 
