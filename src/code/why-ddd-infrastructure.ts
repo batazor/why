@@ -1,16 +1,18 @@
 import type { CodeDeck } from './types';
 import posterSpec from './why-ddd-infrastructure.poster.ts';
 import type { FileTreeSpec } from './tree';
+import { eventsWithPenalty, overdueSeed } from './why-ddd-seed.ts';
 
 /**
- * Колода третьей части: сценарии и инфраструктура.
+ * Колода пятой главы: сценарии и инфраструктура.
  *
  * ПРАВИЛО: код и дерево общие для всех локалей, поэтому в них только
  * английский, а комментарии — ключи `{{key}}`. Проза и переводы комментариев
  * лежат в локализованном уроке.
  *
- * Домен достался от второй части целиком: его файлы помечены `seed` и стоят в
- * дереве с первого шага в том виде, в каком вторая часть их оставила.
+ * Домен достался от предыдущих глав целиком, вместе со сценарием просрочки:
+ * файлы помечены `seed` и стоят в дереве с первого шага в том виде, в каком
+ * их оставили главы про домен, доменные сервисы и спецификацию.
  */
 
 export const tree: FileTreeSpec = {
@@ -31,6 +33,7 @@ export const tree: FileTreeSpec = {
     files: { view: 'both', standalone: true, wide: true, summary: true },
   },
   files: [
+    ...overdueSeed,
     {
       path: 'GLOSSARY.md',
       seed: true,
@@ -131,31 +134,7 @@ func (i *Invoice) MarkPaid() error {
       path: 'invoice/domains/invoice/events/event.go',
       seed: true,
       lang: 'go',
-      code: `package events
-
-import "billing/invoice/domains/invoice/vo"
-
-// {{eventWhat}}
-type Event interface {
-	FactName() string
-}
-
-// {{eventIssued}}
-type Issued struct {
-	Number   string
-	Customer string
-	Total    vo.Money
-}
-
-func (Issued) FactName() string { return "invoice.issued" }
-
-// {{eventPaid}}
-type Paid struct {
-	Number string
-}
-
-func (Paid) FactName() string { return "invoice.paid" }
-`,
+      code: eventsWithPenalty,
     },
     {
       path: 'invoice/domains/invoice/repository.go',
@@ -569,8 +548,6 @@ func (o *Outbox) Publish(ctx context.Context, facts ...events.Event) error {
 `,
     },
   ],
-  /** Каталог просрочки пока пуст: его сценарий в разборе не участвует. */
-  dirs: [{ path: 'invoice/applications/overdue', seed: true }],
 };
 
 /** Постер каталога: суть главы одной схемой. */

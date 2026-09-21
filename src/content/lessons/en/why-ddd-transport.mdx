@@ -93,6 +93,21 @@ comments:
   wireBind: which implementation stands behind the port
   wireInject: 'what to assemble — stated by the result type'
   wireStub: 'a stub body: the real one is written by the generator'
+  aggCharge: puts the fee on the invoice; a paid invoice takes none
+  svcCalendar: 'the working calendar: part of the model, not a storage port'
+  svcPenalty: 'the rule: an invoice, a rate and a calendar — an amount out'
+  svcFromAggregate: 'the rule takes the due date from the invoice itself, not from the caller'
+  specIface: 'the specification contract: one question about one aggregate'
+  specWhat: 'the predicate: is this invoice overdue?'
+  specSatisfied: 'a paid invoice is never overdue'
+  specBig: 'a second predicate: the invoice is above the limit'
+  specAll: 'composition: requires every predicate at once'
+  ucOverdueDeps: two ports, a calendar and a rate — all the use case needs
+  ucOverdueRun: load, calculate, apply, save, tell
+  ucSpecGuard: 'the use case asks the rule instead of trusting the caller'
+  ucOverdueCall: the rule computes the amount from the invoice, the rate and the calendar
+  ucOverdueApply: only the invoice itself can charge the fee to the invoice
+  eventPenalty: the invoice was charged a late fee
 steps:
   - id: entry
     title: Nobody to call it

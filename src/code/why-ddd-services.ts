@@ -1,5 +1,6 @@
 import type { CodeDeck } from './types';
 import type { FileTreeSpec } from './tree';
+import { eventsWithPenalty } from './why-ddd-seed.ts';
 import posterSpec from './why-ddd-services.poster.ts';
 
 /**
@@ -11,7 +12,7 @@ import posterSpec from './why-ddd-services.poster.ts';
  *
  * Домен достался от второй главы и помечен `seed`. Здесь появляется правило,
  * которое не про один агрегат, метод, который его применяет, и наполняется
- * последний пустой модуль — `overdue`.
+ * первый из пустых модулей — `overdue`.
  */
 
 /** Постер каталога: суть проблемы одной схемой. */
@@ -158,39 +159,7 @@ func (Paid) FactName() string { return "invoice.paid" }
       edits: [
         {
           from: 'applying',
-          code: `package invoice
-
-import "billing/invoice/domains/invoice/vo"
-
-// {{eventWhat}}
-type Event interface {
-	FactName() string
-}
-
-// {{eventIssued}}
-type Issued struct {
-	Number   Number
-	Customer CustomerID
-	Total    vo.Money
-}
-
-func (Issued) FactName() string { return "invoice.issued" }
-
-// {{eventPaid}}
-type Paid struct {
-	Number Number
-}
-
-func (Paid) FactName() string { return "invoice.paid" }
-
-// {{eventPenalty}}
-type PenaltyCharged struct {
-	Number Number
-	Amount vo.Money
-}
-
-func (PenaltyCharged) FactName() string { return "invoice.penalty_charged" }
-`,
+          code: eventsWithPenalty,
         },
       ],
     },

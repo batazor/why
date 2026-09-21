@@ -1,5 +1,6 @@
 import type { CodeDeck } from './types';
 import type { FileTreeSpec } from './tree';
+import { eventsWithPenalty, overdueSeed } from './why-ddd-seed.ts';
 import posterSpec from './why-ddd-transport.poster.ts';
 
 /**
@@ -33,6 +34,7 @@ export const tree: FileTreeSpec = {
     files: { view: 'both', standalone: true, wide: true, summary: true },
   },
   files: [
+    ...overdueSeed,
     {
       path: 'GLOSSARY.md',
       seed: true,
@@ -133,31 +135,7 @@ func (i *Invoice) MarkPaid() error {
       path: 'invoice/domains/invoice/events/event.go',
       seed: true,
       lang: 'go',
-      code: `package events
-
-import "billing/invoice/domains/invoice/vo"
-
-// {{eventWhat}}
-type Event interface {
-	FactName() string
-}
-
-// {{eventIssued}}
-type Issued struct {
-	Number   string
-	Customer string
-	Total    vo.Money
-}
-
-func (Issued) FactName() string { return "invoice.issued" }
-
-// {{eventPaid}}
-type Paid struct {
-	Number string
-}
-
-func (Paid) FactName() string { return "invoice.paid" }
-`,
+      code: eventsWithPenalty,
     },
     {
       path: 'invoice/domains/invoice/repository.go',
@@ -808,11 +786,10 @@ func openDB(dsn string) (*sql.DB, error) {
   ],
   /**
    * Каталоги, которые проблема называет раньше кода: пустой `cmd` и есть та
-   * самая «сборки нет», а `payment` ждёт второй ручки.
+   * самая «сборки нет».
    */
   dirs: [
     { path: 'invoice/cmd/api', from: 'entry' },
-    { path: 'invoice/applications/overdue', seed: true },
   ],
 };
 

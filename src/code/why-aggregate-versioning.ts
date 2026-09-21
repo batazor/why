@@ -1,5 +1,6 @@
 import type { CodeDeck } from './types';
 import type { FileTreeSpec } from './tree';
+import { eventsWithPenalty, overdueSeed } from './why-ddd-seed.ts';
 import posterSpec from './why-aggregate-versioning.poster.ts';
 
 /**
@@ -34,6 +35,7 @@ export const tree: FileTreeSpec = {
     files: { view: 'both', standalone: true, wide: true, summary: true },
   },
   files: [
+    ...overdueSeed,
     {
       path: 'GLOSSARY.md',
       seed: true,
@@ -207,31 +209,7 @@ func (i *Invoice) MarkPaid() error {
       path: 'invoice/domains/invoice/events/event.go',
       seed: true,
       lang: 'go',
-      code: `package events
-
-import "billing/invoice/domains/invoice/vo"
-
-// {{eventWhat}}
-type Event interface {
-	FactName() string
-}
-
-// {{eventIssued}}
-type Issued struct {
-	Number   string
-	Customer string
-	Total    vo.Money
-}
-
-func (Issued) FactName() string { return "invoice.issued" }
-
-// {{eventPaid}}
-type Paid struct {
-	Number string
-}
-
-func (Paid) FactName() string { return "invoice.paid" }
-`,
+      code: eventsWithPenalty,
     },
     {
       path: 'invoice/domains/invoice/repository.go',
@@ -826,8 +804,6 @@ func (o *Outbox) Publish(ctx context.Context, facts ...events.Event) error {
 `,
     },
   ],
-  /** Каталог просрочки пока пуст: его сценарий в разборе не участвует. */
-  dirs: [{ path: 'invoice/applications/overdue', seed: true }],
 };
 
 const deck: CodeDeck = [
