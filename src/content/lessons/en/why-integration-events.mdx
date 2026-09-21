@@ -24,8 +24,8 @@ terms:
     same words and types as the domain. It changes when the domain changes.
   integration event: >-
     The message a service uses to tell its neighbours about a fact. A separate
-    type with a separate schema: strangers read it, so it changes by the rules
-    of compatibility.
+    type with a separate schema: strangers read it, so it changes under
+    compatibility rules.
   envelope: >-
     The wrapper around a message: identifier, type, time, key. The data of the
     fact sits inside it as a separate body.
@@ -56,7 +56,7 @@ comments:
   aggIssue: creates the invoice and sums the lines
   aggCopy: 'a copy of the lines: they cannot be changed from outside'
   aggRecord: 'records the fact; sending it is not the aggregate''s job'
-  aggEvents: hands the collected facts outward
+  aggEvents: hands the collected facts to the outside
   aggPaid: 'marks the invoice paid; paying twice is not allowed'
   aggRestore: rebuilds the invoice from what was in the database
   eventWhat: 'a domain fact; its name is an internal one'
@@ -83,7 +83,7 @@ comments:
   pubAppender: 'the write port: where the message row goes'
   pubWhat: 'the publish port implemented: translates and hands over for writing'
   pubPublish: one message per fact, and not a single send
-  pubSkip: a fact with no outward contract does not leave
+  pubSkip: a fact with no external contract does not leave
   pubAppend: the row lands in the same transaction as the invoice
   outboxPublish: writes the facts into the same transaction
   outboxAsIs: the domain structure is serialised as it is
@@ -94,7 +94,7 @@ comments:
   intPaid: 'exactly as many fields as the reader needs'
   envWhat: 'the envelope: message metadata apart from the data of the fact'
   envKey: 'the ordering key: messages about one invoice keep their order'
-  transInternal: a fact that has no outward contract
+  transInternal: a fact that has no external contract
   transWhat: translates a domain fact into a message
   transIssued: 'an explicit switch: what goes out is decided here'
   transSkip: a new fact does not leave on its own
@@ -106,7 +106,7 @@ comments:
   inAlreadyPaid: 'a repeat is not an error: the invoice is already in that state'
   inboxWhat: 'the implementation: a table of handled messages'
   inboxRemember: an insert by unique id inside the same transaction
-  inboxRows: it inserted — so the message is new
+  inboxRows: the row was inserted — so the message is new
 steps:
   - id: leak
     title: The domain went onto the bus
@@ -116,9 +116,9 @@ steps:
       `json.Marshal` takes the whole `Issued` structure, and the message type is
       the internal name `invoice.issued`.
 
-      While we are the only readers, that is honest. But a neighbour read the
+      While we are the only readers, that is fair. But a neighbour read the
       message — delivery subscribed and started packing parcels. From that
-      minute the internal structure of the domain became a contract: rename the
+      moment the internal structure of the domain became a contract: rename the
       `Total` field and you break somebody's parser; add a field for yourself
       and you have told the neighbours something they have no business knowing.
 
@@ -126,18 +126,18 @@ steps:
       which the fact does not carry — and the request to add a field arrives in
       the domain.
 
-      A [[domain event|domain fact]] and a message sent outward are different
+      A [[domain event|domain fact]] and a message sent outside are different
       things, and they change at different speeds. We edit the first whenever we
       like; the second only after agreeing with everyone who reads it.
   - id: contract
     title: The integration event
     narration: |-
       An [[integration event]] is a separate type in a separate package, and the
-      version stands right in its path:
+      version sits right in its path:
       `infrastructure/broker/contracts/v1`.
 
       It lives in the bus infrastructure rather than at the root of the service,
-      and that is not a detail. The shape of a message belongs to the transport
+      and that is no small thing. The shape of a message belongs to the transport
       that carries it: on the bus it is JSON in an envelope with a partition
       key, over gRPC it would be protobuf with its own compatibility rules, over
       HTTP a response body and a status. A service often has several transports,
@@ -167,7 +167,7 @@ steps:
 
       `ID` is for the receiver: [[at-least-once]] delivery promises the message
       will arrive, not that it will arrive once. A repeat is recognised by that
-      identifier — we come back to this on the receiving side.
+      identifier — we will come back to this on the receiving side.
 
       `Key` is about order. A broker keeps order inside a partition, not across
       the whole topic; a key equal to the invoice number puts every message
@@ -184,7 +184,7 @@ steps:
       returns a finished envelope.
 
       The `switch` on the fact type looks dull — that is the point. It is
-      explicit: for a new message to go outward, somebody has to add it here.
+      explicit: for a new message to go out, somebody has to add it here.
       Until they do, the fact stays internal and publishing skips it —
       `ErrInternalFact`.
 
@@ -195,7 +195,7 @@ steps:
       Next to it is whoever calls `Contract`: `broker.Publisher`. It implements
       the `invoice.Publisher` port the domain declared back in the third
       chapter — translate the fact, serialise it and hand the row over for
-      writing. It sends nothing itself; why, on the next step.
+      writing. It sends nothing itself; why — in the next step.
 
       The row is written not by it but by `Appender` — a narrow one-method port
       declared right here, by the one who uses it. Behind it stands
@@ -231,7 +231,7 @@ steps:
       three things.
 
       **It translates.** `PaymentReceived` is our copy of a foreign schema, and
-      it stands on the boundary. The neighbour changes their schema — we edit
+      it sits on the boundary. The neighbour changes their schema — we edit
       this file; the domain does not notice.
 
       **It remembers.** `Remember` answers "first time" or "seen it", and the
@@ -243,7 +243,7 @@ steps:
 
       **It forgives.** `ErrAlreadyPaid` is not a handling error: the invoice is
       already in the state we wanted, so we acknowledge the message and move on.
-      That is [[idempotency]] at the entrance — two identical messages give one
+      That is [[idempotency]] on the inbound side — two identical messages give one
       result.
   - id: inbox
     title: The memory of messages
@@ -256,7 +256,7 @@ steps:
       adapter, so the mark lands in the transaction of the operation. Either the
       invoice is paid and the message is marked, or neither.
 
-      What not to forget: the table grows. Identifiers older than the broker's
+      One thing not to forget: the table grows. Identifiers older than the broker's
       retention are of no use — they are cleaned out by time, in partitions,
       like ordinary logs.
   - id: evolve
@@ -270,7 +270,7 @@ steps:
         `v2`: a new message type living next to `v1` until the last reader has
         moved.
 
-      Which means you have to know who reads it. Without that `v1` can never be
+      Which means you have to know who reads it. Without that, `v1` can never be
       switched off — and versions pile up instead of replacing each other.
 
       And the line not to cross: an event says what happened, not what to do.

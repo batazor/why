@@ -51,7 +51,7 @@ comments:
   aggIssueVer: 'creates the invoice; the version stays zero — it is not in the database yet'
   aggCopy: 'a copy of the lines: they cannot be changed from outside'
   aggRecord: 'records the fact; sending it is not the aggregate''s job'
-  aggEvents: hands the collected facts outward
+  aggEvents: hands the collected facts to the outside
   aggVersion: the number of the state that was read from the database
   aggVersionGet: 'returns the version; nothing outside can change it'
   aggPaid: 'marks the invoice paid; paying twice is not allowed'
@@ -96,7 +96,7 @@ steps:
       On the right is the payment use case as the infrastructure chapter left
       it: a [[unit of work]], a repository, published facts.
 
-      While it is called one at a time it is correct. Now two calls at once: one
+      While it is called one at a time, it is correct. Now two calls at once: one
       takes a payment, the other charges a penalty — the overdue scheduler woke
       up a second earlier.
 
@@ -131,7 +131,7 @@ steps:
     narration: |-
       A version is the number of the state that was read. When we write, we tell
       the database which number we saw; if the number there is different,
-      someone was between our read and our write.
+      someone got in between our read and our write.
 
       The field belongs to the [[aggregate]] rather than to a table on its own:
       the aggregate is the consistency boundary, so it has one counter for
@@ -179,36 +179,36 @@ steps:
     title: A retry instead of an error
     narration: |-
       A conflict says: the data you decided on is stale. So the right answer is
-      to decide again on fresh data, not to hand an error outward.
+      to decide again on fresh data, not to hand an error back to the caller.
 
       That is why the whole attempt, the read included, is repeated. Repeating
-      only the write would write the very stale data we were trying to leave
-      behind.
+      only the write would write the very same stale data we were trying to
+      leave behind.
 
       The retry is safe precisely because the whole attempt sits inside one unit
-      of work. Nothing saved — and what went into the [[outbox]] rolled back too,
+      of work. If the save failed, what went into the [[outbox]] rolled back too,
       so subscribers never heard about the cancelled attempt. Without that,
       every attempt would send the fact again and [[idempotency]] would become
       someone else's problem.
 
-      Three attempts, not endless ones: a conflict arriving for the third time
+      Three attempts, not an endless loop: a conflict arriving for the third time
       is no longer a race between two calls but load — and load is answered
       differently.
   - id: handover
     title: When a retry is the wrong answer
     narration: |-
       A retry fits when the code decides: `MarkPaid` will look at the fresh
-      invoice again and say itself that a paid invoice is not paid twice.
+      invoice again and itself say that a paid invoice is not paid twice.
 
       It does not fit when a person decided, looking at the old state. Then the
-      version travels outward with the data — a field in the
+      version travels out with the data — a field in the
       [[projection|projection]] or an `ETag` header — and comes back with the
-      request to change it. It does not match, and the person is told "the
+      request to change it. If it does not match, the person is told "the
       invoice has changed, take another look". That is the right answer, not an
       error.
 
       The difference is not in the mechanics but in who decided. The mechanics
-      are one: the number of the state that was read, checked at the moment of
+      are the same: the number of the state that was read, checked at the moment of
       the write.
 
       And the boundary: a version detects a conflict on one aggregate. A rule

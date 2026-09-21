@@ -31,7 +31,7 @@ steps:
   - id: naive
     title: The handler that looks fine
     narration: >-
-      Charge the card, write the row, return the id. Nobody stops on this in review.
+      Charge the card, write the row, return the id. Nobody would flag this in review.
       It is correct for exactly one execution.
     note: >-
       One call, one charge. Correct for exactly one execution.
@@ -49,7 +49,7 @@ steps:
     narration: >-
       The fix starts on the client. It generates a key once and reuses it on every
       retry. Look at what the key names: one charge, not one HTTP request. A key made
-      on the server would be new every attempt, which is the thing going wrong.
+      on the server would be new on every attempt and would deduplicate nothing.
     note: >-
       The key is born here. It has to outlive the request.
   - id: store
@@ -59,7 +59,7 @@ steps:
       is such a home. A map in process memory is not. You are borrowing the database's
       uniqueness instead of writing your own.
     note: >-
-      The uniqueness is the database’s, not yours.
+      The uniqueness is the database's, not yours.
   - id: handler
     title: Claim first, charge second
     narration: >-

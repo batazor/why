@@ -151,7 +151,7 @@ const copy = {
         points: [
           'Writes the task: everyone sees it as a card pinned over the canvas.',
           'Draws the reference the answer is compared against.',
-          'Orders the hints the way they should be revealed.',
+          'Puts the hints in the order they should be revealed.',
           'Builds the rubric: each criterion from 0 to 3, weight ×2 or ×3 for the key ones.',
           'Prepares deep-dive questions and decides whether the candidate gets the calculator and the checks.',
         ],
@@ -171,8 +171,8 @@ const copy = {
         name: 'Interviewer',
         points: [
           'Watches the candidate’s board without changing it.',
-          'Reveals a hint when the candidate is stuck — and it counts in the score.',
-          'Scores the rubric during the conversation.',
+          'Reveals a hint when the candidate is stuck — and it counts toward the score.',
+          'Scores against the rubric during the conversation.',
           'At the end sees what the answer lacks compared with the reference and what it adds.',
         ],
       },
@@ -203,7 +203,7 @@ const copy = {
       {
         icon: 'schema', tone: 'mint', demo: ['PK', 'FK', 'PART', 'SORT', 'SQL · CQL'],
         name: 'Data schemas',
-        text: 'Tables and message types per block, PK, FK, PART and SORT keys, ready DDL for SQL and CQL.',
+        text: 'Tables and message types per block, PK, FK, PART and SORT keys, ready-made DDL for SQL and CQL.',
       },
       {
         icon: 'check', tone: 'rose', wide: true, demo: ['orphan block', 'FR-3 with no block', 'NFR-4 with no number', 'single point of failure'],
@@ -214,8 +214,8 @@ const copy = {
     flowTitle: 'How an interview goes',
     flow: [
       ['Prepare the scenario', 'As the author: task, reference, hints and rubric. Once per problem.'],
-      ['Open the interview', 'The candidate gets a link with ?role=candidate, you take the interviewer role.'],
-      ['The candidate draws', 'You reveal hints along the way; each one is recorded and counted in the score.'],
+      ['Open the interview', 'The candidate gets a link with ?role=candidate; you take the interviewer role.'],
+      ['The candidate draws', 'You reveal hints along the way; each one is recorded and counted toward the score.'],
       ['Score', 'From 0 to 3 per rubric item with weights, notes and a verdict.'],
       ['Compare with the reference', 'Which blocks the candidate missed and which they added beyond the reference.'],
     ],
@@ -226,7 +226,7 @@ const copy = {
     example:
       'The scraping jobs write-up goes all the way: the task, questions, requirements, estimates, C1 → C2 → C3 and matching decisions to requirements.',
     exampleLink: 'Open the write-up',
-    finalTitle: 'Start from a ready scenario',
+    finalTitle: 'Start from a ready-made scenario',
     finalText: 'The playground has an example — a URL shortener with a reference, hints and a rubric. Switch roles and see the interview from each side.',
   },
 }[lang];

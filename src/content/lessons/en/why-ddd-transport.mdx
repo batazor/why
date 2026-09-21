@@ -3,7 +3,7 @@ title: 'Why DDD: transport && wiring'
 description: ''
 problem: >-
   The use cases are written and the ports have implementations — and still the
-  service cannot be called: outside there is JSON, and the use case expects the
+  service cannot be called: JSON arrives from outside, and the use case expects
   domain entities. Nor is there anyone to assemble it into a running
   process: `cmd/` is empty.
 tags: [ddd]
@@ -35,7 +35,7 @@ terms:
     A port that runs the work it is given as a whole or does not run it at all.
     The word "transaction" never appears in the domain.
   vertical slice: >-
-    A module cut along the scenario rather than the layer: transport, scenario
+    A module cut along the use case rather than the layer: transport, use case
     and the work with the aggregate live together because they change together.
   wire: >-
     Google's dependency-wiring generator: it reads a list of constructors and
@@ -45,7 +45,7 @@ comments:
   aggIssue: creates the invoice and sums the lines
   aggCopy: 'a copy of the lines: they cannot be changed from outside'
   aggRecord: 'records the fact; sending it is not the aggregate''s job'
-  aggEvents: hands the collected facts outward
+  aggEvents: hands the collected facts to the outside
   aggPaid: 'marks the invoice paid; paying twice is not allowed'
   aggRestore: rebuilds the invoice from what was in the database
   eventWhat: 'a domain fact; its name travels to the bus as the message type'
@@ -76,20 +76,20 @@ comments:
   dtoToDomain: translates the request body into domain types
   hWhat: the handler owns the use case and nothing else
   hIssue: 'POST /invoices: parse, translate, call'
-  hDecode: the body does not read — that is the client's error
+  hDecode: the body does not parse — that is the client's error
   hToDomain: translating into domain types is the dto package's job
   hCall: the use case gets domain entities, not a request
   hFail: a separate function turns a domain error into a status code
   hCreated: '201 and an empty body: the client sent the number itself'
-  errWhat: turns a domain error into a response code
+  errWhat: turns a domain error into a status code
   errRule: 'a broken domain rule is the request''s error, not the server''s'
   errUnknown: 'the cause stays in the log, the code goes out'
   routeWhat: the module declares the address of its own handler
   mainByHand: 'assembled by hand, top to bottom'
-  mainAdapters: one connection for every adapter
+  mainAdapters: one connection for all the adapters
   mainWire: 'the use case is handed ports; the assembly picks the implementations'
   mainWired: the assembly moved into a generated function
-  wireSet: 'the set of adapters: one for every application of the service'
+  wireSet: 'the set of adapters: one for all applications of the service'
   wireBind: which implementation stands behind the port
   wireInject: 'what to assemble — stated by the result type'
   wireStub: 'a stub body: the real one is written by the generator'
@@ -98,15 +98,15 @@ steps:
     title: Nobody to call it
     narration: |-
       On the right is the use case for issuing an invoice, as the previous
-      chapter left it. It takes a number, a customer, lines and a due date: the
+      chapter left it. It takes a number, a customer, lines and a due date:
       domain entities and nothing else.
 
       What arrives from outside is not that. Outside there is JSON: the number
       as a string, the amounts as numbers, the date in ISO. Something has to
-      translate between them, and the question is not which framework to take
+      translate between them, and the question is not which framework to pick
       but who translates and where that translation lives.
 
-      The second thing is visible in the tree: an empty `cmd/api` appeared. The
+      The second thing is visible in the tree: an empty `cmd/api` has appeared. The
       use case needs three port implementations, those need a database
       connection, and the connection needs a string from the environment.
       Nobody does any of this yet, and the service cannot be started.
@@ -122,7 +122,7 @@ steps:
       type is the [[transport|transport's]] job.
 
       `Validate` checks the shape, not the domain: the number is not empty, the
-      body reads. "An invoice with no lines" is a domain rule and `Issue` will
+      body parses. "An invoice with no lines" is a domain rule and `Issue` will
       check it; duplicating it here would mean two places, one of which goes
       stale eventually.
 
@@ -157,7 +157,7 @@ steps:
       to change — the contract of the request: the database, the transaction and
       the bus change without touching it.
 
-      The answer is `201` with an empty body: the client sent the number
+      The response is `201` with an empty body: the client sent the number
       itself, so there is nothing to hand back.
   - id: errors
     title: Domain errors into status codes
@@ -170,7 +170,7 @@ steps:
       a broken domain rule is `422`, a conflicting state is `409`, everything
       else is `500` and a line in the log.
 
-      Nothing of the database error or the stack goes out: the cause stays in
+      Neither the database error text nor the stack trace goes out: the cause stays in
       the log, the client gets a code and a short phrase.
 
       An unknown error gets `500` on purpose. The list of codes is part of the
@@ -198,7 +198,7 @@ steps:
       top to bottom: the connection, three adapters, the use case, the handler,
       the multiplexer, the server.
 
-      The good news: this is all of DI. Dependencies arrive as constructor
+      The good news: this is all there is to DI. Dependencies arrive as constructor
       arguments, the implementations are chosen in one place, and no container
       is needed for that.
 
@@ -229,11 +229,11 @@ steps:
       production.
 
       What this buys: a forgotten dependency is reported by the generator, with
-      the name of the type, before anything starts; the set of adapters is one
-      for every entry point; and the generated code reads like your own.
+      the name of the type, before anything starts; there is one set of adapters
+      for all entry points; and the generated code reads like your own.
 
       And no zealotry about it. For one application with five constructors
-      `wire` is not worth it — by hand is shorter and clearer. It starts paying
+      `wire` is not worth it — doing it by hand is shorter and clearer. It starts paying
       off when a second and a third application are assembled from the same
       set.
   - id: files
@@ -249,7 +249,7 @@ steps:
       - `cmd/api/main.go` — the entry point.
       - `cmd/api/wire.go` — the list of providers for the generator.
 
-      The chain is closed: a request arrives at `POST /invoices`, becomes the
+      The chain is closed: a request arrives at `POST /invoices`, becomes
       domain entities, and the use case builds the [[aggregate]], saves it
       and writes the fact — all as one operation.
 

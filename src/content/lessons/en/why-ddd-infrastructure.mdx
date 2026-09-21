@@ -101,11 +101,11 @@ steps:
 
       Not a single domain rule is here — they stayed in `Issue`. Here there is
       only order, and that is what [[application]] is: it hands out work and
-      keeps the course of the operation.
+      keeps the operation on course.
 
       The scenario takes what the domain needs as plain parameters. Whatever
       arrives over HTTP or from the bus does not reach this far: those are
-      transport [[DTO]] and the transport translates them.
+      transport [[DTO|DTOs]], and the transport translates them.
 
       The dependencies are two ports and no implementations. That is why the
       scenario has one reason to change — the order of the operation: swap the
@@ -136,7 +136,7 @@ steps:
       does that is not its business.
 
       Time to do it. And the first question of the implementation is not about
-      SQL: how do you return an aggregate whose fields are all closed? `Issue`
+      SQL: how do you return an aggregate whose fields are all private? `Issue`
       will not do — it creates a new invoice and records the fact "invoice
       issued", while we are loading one that already exists.
   - id: restore
@@ -162,7 +162,7 @@ steps:
       an invoice with no lines — a state the domain does not allow.
 
       The connection comes from a `conn(ctx, db)` function rather than a field.
-      Why — that is the next steps.
+      Why is the subject of the next steps.
   - id: broken
     title: Saved and published
     narration: |-
@@ -181,7 +181,7 @@ steps:
     narration: |-
       A unit of work is a port that says one thing: do the work whole or do not
       do it at all. There is no `Begin`, no `Commit` and not even the word
-      "transaction" in the domain — there is a function someone will run under
+      "transaction" in the domain — there is a function someone will run on
       their own responsibility.
 
       That is why the port stands next to the others: the domain does not know

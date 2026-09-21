@@ -131,7 +131,7 @@ steps:
       action: Apply coupon
       applied: Coupon applied
       result: >-
-        The result is 28.13, which is 3.87 below cost. The second 25% uses 37.50: the discount of 9.375 rounds down to 9.37. Combining two individually safe promos breaks the rule.
+        The result is 28.13, which is 3.87 below cost. The second 25% applies to 37.50: the discount of 9.375 rounds down to 9.37. Combining two individually safe promos breaks the rule.
   - id: clamp
     title: Clamp it at cost
     narration: >-
@@ -155,7 +155,7 @@ steps:
     narration: >-
       The pair already dropped the price to 28.13, but so far that is an
       observation: the compiler knows nothing about it and will not bring it up
-      the next time someone edits the engine. To make it know, you state the
+      the next time someone edits the engine. To let it know, you state the
       negation of the rule as a theorem and prove it. In Lean `¬P` is shorthand
       for `P → False`, so the job is to derive a contradiction from the
       assumption. That is what `intro` does — it takes the premise and gives it a
@@ -181,19 +181,19 @@ steps:
       to the goal, and the theorem is closed. So the assumption fails: the rule
       does not hold. The counterexample stays in the file, and the compiler
       re-runs it on every build.
-    note: Disproven, with the pair attached.
+    note: Disproved, with the pair attached.
   - id: budget
     title: The pool the discounts are paid from
     narration: >-
       Everything the promos may spend is the margin: the gap between the list
-      price and cost. On these sneakers that is 18.00. Until now promos counted
-      off the price and knew nothing about cost; now they share a wallet.
+      price and cost. On these sneakers that is 18.00. Until now promos were computed
+      from the price and knew nothing about cost; now they share a wallet.
     note: The discount pool is the margin, 18.00.
   - id: spend
     title: You cannot draw on an empty wallet
     narration: >-
-      `spend` takes the smaller amount: what the promo requests or what remains in
-      the pool. It subtracts `taken` from both the price and the pool. The next
+      `spend` takes the smaller of two amounts: what the promo requests and what
+      remains in the pool. It subtracts `taken` from both the price and the pool. The next
       percentage still uses the already reduced price. The first promo takes
       12.50; the second asks for 9.37 but receives only the remaining 5.50.
     note: A promo takes its cut or the remainder, whichever is smaller.
@@ -225,7 +225,7 @@ steps:
 quiz:
   - question: Why does the report disagree after clamping in this example?
     options:
-      - It is too slow on large carts
+      - Clamping is too slow on large carts
       - The report uses the old engine instead of the receipt
       - Clamping only works for percentage promos
     answer: 1
@@ -263,8 +263,8 @@ discount — cashback, say — the file stops compiling. The function that compu
 the size of a discount matches on the promo type case by case, the new case has
 no branch, and Lean names the missing one out loud. Until that branch is written,
 until somebody decides what cashback takes off the price, there is no build. The
-rule itself is never at risk: the proof never looks inside a mechanic and
-bounds the receipt total. Later cashback payments are outside that guarantee.
+rule itself is never at risk: the proof never looks inside a mechanic, and
+it bounds the receipt total from below. Later cashback payments are outside that guarantee.
 
 ## Where else rules add up
 

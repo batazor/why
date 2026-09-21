@@ -80,25 +80,25 @@ steps:
     title: The command as a type
     narration: |-
       A [[команда|command]] is a request to change state, named by a type. Here
-      it sits next to the scenario, in its own module: the command is invented
+      it sits next to the scenario, in the same module: the command is invented
       by whoever carries it out.
 
       What that buys immediately: the call now has a shape. It can be put in a
       queue, written to a log, retried after a failure and compared with what
       arrived — there was nothing to compare before.
 
-      `Validate` checks the shape, not the domain: the number is not empty, the
-      lines are not zero. The rules stayed in the domain, and that is the line
-      not to blur — a shape check answers "can this be read at all", not "does
+      `Validate` checks the shape, not the domain: the number is not empty, there
+      is at least one line. The rules stayed in the domain, and that is the line
+      not to blur — a shape check answers "can this be read at all", not "can
       such an invoice exist".
   - id: handler
     title: The command handler
     narration: |-
       The same file, and one argument in it instead of four. The scenario became
-      a handler: took the command, checked the shape, handed the work to the
-      domain, saved, published the facts.
+      a handler: it takes the command, checks the shape, hands the work to the
+      domain, saves, publishes the facts.
 
-      The order has not changed by a single step — what changed is what calls it.
+      The order has not changed by a single step — what changed is what it is called with.
       That is why CQRS starts neither with two databases nor with a bus, but with
       a type: the command separates what is being asked from how it is carried
       out.
@@ -129,7 +129,7 @@ steps:
 
       What is missing here is a handler with a `Run` that would only pass the
       call along to the port. Reading has neither invariants nor a transaction
-      for such a layer to exist for; it appears once it starts doing something:
+      for such a layer to exist for; the layer appears once it has something to do:
       checking permissions, joining two sources, holding a cache.
 
       This module does not touch a single line of the domain: it simply cannot.
@@ -143,10 +143,10 @@ steps:
       The columns land straight in the fields of the projection, because the
       query is written for the screen rather than for the model. The overdue
       flag is computed by the query itself — roughly, from the due date and the
-      status; the exact rule lives in the domain and is asked there, where
+      status; the exact rule lives in the domain and is consulted where
       decisions are made, not where things are displayed.
 
-      The connection comes from the field rather than from `ctx`: reading needs
+      The connection comes from a field rather than from `ctx`: reading needs
       no transaction — there is nothing to roll back.
 
       Behind the port is still the same table the writes go to, and that is a
@@ -165,8 +165,8 @@ steps:
 
       The split is cheap: two types and two ports, each in its own module. Behind
       that boundary you can go as far as you like — a separate read database, a
-      projection updated from a fact on the bus, a cache. Or you can not go
-      anywhere: the same database, the same `SELECT` — the split has already done
+      projection updated from a fact on the bus, a cache. Or you can go nowhere
+      at all: the same database, the same `SELECT` — the split has already done
       the main thing.
   - id: files
     title: What came out

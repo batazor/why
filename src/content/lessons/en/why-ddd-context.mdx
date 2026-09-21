@@ -1,10 +1,10 @@
 ---
-title: 'Why DDD: boundary context'
+title: 'Why DDD: bounded context'
 description: ''
 problem: >-
   Every service is arranged its own way: its own directory layout, a muddle of
   terms, a wheel reinvented and the same mistake made for the hundredth time.
-  What you know about one service does not carry to the next — not for the
+  What you know about one service does not carry over to the next — not for the
   author, not at review, not for whoever arrives a year later.
 tags: [ddd]
 order: 4
@@ -69,11 +69,12 @@ steps:
       The diagram on the right is [[C1]]: the system as a whole, one block.
 
       The three departments from the example are three contexts, and each has
-      its own truth about the word "payment". Arguing which one is correct goes
-      nowhere: all three are, in different places.
+      its own truth about the word "payment". Arguing over which one is correct
+      goes nowhere: all three are, in different places.
 
       A bounded context is such a place: the stretch of a system inside which a
-      word has one meaning, one model, and one team answering for both.
+      word has one meaning, with its own model and its own team answering for
+      both.
 
       The language sets the boundary. Where a word starts to mean something
       else, the context has ended; the directory layout and the database schema
@@ -85,7 +86,7 @@ steps:
 
       - **Catalogue** — the basket and the checkout.
       - **Billing** — what the customer owes and what has been paid.
-      - **Delivery** — parcels, carriers and where the order got to.
+      - **Delivery** — parcels, carriers and where the order is now.
 
       Three areas, three teams, three glossaries. There is one arrow so far and
       it points at the shop as a whole: who talks to whom inside comes later.
@@ -96,7 +97,7 @@ steps:
 
       - **Core** is what makes this shop different from the one next door: the
         catalogue and billing. Built in-house and staffed with the best people.
-      - **Supporting** is needed but wins nothing: delivery.
+      - **Supporting** is needed but gives no competitive edge: delivery.
       - **Generic** is a solved problem, the same everywhere: authentication.
         The customer logs in there first and only then walks into the shop, and
         on the diagram it stands outside the boundary: nobody builds it — it is
@@ -111,8 +112,8 @@ steps:
       but at billing: billing is what owns the word "payment".
 
       Until the boundary was drawn, the "payment" from the example meant three
-      different events, and everybody nodded in the meeting while keeping their
-      own; in code that shows up like this: one service's `payment.completed` is
+      different events, and everybody nodded at the meeting, each keeping their
+      own meaning; in code that shows up like this: one service's `payment.completed` is
       about the checkmark, another's is about money in the account.
 
       So the first file in billing's directory is a glossary.
@@ -147,7 +148,7 @@ steps:
 
       Domains have kinds too: inside a core context not everything is core.
       Invoice and payment are what billing exists for; settlement is needed but
-      wins nothing.
+      gives no edge.
 
       The catalogue and delivery have gone grey: from here on the walkthrough
       is about billing, and relative to billing the neighbours are external
@@ -159,7 +160,7 @@ steps:
       A domain's state lives in a database of its own. Three domains, three
       databases, and no shared one.
 
-      Which buys the thing that matters: "do not read somebody else's tables"
+      That buys the thing that matters: "do not read somebody else's tables"
       stops being an agreement people forget while on call. There are no other
       tables next door — invoice physically cannot read payment's.
 
@@ -173,10 +174,10 @@ steps:
       services that talk.
 
       The catalogue does not call billing — it publishes the fact that an order
-      was placed. Billing reads that fact and issues an invoice. A paid invoice
-      it publishes as a fact in turn, and delivery reads it and starts packing.
+      was placed. Billing reads that fact and issues an invoice. It publishes
+      the paid invoice as a fact too, and delivery reads it and starts packing.
 
-      Who is subscribed is not the publisher's business. Which buys the thing
+      Who is subscribed is not the publisher's business. That buys the thing
       that matters: a second listener appears, and billing does not change.
   - id: provider
     title: Who moves the money
@@ -185,7 +186,7 @@ steps:
       answer — a synchronous call, and a decline is an answer too.
 
       The provider is outside the boundary: it is not ours, its glossary is not
-      ours, and the conversation goes through a translation. Billing keeps its
+      ours, and the conversation goes through translation. Billing keeps its
       own state regardless — what was asked and what came back is written down
       here, not only at the provider.
 
@@ -197,7 +198,7 @@ steps:
     narration: |-
       [[C2]] in full: billing with its three domains and their databases, the
       neighbours in the shop, the bus, and the external services —
-      authentication and the payments provider.
+      authentication and the payment provider.
   - id: service
     title: 'C2: one domain and nothing else'
     narration: |-
@@ -206,7 +207,7 @@ steps:
       The shop with its neighbours has been shown and is no longer needed in the
       frame. Payment and settlement were there to show that a context is not one
       domain: several services live inside its boundary, each owning its own
-      front of work — issue the invoice, take the money, reconcile with the
+      piece of the work — issue the invoice, take the money, reconcile with the
       statement. From here the story runs through the invoice, and the rest
       would only distract.
 
@@ -217,7 +218,7 @@ steps:
     narration: |-
       A domain is not one lump of code. The tree on the right shows three
       levels: `billing` is the context, and the glossary sits at its root
-      because the language is one per context; `invoice` is a domain inside the
+      because there is one language per context; `invoice` is a domain inside the
       context; the directories inside the domain are its modules. There are
       three of them.
 
@@ -256,7 +257,7 @@ The DTO goes no further: what reaches application is a [[command]] built from do
       key: 'application',
       name: 'Application',
       decides: 'what jobs the software does',
-      text: `The level that defines the jobs the software is supposed to do. One business scenario is one use case with its own logic: take a sale, issue an invoice, refund money.
+      text: `The level that defines the jobs the software is supposed to do. One business scenario is one use case with its own logic: complete a sale, issue an invoice, refund money.
 
 The logic here is the order of the steps: fetch the aggregate, call it, save it, announce what happened.
 
@@ -304,9 +305,9 @@ delivery, customers and billing.
 
 Say "payment" inside it and every department hears its own thing.
 
-- **Product.** The purchase went through, the customer saw the checkmark.
+- **Product.** The purchase went through, the user saw the checkmark.
 - **Processing.** The money is held, nothing was captured.
-- **Finance.** The money will show up in a statement two days later, or will
+- **Accounting.** The money will show up in a statement two days later, or will
   not show up at all.
 
 Three different events under one word — and that is where the walkthrough

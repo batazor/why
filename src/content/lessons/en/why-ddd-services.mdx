@@ -57,7 +57,7 @@ comments:
   svcPenalty: 'the rule: an invoice, a rate and a calendar — an amount out'
   svcFromAggregate: 'the rule takes the due date from the invoice itself, not from the caller'
   ucOverdueCall: the rule computes the amount from the invoice, the rate and the calendar
-  ucOverdueApply: only the invoice itself can charge a penalty to the invoice
+  ucOverdueApply: only the invoice itself can charge the fee to the invoice
   ucOverdueDeps: two ports, a calendar and a rate — all the scenario needs
   ucOverdueRun: load, calculate, apply, save, tell
 steps:
@@ -73,7 +73,7 @@ steps:
 
       It cannot go into the [[агрегат|aggregate]]: the invoice would start
       knowing about calendars and rates, and neither belongs to it — the rate is
-      changed by an order, the calendar comes from a reference table. It cannot
+      changed by a directive, the calendar comes from a reference table. It cannot
       go into the scenario either: the rule would leave the domain for
       [[application]], and the next caller — from another module — would
       calculate it differently.
@@ -83,14 +83,14 @@ steps:
     title: The domain service
     narration: |-
       A [[доменный сервис|domain service]] is a rule that belongs in no
-      aggregate. Here it is a function: due date, time, rate, calendar → an
+      aggregate. Here it is a function: invoice, time, rate, calendar → an
       amount.
 
       The invoice arrives as an aggregate rather than a handful of fields, and
       that is not a detail of the signature. The rule asks the invoice for what
       it needs — `overdue.DueOn()` — so the caller does not have to know what
       the amount is computed from. Pass a date instead of the invoice, and the
-      rule becomes a calculator while the knowledge "a penalty is counted from
+      rule becomes a calculator while the knowledge "the late fee is counted from
       the due date" moves out to whoever called it.
 
       Why not a method on the invoice, then? A fair question: there is one
@@ -105,13 +105,13 @@ steps:
       do at all — none of them may change the others. This is the first case: a
       rule about one invoice, but from data the invoice does not hold.
 
-      It does not leave the domain, though: the penalty is a rule about the
+      It does not leave the domain, though: the late fee is a rule about the
       invoice — just not about what the invoice knows on its own. That is why it
       sits inside the invoice domain rather than beside all the domains:
       `domains/invoice/services/penalty`. A package of its own rather than a
       file next to the aggregate — the rule has its own inputs and its own set
       of calendar implementations, and putting it into the shared domain package
-      would mix "what an invoice is" with "how a penalty is computed". It is
+      would mix "what an invoice is" with "how a late fee is computed". It is
       named after the package: `penalty.Amount(...)`.
 
       There is deliberately no `services/` at the root of the domains. A rule is
@@ -121,17 +121,16 @@ steps:
       and the transaction. A shared folder for "rules in general" ends up a
       dumping ground with no domain visible in it.
 
-      What it does not have: `context`, a repository, infrastructure errors.
-      That is why it can be called in one line and answer without starting a
-      database or a bus.
+      What the service does not have: `context`, a repository, infrastructure
+      errors. That is why it can be called in one line and answer without
+      starting a database or a bus.
 
-      `Calendar` stayed in the domain, in `calendar.go`: more than the penalty
-      uses it — the overdue rule will answer by it a chapter later. It is an
-      interface but not a port: it has neither `ctx` nor an
-      error, and it speaks about the domain, not about storage. The sign is
-      simple: a port describes where to get data from, while this is part of the
-      model that may have several implementations, because a business has
-      several calendars.
+      `Calendar` stayed in the domain, in `calendar.go`: the late fee is not its
+      only user — a chapter later the overdue rule will rely on it too. It is an
+      interface but not a port: it has neither `ctx` nor an error, and it
+      speaks about the domain, not about storage. The test is simple: a port
+      describes where to get data from, while this is part of the model that may
+      have several implementations, because a business has several calendars.
   - id: applying
     title: The service calculates, the aggregate applies
     narration: |-
@@ -145,9 +144,9 @@ steps:
       cannot change it — it has neither access to the fields nor the right to
       record a fact.
 
-      The line and the total change here, in one operation, and the fact —
-      `PenaltyCharged` — is recorded here too. The service publishes no facts and
-      changes no state: it calculates.
+      The invoice line and the total change here, in one operation, and the
+      fact — `PenaltyCharged` — is recorded here too. The service publishes no
+      facts and changes no state: it calculates.
 
       That is the division of labour inside the domain: the rule in the service,
       the state in the aggregate. Swap them and either the aggregate grows
@@ -162,13 +161,13 @@ steps:
 
       Compare it with the service next to it. The scenario has `ctx`, two ports
       and the order of the operation — and not a single rule. The service has a
-      rule — and not a single port. The sign that keeps them apart: once `ctx` or
+      rule — and not a single port. The test that keeps them apart: once `ctx` or
       an interface to storage appears, it is not a domain service any more but
       application.
 
       The scenario does not touch the due date at all: it hands the rule the
       invoice, and the rule takes the date itself. The invoice knows the date
-      because the invoice issued it; the rate and the calendar are not kept on
+      because the invoice set it itself; the rate and the calendar are not kept on
       the invoice — the scenario brings those. That is the difference between a
       field of the aggregate and an input of the rule.
   - id: notneeded

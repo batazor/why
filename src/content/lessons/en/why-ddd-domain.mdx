@@ -4,7 +4,7 @@ description: ''
 problem: >-
   The domain has been named in words, but in code it is still a struct with
   exported fields and `float64` for money. The domain rules live in the callers:
-  each holds its own half, and one day one of them falls behind.
+  each holds its own half, and one day one of them goes stale.
 tags: [ddd]
 order: 5
 deck: why-ddd-domain
@@ -72,7 +72,7 @@ comments:
   eventPaid: 'the invoice has been paid'
   eventWhat: 'a domain fact; the name goes to the bus as the message type'
   moneyMinor: 'an amount in cents'
-  naiveIssue: 'builds an invoice with the total given'
+  naiveIssue: 'builds an invoice with the total passed in'
   naiveShape: 'an invoice issued to a customer'
   portPublisher: 'the port: where facts are sent'
   portRepo: 'the port: how an invoice reaches storage and comes back'
@@ -85,7 +85,7 @@ steps:
 
       On the right is the invoice as an [[anemic model]] — the way a domain most
       often gets written: a struct of strings, numbers and time. It reads at
-      once, nothing to spare.
+      a glance, nothing extra.
 
       It sits in `domains/invoice/`, next to the rest of the domain code. The
       modules — `issuing`, `payment`, `overdue` — use it but do not own it: each
@@ -95,7 +95,7 @@ steps:
       a total, a due date and a state — the same words as in the glossary. The
       main thing here is done right.
 
-      What this code pays for that comes next.
+      The price this code pays for that comes next.
   - id: problems
     title: What is wrong with it
     narration: |-
@@ -104,7 +104,7 @@ steps:
 
       - **The total comes in as a parameter.** `Issue` does not compute it from
         the lines, it accepts it. So an invoice whose total is not the sum of
-        its lines exists, and it will reach the database.
+        its lines can exist, and it will quietly reach the database.
       - **`float64` for money.** `0.1 + 0.2` is not `0.3`, and an invoice has to
         add up to the cent. And nothing stops you from adding a price to a
         quantity: to the compiler they are both just numbers.
@@ -128,7 +128,7 @@ steps:
       aggregate nor the modules — the dependency goes one way only, towards it.
 
       Inside it are whole cents. No fractional units get into the type: money is
-      built from an `int64` only, and `0.1 + 0.2` never arrives as a bank
+      built from an `int64` only, and `0.1 + 0.2` never shows up in a bank
       statement again.
 
       Money can only be added through `Add`, so the rule holds everywhere money
@@ -139,7 +139,7 @@ steps:
     narration: |-
       The same file as three steps ago — and `vo.Money` is in it instead of
       `float64`. The price and the total are money now, and there is no way to
-      count them as anything else.
+      compute them with anything else.
 
       The other values follow the same pattern: `Number`, `CustomerID` and
       `Status` are types now, not `string`. They are declared in their own files
@@ -152,11 +152,11 @@ steps:
     title: 'Aggregate: the invoice'
     narration: |-
       The second thing that changed in the file: the fields are closed. The
-      outside world holds the invoice whole — a line cannot be changed around
-      it. An object like that is called an [[агрегат|aggregate]].
+      outside world holds the invoice whole — a line cannot be changed behind
+      its back. An object like that is called an [[aggregate]].
 
       `Issue` is the only way an invoice comes into being, so every
-      [[инвариант|invariant]] it promises is checked there. There cannot be zero
+      [[invariant]] it promises is checked there. There cannot be zero
       lines. The total is not passed in as a parameter — it is computed from the
       lines: pass it from outside, and the first call with a wrong number stores
       an invoice the domain does not allow.
@@ -166,7 +166,7 @@ steps:
       knowing.
 
       Status is changed by methods, not by assignment from outside. Which ones
-      comes next: for now `Issue` is all the invoice has.
+      is for the next steps: for now `Issue` is all the invoice has.
   - id: transition
     title: Changing state
     narration: |-
@@ -176,11 +176,11 @@ steps:
       It sits in a file of its own: one file per method. The directory then
       shows what the invoice can do without opening the struct.
 
-      The check inside the method is an [[инвариант|invariant]], not input
+      The check inside the method is an [[invariant]], not input
       validation: a paid invoice cannot be paid twice, and the outside learns
       about it only from the error the invoice itself returns.
 
-      What the file does not have: no write to storage, no event sent, no
+      What the file does not have: a write to storage, an event being sent, a
       transaction. The method changes state and that is all. Who saves it and
       who tells the outside is decided by the levels above.
   - id: port
@@ -216,8 +216,8 @@ steps:
       the contract, not an implementation detail. The `Event` interface is made
       of exactly that.
 
-      The facts live in a package of their own — `domains/invoice/events`. More
-      than the aggregate reads them: infrastructure publishes them and an
+      The facts live in a package of their own — `domains/invoice/events`. The
+      aggregate is not their only reader: infrastructure publishes them and an
       adapter translates them outward, and a separate package makes that
       dependency visible. That is why the fields are plain strings rather than
       the invoice's own types: the facts package knows nothing about the
@@ -229,12 +229,12 @@ steps:
   - id: recording
     title: The aggregate records facts
     narration: |-
-      The aggregate records the fact where it changes state. It cannot send it:
-      it has neither a bus nor a transaction, and it has no business knowing
-      about them.
+      The aggregate records the fact itself, right where it changes state. It
+      cannot send it: it has neither a bus nor a transaction, and it has no
+      business knowing about them.
 
       So the facts pile up inside and are handed out as a list — `Events()`.
-      Taking them and sending them is decided by the level above.
+      Taking them and sending them is up to the level above.
 
       The point is that the state and the fact about it change in one place and
       in one operation. Send the event from inside the method, and one day you
@@ -250,9 +250,9 @@ steps:
       aggregate recorded them in. Sending half of them would be a lie about the
       operation.
   - id: files
-    title: What the domain came out as
+    title: What ended up in the domain
     narration: |-
-      The whole domain — six files. The tree and the contents are side by side
+      The whole domain is six files. The tree and the contents are side by side
       now: click any file and see what is in it.
 
       - `invoice.go` — the aggregate: fields closed, `Issue` builds the invoice

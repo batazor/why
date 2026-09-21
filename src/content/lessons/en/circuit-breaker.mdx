@@ -50,7 +50,7 @@ steps:
   - id: open
     title: Open — stop asking
     narration: >-
-      Past the threshold the breaker flips to Open. Every call fails at once, without
+      Past the threshold the breaker flips to Open. Every call fails instantly, without
       touching the network. This is the uncomfortable part: you are dropping requests
       that might have worked. That is the trade. The dependency gets silence, which is
       what it needs to come back. Your threads stop piling up on a call that was going
@@ -62,7 +62,7 @@ steps:
     narration: >-
       After the cooldown the breaker does not open the floodgates. It moves to Half-open
       and lets exactly one request through. Skipping this state is the classic mistake.
-      The cooldown expires, the full traffic hits a service that has barely stood up, it
+      The cooldown expires, the full traffic hits a service that is barely back up, it
       falls over again, and now you have an oscillator.
     note: >-
       One request asks the question, not the full traffic.
@@ -100,7 +100,7 @@ Retrying a failed call is usually right. Retrying a call to a service that is do
 a partial failure becomes a total one. Every caller politely multiplies its own traffic at
 the moment the target can absorb it least.
 
-A circuit breaker is the thing that notices and stops. It is load shedding, applied by the
+A circuit breaker is the thing that notices and stops it. It is load shedding, applied by the
 caller on behalf of the callee.
 
 ## The cost you are accepting

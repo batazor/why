@@ -4,8 +4,8 @@ description: ''
 problem: >-
   The rule "the invoice is overdue" lives in three places and is named in none:
   the scenario assumes it from outside, the read projection keeps a field, the
-  database keeps a `WHERE` clause. The first change to the rule reaches one of
-  the three.
+  database keeps a `WHERE` clause. The first change to the rule reaches only one
+  of the three.
 tags: [ddd, pattern]
 order: 7
 deck: why-ddd-specification
@@ -59,7 +59,7 @@ comments:
   svcPenalty: 'the rule: an invoice, a rate and a calendar — an amount out'
   svcFromAggregate: 'the rule takes the due date from the invoice itself, not from the caller'
   ucOverdueCall: the rule computes the amount from the invoice, the rate and the calendar
-  ucOverdueApply: only the invoice itself can charge a penalty to the invoice
+  ucOverdueApply: only the invoice itself can charge the fee to the invoice
   ucOverdueDeps: two ports, a calendar and a rate — all the scenario needs
   ucOverdueRun: load, calculate, apply, save, tell
   ucSpecGuard: 'the scenario asks the rule instead of trusting the caller'
@@ -93,10 +93,10 @@ steps:
       The rule lives in `domains/invoice/rules` — a package of its own, next to
       `services`. The reason is the same as for the penalty: a rule about the
       invoice but not from its data — and a separate package keeps it from
-      spreading across the domain as files named `*_spec.go`. It is called by
+      spreading across the domain as files named `*_spec.go`. You call it through
       the package: `rules.NewOverdue(...)`.
 
-      What that already buys: the rule became a separate thing you can call. To
+      What that already buys: the rule has become a separate thing you can call. To
       see how it behaves on holidays, one call is enough — no database and no
       scheduler are needed for it.
   - id: usage
@@ -116,14 +116,14 @@ steps:
     title: Combining — and when it is redundant
     narration: |-
       Specifications compose: `AllOf` takes any predicates and requires all of
-      them. A `Specification` interface appeared — and it is the whole contract:
+      them. A `Specification` interface has appeared — and it is the whole contract:
       one method answering about one [[агрегат|aggregate]].
 
       Next to it is a second predicate, `OverBudget`, about an invoice above a
       limit. Together with the first it gives "overdue and large" — the rule by
       which someone on duty calls the customer instead of waiting.
 
-      And right away about the other side: combinators are not always needed. If
+      And right away, the flip side: combinators are not always needed. If
       two predicates always travel together, it is more honest to give them a
       third name — `RequiresCall` — than to assemble `AllOf` in four places and
       later work out which assembly was right. I deliberately did not add `Or`:
@@ -131,9 +131,9 @@ steps:
   - id: cost
     title: What it costs
     narration: |-
-      Now honestly about the price. A specification cannot select overdue
+      Now the price, honestly. A specification cannot select overdue
       invoices from the database: it works with a loaded aggregate, and nobody
-      will load everything to filter out a hundred.
+      will load everything to filter it down to a hundred.
 
       So the selecting will be done by a query anyway. There are two ways out of
       that.
@@ -148,7 +148,7 @@ steps:
 
       The second way is usually cheaper, and here is why: the query and the rule
       have different jobs. The query is allowed to err in one direction only —
-      to bring extra invoices; the rule will sieve them out afterwards. Nothing
+      to bring in extra invoices; the rule will weed them out afterwards. Nothing
       is duplicated, because the query is not trying to be the rule.
 
       The price of the second way is the wasted loads: the coarser the clause,

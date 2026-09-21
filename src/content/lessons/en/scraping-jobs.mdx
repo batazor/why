@@ -68,7 +68,7 @@ labels:
   calc.out.stored: In storage
   calc.out.stored.unit: ''
   sort.prompt: >-
-    Ten statements from the conversation with the product. Sort them: what the
+    Ten statements from the conversation with product. Sort them: what the
     system does, with what properties it does it, and what it does not do at all.
   sort.check: Check
   sort.again: Sort again
@@ -129,7 +129,7 @@ labels:
   req.text.FR-7: 'Call back when a job is finished'
   req.note.FR-7: 'script'
   req.text.FR-8: 'Show a job''s attempt history with the target''s answers'
-  req.note.FR-8: 'on call, human'
+  req.note.FR-8: 'on-call, human'
   req.text.NFR-1: 'Intake survives the targets being down'
   req.note.NFR-1: 'one broken target takes the whole product down'
   req.goal.NFR-1: '99.9% successful intake responses over 30 days'
@@ -138,7 +138,7 @@ labels:
   req.goal.NFR-2: 'p99 ≤ 200 ms'
   req.text.NFR-3: 'An accepted job is not lost'
   req.note.NFR-3: 'the client got "accepted", and the job was lost when a worker restarted'
-  req.goal.NFR-3: '99% of jobs reach a final state with no human'
+  req.goal.NFR-3: '99% of jobs reach a final state without a human'
   req.text.NFR-4: 'Tenants are isolated'
   req.note.NFR-4: 'one user takes the whole pool'
   req.text.NFR-5: 'Repeating a submission does not create a second job'
@@ -169,7 +169,7 @@ labels:
   req.note.NFR-14: 'the job is done, the client reads "running" from the cache and keeps polling'
   req.goal.NFR-14: 'unfinished: TTL 2 s; finished: until retention ends, with the finish event dropping the key'
   req.text.FR-9: 'Set a job priority: high, normal or low'
-  req.note.FR-9: 'person, script'
+  req.note.FR-9: 'human, script'
   req.text.NFR-12: 'Urgent jobs go faster, low priority does not starve'
   req.note.NFR-12: 'an urgent job waits behind a nightly export, or low never starts'
   req.goal.NFR-12: 'queue weights 6 : 3 : 1; an empty queue gives its share to the rest'
@@ -197,9 +197,9 @@ labels:
   lc.actor.worker: 'worker'
   lc.actor.scheduler: 'scheduler'
   lc.state.queued: 'The job is stored and waits for a worker. It comes back here between attempts.'
-  lc.state.running: 'A worker took the job and holds a lease. While the lease is renewed the job is its; once it expires the job goes back to the queue.'
+  lc.state.running: 'A worker took the job and holds a lease. While the lease is renewed, the job belongs to it; once it expires, the job goes back to the queue.'
   lc.state.succeeded: 'The result is in storage and the link is written to the job. The status is set only after the result is saved.'
-  lc.state.failed: 'Attempts ran out or the error is permanent. The scheduler decides from the attempt history, not the worker.'
+  lc.state.failed: 'Attempts ran out or the error is permanent. The scheduler, not the worker, decides this from the attempt history.'
   lc.state.cancelled: 'The user cancelled the job before it finished.'
   lc.tr.submit: 'POST /jobs'
   lc.tr.take: 'taken, lease'
@@ -226,7 +226,7 @@ labels:
   match.why.idempotency: 'This guards against client retries: a network glitch does not turn one job into two.'
   match.card.outbox: 'jobs as the outbox'
   match.card.outbox.text: 'job-publisher sends rows with an empty published_at to MQ'
-  match.why.outbox: 'Writing the job and its future send are one transaction. A job intake has confirmed is not lost between the database and the bus.'
+  match.why.outbox: 'Writing the job and marking it to be sent are one transaction. A job that intake has confirmed is not lost between the database and the bus.'
   match.card.lease: 'Lease and stuck-sweeper'
   match.card.lease.text: 'The worker renews its lease; the sweeper returns expired jobs to the queue'
   match.why.lease: 'This is about jobs of crashed workers: without a lease they would stay in running forever.'
@@ -344,7 +344,7 @@ labels:
   noisy.slots: busy
   noisy.gap: '{slow} waits {ratio}× longer than {fast}.'
   noisy.starved: "{tenant} has not got a single result yet: the whole pool is busy with somebody else's jobs."
-  noisy.even: Everyone waits about the same — the pool is shared.
+  noisy.even: Everyone waits about the same — the pool is split between them.
   noisy.idle: Run it and watch the slot colours in the pool — they show whose work is holding it.
   noisy.tenant.shop: Shop
   noisy.tenant.analyst: Analyst
@@ -436,7 +436,7 @@ steps:
       once. It adds no features, but it decides how much the first four will cost.
 
       The brief has no numbers, and it says nothing about what exactly is scraped
-      or how long results are kept. We need to ask the product about that, which is
+      or how long results are kept. We need to ask product about that, which is
       the next step.
   - id: questions
     title: The questions without which there is nothing to calculate
@@ -446,7 +446,7 @@ steps:
       contain. So the next step is questions.
 
       - **What are we scraping?** Public APIs with a key and a quota, third-party
-        sites with no agreement, or partner exports that expect us. This decides
+        sites with no agreement, or exports from partners who expect us. This decides
         the main risk: an overage bill, an IP ban, or neither.
       - **Who submits jobs?** A human in a UI and a script collect results in
         different ways.
@@ -461,7 +461,7 @@ steps:
       - **Are some jobs urgent?** Priorities make the scheduler more complex, and
         adding them in advance is not worth it.
 
-      Answers in words go into requirements, numbers go into estimates. If the
+      Answers in words go into requirements, numbers go into estimates. If
       product says "don't know", we write down an assumption and check it with a
       number in the estimates step.
   - id: actors
@@ -559,7 +559,7 @@ steps:
         are "done" and "failed for good". A job stuck in "running" forever is worse
         than a failed one.
 
-      Decisions are made by these numbers. If the first one is broken, we scale
+      Decisions are made based on these numbers. If the first one is broken, we scale
       intake. If the third one is broken, we grow the pool or split the queue.
   - id: load
     title: 'Estimate: jobs per second'
@@ -580,15 +580,15 @@ steps:
       Writes are not the whole flow. People ask about a job, and they start asking
       the minute it is accepted. Five seconds in the queue plus twenty of running,
       polled every five seconds, is five status requests and one more for the
-      result. Six reads per write, that is 167 reads a second at peak against 28
+      result. Six reads per write: that is 167 reads a second at peak against 28
       writes. The pool is sized by writes, but the database lives under reads, and
       the second number gets lost more often than the first. What to do about it is
-      the step on caching.
+      covered in the step on caching.
 
-      Waiting is a slider here rather than a result: what it will be is not
-      something Little's law says. What it does is turn it into jobs — 139 of them
+      Waiting is a slider here rather than a result: Little's law does not say
+      what it will be. What the law does is turn the wait into jobs — 139 of them
       queued at peak — and let NFR-8 be checked. While the average wait is five
-      seconds the promise that "95% of jobs start within the first minute" holds;
+      seconds, the promise that "95% of jobs start within the first minute" holds;
       move the slider towards a minute and it breaks, and the read flow grows with
       it.
 
@@ -601,7 +601,7 @@ steps:
       Try changing the duration. At two seconds a pool of fifty jobs and one machine
       are enough. At thirty, almost a thousand jobs run at once: that needs a
       cluster, autoscaling, and a separate budget. The task is the same; only the
-      speed of the target API changed. That is why the first question to the
+      speed of the target API changed. That is why the first question to
       product was what exactly we scrape.
   - id: concurrency
     title: 'Estimate: how many workers'
@@ -669,7 +669,7 @@ steps:
       The first element inside the boundary is the entry point, `api-gateway`.
       All external requests come here: both "submit a job" and "what happened to it".
 
-      The gateway checks who is calling, drops extra traffic, and passes the
+      The gateway checks who is calling, drops excess traffic, and passes the
       request on. It is separate because authentication and per-client limits are needed by both the write
       side and the read side. If they were implemented twice, the rules would drift
       apart over time.
@@ -799,8 +799,8 @@ steps:
     narration: |-
       167 reads a second at peak against 28 writes, and all 167 land on
       `jobs-pg` — the same database intake writes to. The availability of intake
-      is NFR-1, so a polling loop in someone's script can take down job intake it
-      has nothing to do with.
+      is NFR-1, so a polling loop in someone's script can take down job intake,
+      which it has nothing to do with.
 
       `jobs-cache` goes between `job-query` and the database — an [[cache|
       intermediate buffer]] holding the answer to `GET /jobs/{id}`: state, link
@@ -825,12 +825,12 @@ steps:
       the cache removed no load and added latency. So an entry has two lifetimes.
 
       While the job is not in a final state, the TTL is two seconds. Such a TTL
-      does not save a single poller: at a five-second polling interval it misses
+      does nothing for a lone poller: at a five-second polling interval it misses
       every time. The bet is that a job usually has more than one reader — an open
       tab, a script and a page refresh produce several requests within one second,
       and one of them reaches the database.
 
-      Once it reaches a final state, until retention ends. The state will not
+      Once it reaches a final state, the entry lives until retention ends. The state will not
       change again, and such a job is read for a long time: people come for the
       result link an hour later. Those reads do not reach the database at all.
 
@@ -862,7 +862,7 @@ steps:
     title: Getting the result
     note: 'The result goes to the client directly, past api-gateway'
     narration: |-
-      For the client a job has two states: still running, or done. Finding out is
+      For the client a job has two states: still running, or done. Finding out which is
       an ordinary database query through `job-query`. The answer contains the
       status and, if the job is done, a link to the result.
 
@@ -892,7 +892,7 @@ steps:
       to the bus. On the right are the worker
       pool, the only element that calls third-party APIs, and the result storage.
       The bus carries two queues: work to do and completion events — and the second
-      one is listened to not only by the webhook but by the cache.
+      one is listened to not only by the webhook but also by the cache.
 
       Three things are not on the diagram yet and come next: how a worker tells a
       temporary failure from a permanent one, where the per-domain limit comes
@@ -956,7 +956,7 @@ steps:
       the same job, not a second one.
 
       The result is served not by the API but by storage, through a signed
-      link: it serves large volumes more cheaply. The webhook complements
+      link: storage serves large volumes more cheaply. The webhook complements
       polling but does not replace it: it may not arrive.
   - id: lifecycle
     title: The life of a job
@@ -1041,7 +1041,7 @@ steps:
       A fair order makes the scheduler more complex: it needs a queue per tenant,
       tracking of allocated slots, and a rule for a tenant that was quiet for a
       long time and suddenly arrives with work. The next step is weights: paying
-      customers can get more than free ones. The product decides the weights.
+      customers can get more than free ones. Product decides the weights.
   - id: results
     title: Where the results live
     narration: |-
@@ -1127,7 +1127,7 @@ steps:
       analyst gets its share, one job out of ten, and its queue moves.
 
       Change the priorities above the diagram: give the crawler `high`. The burst
-      still does not take the whole pool: `high` gets six takes out of ten, the
+      still does not take the whole pool: `high` gets six picks out of ten, the
       rest goes to the other queues.
   - id: broker
     title: Which MQ to pick
@@ -1197,7 +1197,7 @@ steps:
 
 From here the format changes: instead of one pattern, a whole task. The brief
 above came in the form you get in an interview or in the first message from
-the product: a paragraph of text without a single number.
+product: a paragraph of text without a single number.
 
 The first impulse is to draw the diagram: queue, workers, database, arrows.
 The diagram will come, but at the end.
