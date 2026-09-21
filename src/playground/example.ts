@@ -159,7 +159,7 @@ const REQS: Array<[string, Text, Text?, Requirement['category']?, string[]?]> = 
   ['NFR-7', { en: 'A job’s history is visible', ru: 'По джобе видно, что с ней было' }, { en: 'attempt history with the target’s answers; oldest job age on the dashboard', ru: 'история попыток с ответами цели; возраст старейшей джобы на дашборде' }, 'observability', ['db', 'reader']],
   ['NFR-8', { en: 'A job starts without a long wait', ru: 'Джоба стартует без долгого ожидания' }, { en: '95% of jobs start within the first minute', ru: '95% джоб стартуют в первую минуту' }, 'latency', ['mq', 'worker', 'scheduler']],
   ['NFR-9', { en: 'The system handles the peak flow', ru: 'Система выдерживает пиковый поток' }, { en: '28 jobs/s at peak, up to 556 in flight', ru: '28 джоб/с на пике, до 556 одновременно в работе' }, 'throughput', ['mq', 'worker']],
-  ['NFR-10', { en: 'A result is kept for the retention period', ru: 'Результат хранится срок ретеншна' }, { en: '30 days, about 2.3 TB', ru: '30 дней, около 2,3 ТБ' }, 'cost', ['results']],
+  ['NFR-10', { en: 'A result is kept for the retention period', ru: 'Результат хранится срок ретеншна' }, { en: '30 days, about 2.2 TB', ru: '30 дней, около 2,2 ТБ' }, 'cost', ['results']],
   ['NFR-11', { en: 'Temporary target failures do not fail the job', ru: 'Временные отказы цели не роняют джобу' }, { en: 'up to 5 attempts, exponential backoff with jitter', ru: 'до 5 попыток, экспоненциальный backoff с разбросом' }, 'durability', ['scheduler', 'worker']],
   ['NFR-12', { en: 'Urgent jobs go faster, low priority does not starve', ru: 'Срочные джобы идут быстрее, низкий приоритет не голодает' }, { en: 'queue weights 6 : 3 : 1; an empty queue gives its share to the rest', ru: 'веса очередей 6 : 3 : 1; пустая очередь отдаёт долю остальным' }, 'throughput', ['mq', 'publisher', 'worker']],
 ];
@@ -313,11 +313,11 @@ const SCHEMAS: Record<string, Array<[string, Text, Field[]]>> = {
 const ESTIMATE: Text = {
   en: `Flow: 50k users × 8 jobs/day = 400k jobs/day ≈ 4.6/s on average, peak ×6 ≈ 28/s.
 In flight (Little's law): 28/s × 20 s per job ≈ 556 jobs at once → about 28 workers at 20 concurrent jobs each.
-Results: 200 KB × 400k/day = 80 GB/day, 30 days ≈ 2.3 TB in object storage; jobs-pg only holds state.
+Results: 200 KB × 400k/day ≈ 76 GB/day, 30 days ≈ 2.2 TB in object storage; jobs-pg only holds state.
 The queue is not there for throughput but for the gap between average and peak: five peak minutes pile up ~7k jobs.`,
   ru: `Поток: 50 тыс. пользователей × 8 джоб в сутки = 400 тыс. джоб/сутки ≈ 4,6/с в среднем, пик ×6 ≈ 28/с.
 Одновременно в работе (закон Литтла): 28/с × 20 с на джобу ≈ 556 джоб → около 28 воркеров по 20 джоб каждый.
-Результаты: 200 КБ × 400 тыс./сутки = 80 ГБ/сутки, за 30 дней ≈ 2,3 ТБ в объектном хранилище; в jobs-pg только состояния.
+Результаты: 200 КБ × 400 тыс./сутки ≈ 76 ГБ/сутки, за 30 дней ≈ 2,2 ТБ в объектном хранилище; в jobs-pg только состояния.
 Очередь нужна не ради пропускной способности, а ради разницы между средним и пиком: пять минут пика копят ~7 тыс. джоб.`,
 };
 
@@ -436,7 +436,7 @@ export function exampleDesign(lang: string): Design {
   design.taskSource = 'Product Owner';
   /**
    * Числа из разбора: 50 тыс. пользователей, 8 джоб в сутки, джоба 20 секунд,
-   * пик ×6, результат 200 КБ, ретеншн 30 дней. Реплика одна: 2,3 ТБ из
+   * пик ×6, результат 200 КБ, ретеншн 30 дней. Реплика одна: 2,2 ТБ из
    * разбора — это объём результатов, а не место на дисках хранилища.
    */
   design.calc = {
