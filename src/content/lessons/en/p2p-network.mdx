@@ -1,0 +1,1100 @@
+---
+title: 'System design: a P2P network for file distribution'
+description: >-
+  A walk through the "build it like BitTorrent" task: requirements, three
+  estimates — why a swarm, why a DHT, how many copies a file needs — and a
+  diagram that loses its central parts one by one.
+problem: 'A P2P network gets drawn in a minute at an interview: nodes, arrows between them, the word "DHT". Then come the questions: why one server with a fat pipe is not enough, what happens when the only node with a full copy leaves, how two computers behind home routers connect. The diagram has no answers, because none of those numbers were ever worked out.'
+brief:
+  label: The task
+  source: Product Owner
+  text: >-
+    We distribute large files — images, game updates — and on release day the
+    traffic bill ruins us while the servers go down anyway. Let users share
+    files with each other, like BitTorrent. Files must not get corrupted on the
+    way, the network must not depend on any single server of ours, and all of
+    it has to work for ordinary people behind a home router. The more people
+    download, the faster it should go, not the other way round.
+tags: [system-design, p2p, distributed]
+order: 15
+draft: true
+deck: p2p-network
+labels:
+  p2p.inputs: What we know
+  p2p.result: What follows
+  p2p.time.s: s
+  p2p.time.min: min
+  p2p.time.h: h
+  p2p.time.d: days
+  p2p.swarm.fileGb: File size
+  p2p.swarm.fileGb.unit: GB
+  p2p.swarm.peers: Downloading at once
+  p2p.swarm.peers.unit: nodes
+  p2p.swarm.seedMbps: Server or seed uplink
+  p2p.swarm.seedMbps.unit: Mbit/s
+  p2p.swarm.upMbps: Upload of one node
+  p2p.swarm.upMbps.unit: Mbit/s
+  p2p.swarm.downMbps: Download of one node
+  p2p.swarm.downMbps.unit: Mbit/s
+  p2p.swarm.pieceKb: Piece size
+  p2p.swarm.pieceKb.unit: KB
+  p2p.swarm.out.clientServer: One server feeds everyone
+  p2p.swarm.out.p2p: The swarm feeds itself
+  p2p.swarm.out.speedup: Gain
+  p2p.swarm.out.seedEgressCs: Server traffic
+  p2p.swarm.out.seedEgressP2p: Seed traffic in a swarm
+  p2p.swarm.out.pieces: Pieces in the file
+  p2p.swarm.out.pieces.unit: pcs
+  p2p.swarm.out.metainfo: Piece hashes in the metadata
+  p2p.swarm.out.bitfield: Availability map per neighbour
+  p2p.swarm.line.1: 'Server: {peers} × {fileGb} GB through {seedMbps} Mbit/s = {clientServer}'
+  p2p.swarm.line.2: 'Swarm: the same volume through {seedMbps} + {peers} × {upMbps} Mbit/s = {p2p}'
+  p2p.swarm.verdict.upload: 'The total upload of the swarm sets the time. It grows with the number of downloaders, so the distribution time barely depends on how many there are: this is the answer to "the more people, the faster".'
+  p2p.swarm.verdict.download: 'The swarm uploads faster than a node can receive: the time is bound by one node''s download link. The network has nothing left to speed up; this is the limit of any distribution method.'
+  p2p.swarm.verdict.seed: 'The bottleneck is the seed: until it has uploaded the whole file at least once, the swarm has nothing to share. The first copy needs a pipe; after that the pipe no longer matters.'
+  p2p.dht.nodes: Nodes in the network
+  p2p.dht.nodes.unit: nodes
+  p2p.dht.torrentsPerNode: Torrents per node
+  p2p.dht.torrentsPerNode.unit: pcs
+  p2p.dht.announceMin: Announce every
+  p2p.dht.announceMin.unit: min
+  p2p.dht.k: 'Bucket size, k'
+  p2p.dht.k.unit: nodes
+  p2p.dht.alpha: 'Parallel queries, α'
+  p2p.dht.alpha.unit: pcs
+  p2p.dht.rttMs: Round trip to a neighbour
+  p2p.dht.rttMs.unit: ms
+  p2p.dht.out.trackerRps: Announces to the tracker
+  p2p.dht.out.trackerRps.unit: req/s
+  p2p.dht.out.nodeMessages: DHT background per node
+  p2p.dht.out.nodeMessages.unit: msg/s
+  p2p.dht.out.hops: 'Lookup hops, at most'
+  p2p.dht.out.hops.unit: hops
+  p2p.dht.out.lookup: Finding peers by hash
+  p2p.dht.out.lookupMessages: Messages per lookup
+  p2p.dht.out.lookupMessages.unit: msgs
+  p2p.dht.out.contacts: Contacts in a node's table
+  p2p.dht.out.contacts.unit: nodes
+  p2p.dht.out.table: Routing table of a node
+  p2p.dht.out.records: Other nodes' announces held
+  p2p.dht.out.records.unit: records
+  p2p.dht.line.1: 'Tracker: {nodes} nodes × {torrentsPerNode} torrents / {announceMin} min = {trackerRps} req/s into one point'
+  p2p.dht.line.2: 'DHT: log₂({nodes} / {k}) = {hops} hops × {alpha} queries = {lookupMessages} messages per lookup'
+  p2p.dht.verdict.tracker: 'A single tracker on a single machine handles this announce rate. The DHT is needed here not for load, but so that the network survives the tracker going down.'
+  p2p.dht.verdict.cluster: 'This is already a service behind a load balancer with a sharded table — and it remains a single point of failure. The DHT spreads the same work across the nodes: a fraction of a message per second each.'
+  p2p.dht.verdict.dht: 'A central tracker at this rate is a product of its own with a team of its own. A network this size stands on the DHT, and trackers remain a private accelerator for individual torrents.'
+  p2p.availability.onlinePct: A node with a copy is online
+  p2p.availability.onlinePct.unit: '% of the time'
+  p2p.availability.copies: Copies
+  p2p.availability.copies.unit: pcs
+  p2p.availability.pieces: Pieces in the file
+  p2p.availability.pieces.unit: pcs
+  p2p.availability.out.pieceUp: One piece is available
+  p2p.availability.out.scattered: 'File can be assembled: piece copies scattered'
+  p2p.availability.out.whole: 'File can be assembled: as many full copies'
+  p2p.availability.out.copiesScattered: Copies per piece for 99%
+  p2p.availability.out.copiesScattered.unit: pcs
+  p2p.availability.out.copiesWhole: Full copies for 99%
+  p2p.availability.out.copiesWhole.unit: pcs
+  p2p.availability.line.1: 'Piece: 1 − (1 − {onlinePct}%)^{copies} = {pieceUp}'
+  p2p.availability.line.2: 'File of {pieces} pieces: {pieceUp} to the power of {pieces} = {scattered}; with full copies — {whole}'
+  p2p.availability.verdict.dead: 'The file is more likely unavailable than available. A file needs all of its pieces at once, and the probabilities multiply: the textbook "three copies per piece" does not work on home nodes.'
+  p2p.availability.verdict.flaky: 'The file is not always available: some downloaders will get stuck on the last few percent. Reaching 99% takes more copies — or one node that never switches off.'
+  p2p.availability.verdict.ok: 'The file is available 99 times out of 100. Look at how many copies that costs and compare with one web seed that is always online.'
+  swarm.strategy: Next piece
+  swarm.strategy.sequential: In order
+  swarm.strategy.random: Random
+  swarm.strategy.rarest: Rarest first
+  swarm.seedLeaves: Seed leaves after one full copy
+  swarm.start: Run
+  swarm.pause: Pause
+  swarm.step: Tick
+  swarm.reset: Again
+  swarm.tick: Tick
+  swarm.done: Fully downloaded
+  swarm.rarest: Copies of the rarest piece
+  swarm.seed: Seed
+  swarm.gone: Seed left
+  swarm.peer: Node
+  swarm.idle: 'Run it and watch the bottom number: while the rarest piece has at least one copy, the file can still be assembled.'
+  swarm.running: 'Tick {tick}. Fully downloaded: {done} of {total}.'
+  swarm.finished: 'All {total} got the file in {tick} ticks. The swarm no longer needs the seed: every piece has many copies.'
+  swarm.stuck: 'The swarm stalled at tick {tick}: pieces with no copy left — {lost}. The seed took them away, and none of the {total} will ever assemble the file.'
+  sort.prompt: >-
+    Ten statements from the conversation with the product owner. Sort them:
+    what the network does, with which properties, and what it does not do at all.
+  sort.check: Check
+  sort.again: Sort again
+  sort.score: 'Correct: {right} of {total}.'
+  sort.right: 'All sorted correctly.'
+  sort.wrong: The difference shows in what breaks when the requirement is not met.
+  sort.progress: 'Sorted {placed} of {total}'
+  sort.bin.fr: Function
+  sort.bin.nfr: Property
+  sort.bin.out: Out of scope
+  sort.item.publish: Publish a file and get a link to it
+  sort.why.publish: 'A function: an action the publisher invokes. That the link is a hash is already a decision.'
+  sort.item.find: 'Given a link, find the nodes that have the file'
+  sort.why.find: 'A function: the downloader''s client invokes it. Tracker or DHT is an implementation question.'
+  sort.item.parallel: Download a file from several nodes at once
+  sort.why.parallel: 'A function: without it this is a plain download from one address. It forces the file to be cut into pieces.'
+  sort.item.resume: Resume a download from the same place after a restart
+  sort.why.resume: 'A function: the user invokes it and notices when it is missing.'
+  sort.item.integrity: A corrupted piece never makes it into the file
+  sort.why.integrity: 'A property: no new action, just a guarantee for "download". Articles often list it as a function — and then cannot say who invokes it.'
+  sort.item.nospof: The network works while our server is down
+  sort.why.nospof: 'A property: about the availability of peer discovery. The DHT grows out of it.'
+  sort.item.nat: Works for people behind a home router
+  sort.why.nat: 'A property: it sounds like a function, but there is no new action. It is the condition under which all the others work.'
+  sort.item.fair: Those who do not upload download slower
+  sort.why.fair: 'A property: fairness of exchange. Without it, a network made of other people''s upload is left with none.'
+  sort.item.search: Search for files by name
+  sort.why.search: 'Out of scope: the network finds peers for a known hash. Content search is a separate product with an index, moderation and lawyers.'
+  sort.item.anonymity: Hide who downloads what
+  sort.why.anonymity: 'Out of scope: anonymity takes onion routing and costs speed several times over. In a swarm the neighbours'' addresses are visible to everyone by construction.'
+  req.fr: 'Functional'
+  req.nfr: 'Non-functional'
+  req.col.text.fr: 'The network can'
+  req.col.note.fr: 'Invoked by'
+  req.col.text.nfr: 'Property'
+  req.col.note.nfr: 'What breaks without it'
+  req.col.goal: 'Target'
+  req.drop: 'Drag here from the text on the left'
+  req.chips: 'Into the requirements table'
+  req.addAll: 'Move all'
+  req.placed: 'in the table'
+  req.goal: 'target'
+  req.empty: 'Empty so far'
+  req.reset: 'Start over'
+  req.recall: 'Requirements table'
+  req.text.FR-1: 'Publish a file: get a link by which it can be found'
+  req.note.FR-1: 'publisher'
+  req.text.FR-2: 'Given a link, find the nodes that have the file'
+  req.note.FR-2: 'downloader'
+  req.text.FR-3: 'Download the file in pieces from several nodes at once'
+  req.note.FR-3: 'downloader'
+  req.text.FR-4: 'Share what has been downloaded: both while downloading and after'
+  req.note.FR-4: 'any node'
+  req.text.FR-5: 'Join the network knowing one address, and leave without notice'
+  req.note.FR-5: 'new node'
+  req.text.FR-6: 'Pause a download and resume from the same place'
+  req.note.FR-6: 'downloader'
+  req.text.FR-7: 'Show download progress: speed, neighbours, time left'
+  req.note.FR-7: 'downloader, operator'
+  req.text.NFR-1: 'A corrupted piece never makes it into the file'
+  req.note.NFR-1: 'one malicious or faulty node ruins the file for everyone who downloaded from it'
+  req.goal.NFR-1: 'a hash per piece; the link is the hash of the metadata itself'
+  req.text.NFR-2: 'No single point of failure'
+  req.note.NFR-2: 'the tracker goes down and every torrent stalls at once'
+  req.goal.NFR-2: 'peers are found through the DHT; the tracker speeds things up but is not required'
+  req.text.NFR-3: 'Distribution speeds up with the number of downloaders'
+  req.note.NFR-3: 'the release takes the distribution down on the very day it was built for'
+  req.goal.NFR-3: '4 GB to 10,000 nodes: half an hour instead of four days, seed traffic 200 GB instead of 39 TB'
+  req.text.NFR-4: 'The file stays available while nodes leave'
+  req.note.NFR-4: 'the only seed leaves and nobody can assemble the file'
+  req.goal.NFR-4: '99% with nodes online 30% of the time: 13 full copies or one web seed'
+  req.text.NFR-5: 'Those who do not upload download slower'
+  req.note.NFR-5: 'everyone downloads, nobody uploads, and a network made of upload has none'
+  req.goal.NFR-5: '4 upload slots: 3 to the best reciprocal uploaders, 1 at random; recomputed every 10 s'
+  req.text.NFR-6: 'Works behind NAT'
+  req.note.NFR-6: 'home nodes accept no inbound connections and only see seeds with public addresses'
+  req.goal.NFR-6: 'port mapping via UPnP, otherwise hole punching through a rendezvous; outbound always works'
+  req.text.NFR-7: 'Peers are found quickly'
+  req.note.NFR-7: 'the user stares at "0 peers" for a minute and closes the app'
+  req.goal.NFR-7: 'first peers within 5 s, first piece within 15 s, 95 times out of 100'
+  req.text.NFR-8: 'Taking part costs a node next to nothing'
+  req.note.NFR-8: 'service traffic eats the very uplink the node is there for'
+  req.goal.NFR-8: 'at 10M nodes: 0.2 messages/s and 4 KB of routing table per node'
+  req.text.NFR-9: 'Malicious nodes cannot hide or replace a torrent'
+  req.note.NFR-9: 'an attacker surrounds the hash with their own nodes and the torrent vanishes from lookup'
+  req.goal.NFR-9: 'node id bound to IP; answers gathered from different subnets; ban for bad pieces'
+  match.cards: 'Decisions'
+  match.hint: 'Drag a card onto the requirement it covers. Or click the card, then the row.'
+  match.progress: 'Covered {n} of {total}'
+  match.done: 'Every requirement is covered by a decision from the write-up. No rows left unanswered.'
+  match.right: 'Yes.'
+  match.wrong: 'Not here.'
+  match.miss: '"{card}" does not answer {row}.'
+  match.goesTo: 'It belongs to'
+  match.reset: 'Start over'
+  match.open: 'Show the answer'
+  match.card.magnet: 'Magnet link'
+  match.card.magnet.text: 'The link is the info_hash: a hash of the metadata that holds the piece hashes'
+  match.why.magnet: 'This is about publishing: the link can be passed around anywhere, and it also verifies whatever arrives by it.'
+  match.card.discovery: 'Three peer sources'
+  match.card.discovery.text: 'Tracker, DHT and peer exchange with neighbours — in parallel, first to answer wins'
+  match.why.discovery: 'About peer discovery and its speed: the tracker answers in one request, the DHT in seconds, neighbours fill in the rest.'
+  match.card.chunks: 'Pieces and parallel download'
+  match.card.chunks.text: 'The file is cut into 1 MB pieces; different pieces come from different neighbours at once'
+  match.why.chunks: 'About downloading from several nodes and about scaling: every piece that enters the swarm immediately becomes somebody''s upload.'
+  match.card.have: 'The have message'
+  match.card.have.text: 'A verified piece is announced to neighbours and shared at once, without waiting for the rest of the file'
+  match.why.have: 'This is the sharing function: a node becomes a source from its first piece, not after the download.'
+  match.card.bootstrap: 'Bootstrap node'
+  match.card.bootstrap.text: 'One well-known address to enter the DHT; departures are noticed by ping, no goodbye needed'
+  match.why.bootstrap: 'About joining and leaving: one address is enough to get in, and the network survives an unannounced exit.'
+  match.card.resume: 'Piece map on disk'
+  match.card.resume.text: 'After a restart the client re-checks the hashes of what is on disk and asks for what is missing'
+  match.why.resume: 'This is about resuming. Pieces are independent, so "from the same place" comes for free.'
+  match.card.stats: 'Session counters'
+  match.card.stats.text: 'Speed per neighbour, number of seeds and downloaders, availability of the rarest piece'
+  match.why.stats: 'This is visibility: for the user and for whoever watches the health of a torrent.'
+  match.card.hashes: 'A hash per piece'
+  match.card.hashes.text: 'A piece is checked against the hash in the metadata before it hits the disk; on mismatch, ask someone else'
+  match.why.hashes: 'About integrity: there is no need to trust the neighbour, trusting the link is enough.'
+  match.card.dht: 'Kademlia DHT'
+  match.card.dht.text: 'The "hash → peers" table lives on the nodes themselves; a lookup takes about twenty hops'
+  match.why.dht: 'About having no centre and about the cost of taking part: kilobytes of table and a fraction of a message per second per node.'
+  match.card.rarest: 'Rarest first'
+  match.card.rarest.text: 'A downloader asks for the piece that has the fewest copies in the swarm'
+  match.why.rarest: 'About file survival: piece copies even out, and the swarm outlives the seed.'
+  match.card.webseed: 'Web seed'
+  match.card.webseed.text: 'A plain HTTP server with a full copy, from which pieces are fetched with Range requests'
+  match.why.webseed: 'Also about survival: one copy that is always online replaces a dozen home ones.'
+  match.card.choker: 'Choking: tit for tat'
+  match.card.choker.text: 'Four upload slots: three to those who upload to us the fastest, one at random'
+  match.why.choker: 'About fairness: without uploading you only ever get the random slots.'
+  match.card.punch: 'Port mapping and hole punching'
+  match.card.punch.text: 'UPnP opens a port on the router; if it cannot, a rendezvous tells two nodes each other''s addresses'
+  match.why.punch: 'About working behind NAT: two nodes nobody can knock on knock on each other at the same moment.'
+  match.card.hardening: 'DHT hardening'
+  match.card.hardening.text: 'Node id derived from IP, answers taken from different subnets, ban for bad pieces'
+  match.why.hardening: 'About malicious nodes: a thousand ids from one address stop being a thousand votes.'
+  seq.discovery: 'peer discovery'
+  seq.handshake: 'handshake and metadata'
+  seq.exchange: 'piece exchange'
+  api.request: 'request'
+  api.response: 'response'
+  api.announce: 'Report yourself and get neighbours. The response holds addresses, not data: six bytes per peer.'
+  api.scrape: 'Torrent state without announcing: how many seeds, how many downloading, how many completed.'
+terms:
+  swarm: >-
+    All the nodes that are downloading or sharing the same file right now.
+    Every file has a swarm of its own.
+  seed: >-
+    A node with a full copy of the file: it only uploads. A downloader becomes
+    a seed once finished — unless it leaves.
+  leecher: >-
+    A node that does not have the whole file yet. The name misleads: a
+    downloader shares the pieces it already has from the first minute.
+  piece: >-
+    A fixed-size part of the file, usually 256 KB to 4 MB. The unit of
+    integrity checking and exchange: each piece has its own hash in the
+    metadata.
+  info_hash: >-
+    The hash of a torrent's metadata — the file list and the piece hashes. The
+    torrent's name in the network: peers are looked up by it, and received
+    metadata is verified against it.
+  magnet: >-
+    A link that holds nothing but the info_hash. The client gets the metadata
+    from peers and checks it against the hash in the link.
+  tracker: >-
+    A server that returns the addresses of a swarm's nodes for an info_hash.
+    File data never goes through it.
+  DHT: >-
+    Distributed hash table: key–value pairs live on the network's own nodes,
+    and each node is responsible for the keys close to its identifier.
+  Kademlia:
+    text: 'The DHT protocol BitTorrent runs on: key closeness is measured with XOR, a lookup takes the logarithm of the node count.'
+    url: 'https://pdos.csail.mit.edu/~petar/papers/maymounkov-kademlia-lncs.pdf'
+  XOR metric: >-
+    The distance between two identifiers is their bitwise XOR read as a number.
+    It is symmetric, so a node learns about neighbours from the very queries
+    that reach it.
+  k-bucket: >-
+    A list of up to k nodes whose distance from ours lies between 2^i and
+    2^(i+1). A node knows few of the far nodes and nearly all of the close ones.
+  PEX: >-
+    Peer exchange: neighbours in a swarm trade lists of the peers they know.
+    It finds no new swarms but quickly fills one already found.
+  choking: >-
+    A node uploads not to all neighbours but to a few: for the rest it is
+    "choked". Who gets a slot is decided by how much the neighbour uploads
+    itself.
+  NAT: >-
+    Address translation on a home router: a connection can be opened from the
+    inside, but nobody can reach the node from outside until it opens the way
+    itself.
+  hole punching: >-
+    Two nodes behind NAT send packets to each other at the same moment: each
+    router takes the inbound packet for a reply to the outbound one and lets it
+    through.
+  web seed: >-
+    An HTTP server with a full copy of the file, from which the client fetches
+    pieces with Range requests. To the swarm it is a seed that never leaves.
+  churn: >-
+    Node turnover: how many come and go per unit of time. In a home network a
+    node lives for hours, not months.
+  Sybil: >-
+    An attack in which one participant creates many identities to gain weight
+    in the network that it does not have.
+  eclipse: >-
+    An attack on a DHT: the attacker takes the identifiers around a key, and
+    every query about that key reaches the attacker.
+  endgame: >-
+    End-of-download mode: the last blocks are requested from all neighbours at
+    once and surplus requests are cancelled. Otherwise the download waits on
+    one slow neighbour.
+  C1: >-
+    The system as a single block and everything that talks to it: people and
+    neighbouring systems. Its insides are not shown at this level.
+  C2: >-
+    Which parts the system consists of and how they are connected.
+  C3: >-
+    What is inside one part: its modules and how they connect to each other
+    and to the neighbours.
+steps:
+  - id: overview
+    title: What is actually being asked
+    narration: |-
+      The task reads as "build a torrent", and the urge is to draw nodes with
+      arrows right away. First we restate it as a set of promises: each one
+      will have to be paid for.
+
+      - **Users share with each other.** Data travels between nodes directly,
+        with none of our servers on the data path. So the capacity of the
+        network is other people's home links, which we do not control.
+      - **Files do not get corrupted.** A neighbour cannot be trusted: it may be
+        faulty or malicious. So the downloader has a way to verify what it
+        received without asking anyone.
+      - **No dependence on a single server.** The network must find peers while
+        our server is down. This is the most expensive promise: because of it,
+        peer discovery has to be handed over to the peers themselves.
+      - **Works behind a home router.** Most nodes cannot be reached from
+        outside. Ignore that, and the network consists of nodes that cannot
+        connect to each other.
+
+      The fifth phrase — "the more people, the faster" — is not a function but
+      a property, and a testable one: it can be calculated before the first
+      line of code is written. We will do that at the estimates step.
+
+      The task gives no file size, no number of downloaders, and not a word
+      about who holds the first copy. Those are questions for the product
+      owner.
+  - id: questions
+    title: Questions without which there is nothing to calculate
+    narration: |-
+      The wording fits both image distribution to a thousand machines inside a
+      datacentre and a public network of ten million home computers. Those are
+      two different systems.
+
+      - **Whose nodes?** Own servers on one network: nodes always online, no
+        NAT, no malicious ones. Home computers: the exact opposite. Half of the
+        requirements below depend on the answer.
+      - **How many downloaders, and when?** A steady flow, or a release when
+        everyone arrives within the same hour. A swarm wins precisely at the
+        peak.
+      - **How large are the files?** The size drives the piece size, the weight
+        of the metadata and how long a swarm lasts.
+      - **Who holds the first copy, and for how long?** If the publisher seeds
+        forever, file survival is their concern. If they leave in an hour, it
+        is the network's.
+      - **Does the file change?** If so, versions are needed, and a way to
+        learn about a new one. A hash in the link makes a torrent immutable by
+        construction.
+      - **Is search by name needed?** Finding peers for a known hash and
+        finding a file by the word "ubuntu" are problems of different orders.
+      - **Must it hide who downloads what?** Anonymity changes the whole
+        architecture and costs speed.
+
+      We take the answers this write-up stands on: a public network, home
+      nodes, files from hundreds of megabytes to tens of gigabytes, releases
+      with tens of thousands of downloaders, immutable files, and a publisher
+      who holds a copy but cannot be relied on. Search by name and anonymity
+      are out of scope.
+  - id: actors
+    title: Who takes part in the network
+    narration: |-
+      In a client–server system the users are outside. Here the users are the
+      system, so there are more roles, and one of them is the adversary.
+
+      - **The publisher.** Uploads a file, gets a link and seeds the first
+        copy. They need the file to reach everyone without their link going
+        down.
+      - **The downloader.** Got a link, wants the file fast and intact. Where
+        the pieces come from makes no difference to them.
+      - **The sharer.** The same downloader an hour later: they have the file,
+        and the network needs them to stay. They have no reason to, other than
+        the ones we give them.
+      - **The operator.** Us: we run a few servers that help the network get
+        started. We need to see the health of torrents without taking part in
+        each one.
+      - **The adversary.** A node that serves garbage, occupies slots and
+        uploads nothing, or creates a thousand identities to hide a torrent.
+        In an open network it is always there, and the requirements are
+        written with it in mind.
+
+      The downloader and the sharer are one and the same program. Hence a
+      requirement for the protocol: there are no "client" and "server" roles
+      in piece exchange; the connection is symmetric.
+  - id: fr
+    title: Functional requirements
+    narration: |-
+      The table on the right is the requirements document, one for the whole
+      write-up. The rows of this step sit under the text and need to be moved
+      into the table; their numbers will arrive at the estimate steps.
+
+      A functional requirement describes an action, and an action has someone
+      who invokes it. In a P2P network the invoker is often the node itself
+      rather than a person: "join the network knowing one address" is invoked
+      by the program at start-up. It is still a function: it has a beginning,
+      an end and a result.
+
+      There is no DHT, tracker or pieces in the table: those are means of
+      implementation. "Find the nodes that have the file" can be fulfilled by
+      three different mechanisms, and all three will end up on the diagram.
+  - id: scope
+    title: What is out of scope
+    narration: |-
+      What the network does not do gets written down as explicitly as the
+      functions.
+
+      - **Search by name.** The network finds peers for a known hash. Where
+        the link comes from — a site, a chat, an email — is none of its
+        concern. Content search would take an index, moderation and lawyers.
+      - **Anonymity.** In a swarm everyone sees the neighbours' addresses:
+        there is no connecting to them otherwise. Hiding them takes onion
+        routing, and that is a different network with a different speed.
+      - **Mutable files.** The link is a hash of the content. A new version is
+        a new link; how the user learns about it is up to whoever publishes
+        links.
+      - **Storage "forever".** The network distributes what somebody wants to
+        share. A guarantee that a file outlives the interest in it comes only
+        from paid storage, and at the survival step it will appear as a single
+        server, not as a property of the network.
+
+      On the right are ten statements from the same conversation. Two of them
+      usually sit in the wrong column in textbook write-ups.
+  - id: nfr
+    title: Non-functional requirements
+    narration: |-
+      We test properties through consequences: under each one it says what
+      breaks without it. In a P2P network this column has a peculiarity —
+      nearly every breakage means there is no network at all, not that it
+      works worse. A network without fair exchange is not slow: nobody shares
+      in it. A network without NAT traversal is not inconvenient: its nodes
+      cannot see each other.
+
+      Note NFR-3. "Distribution speeds up with the number of downloaders"
+      sounds like an advertising slogan, but it is a requirement with a
+      formula, and two steps from now it will get a number.
+
+      The "Target" column is empty for now. Targets will come from the
+      estimates and from the steps where the corresponding decision is made.
+  - id: slo
+    title: The numbers we commit to
+    narration: |-
+      For a network with no servers on the data path, promising availability
+      in nines is odd: there is nowhere to measure it and nobody to answer for
+      it. The promises are about what a single user sees.
+
+      - **First peers within 5 seconds, first piece within 15.** This is the
+        time from a pasted link to movement on the screen. A user who stares
+        at "0 peers" for a minute closes the app, and the network loses a
+        node.
+      - **95 times out of 100.** The remaining five are rare torrents where
+        peers really are scarce, and fast lookup does not cure that.
+
+      The other numbers — distribution time, cost of taking part, number of
+      copies — cannot be assigned; they have to be calculated. How long a
+      release takes depends on links we do not control, and we can promise
+      only what the formula gives.
+  - id: calc-swarm
+    title: 'Estimate: why a swarm when there is a server'
+    narration: |-
+      The first question an interviewer asks: why not put up a server with a
+      fat pipe. The answer is a formula from the Kurose and Ross textbook, and
+      the calculator on the right uses it.
+
+      A server has to upload N copies of the file on its own. Its time —
+      `N × F / u_s` — grows linearly with the number of downloaders. A 4 GB
+      file to ten thousand nodes through a gigabit link takes four days. A
+      release that downloads for four days is a server that went down.
+
+      In a swarm everybody uploads. The total upload is the seed's link plus
+      the upload of each of the N nodes, and the time is
+      `N × F / (u_s + N × u)`. N sits in both the numerator and the
+      denominator: with many nodes it cancels out, leaving `F / u` — the file
+      size divided by the upload of one home link. The same ten thousand nodes
+      with 20 Mbit/s of upload finish in half an hour, and so do a hundred
+      thousand. This is "the more people, the no slower".
+
+      Move the sliders and see what becomes the limit.
+
+      - **Node upload.** The main slider. A home link is asymmetric: 100 down,
+        20 up. The network is made of upload, and distribution will not go
+        faster than `F / u` no matter how many nodes you add.
+      - **Seed link.** Affects next to nothing — until the seed leaves. Its
+        traffic for the release is 200 GB instead of the server's 39 TB: the
+        saving the task was written for.
+      - **Piece size.** Does not affect the time, but sets the bookkeeping
+        cost: 4096 one-megabyte pieces mean 80 KB of hashes in the metadata
+        and half a kilobyte of availability map per neighbour. A 64 KB piece
+        gives metadata over a megabyte; a 16 MB one loses sixteen megabytes on
+        every corrupted transfer.
+
+      The model is a fluid one: it assumes any bit can be given to any node at
+      any moment. In reality a node can only give a piece it has and the
+      neighbour lacks. How close a real swarm gets to the formula depends on
+      how nodes pick pieces — that is the simulator step.
+  - id: calc-dht
+    title: 'Estimate: why a DHT when there is a tracker'
+    narration: |-
+      Somebody has to answer "who is sharing this file". The simple option is
+      a [[tracker]]: a server with a table "torrent hash → node addresses". A
+      node reports itself every half hour and gets a list of neighbours.
+
+      Let us size a tracker for the whole network. Ten million nodes with five
+      torrents each, announcing every thirty minutes — 28 thousand requests
+      per second into one point. It is doable: the request is tiny, the table
+      is in memory. But it is a service behind a load balancer, with sharding
+      and people on call, and while it is down, no torrent in the network can
+      start. It violates NFR-2 by construction.
+
+      A [[DHT]] spreads the same table across the nodes themselves. Every node
+      has a 160-bit identifier, every torrent has its [[info_hash]] of the
+      same length, and the record about a torrent lives on the k nodes whose
+      identifiers are closest to the hash. Closest by the [[XOR metric]]: the
+      distance between two identifiers is their bitwise XOR read as a number.
+
+      The right column of the calculator works out the price.
+
+      - **Lookup is a logarithm.** Each hop at least halves the distance to
+        the target, so there are at most `log₂(N / k)` hops: twenty-one for
+        ten million nodes. Queries go out α at a time, and with a 150 ms
+        round trip a lookup fits in three seconds — within the five-second
+        promise from the SLO.
+      - **The table is kilobytes.** A node keeps k neighbours per
+        [[k-bucket]], that is, per order of distance: 168 addresses, four
+        kilobytes. Of a network of ten million nodes it knows a hundred and a
+        half.
+      - **The background is a fraction of a message per second.** Announcing
+        a torrent is one lookup plus k stores. That comes to 0.2 messages per
+        second per node, and the figure depends on network size
+        logarithmically.
+
+      Shift the node count two orders of magnitude either way. The tracker
+      load changes a hundredfold; the cost of the DHT for a node changes by a
+      third. For a network under a hundred thousand nodes the verdict is
+      different: one tracker copes, and the DHT is needed for survival only.
+
+      We pay for this in time: a tracker answers in one request, a DHT in
+      about twenty. That is why the tracker will not vanish from the diagram:
+      it stays as an accelerator without which the network works but starts
+      more slowly.
+  - id: calc-availability
+    title: 'Estimate: how many copies a file needs'
+    narration: |-
+      Textbook write-ups of P2P networks say: "each chunk is stored in three
+      copies". Let us check that with a number.
+
+      A home node is not always online: the computer is on in the evenings,
+      say 30% of the time. A piece with three copies on such nodes is
+      available with probability `1 − 0.7³`, which is 66%. Not bad for one
+      piece.
+
+      But a file needs all of its pieces at once. If the copies of each piece
+      are scattered across nodes independently, the probabilities multiply:
+      0.66 to the power of 4096 is zero, however many digits you print. For
+      the file to assemble 99 times out of 100, each piece needs 37 copies.
+
+      Now lay the same copies out differently: not pieces on random nodes, but
+      full copies of the file on a few. The file is available when at least
+      one node with a full copy is online, and thirteen are enough for 99%. A
+      third of the space and traffic — only because the pieces of one file
+      come and go together.
+
+      Two decisions follow, and both will land on the diagram.
+
+      **The network does not place pieces itself.** There is no component that
+      spreads other people's pieces across nodes and watches the copy count.
+      Copies appear where somebody wanted the file, and they are kept whole.
+      The protocol's job is to make a finished downloader stay as a seed and
+      to keep piece copies from skewing inside the swarm; piece selection
+      takes care of the latter.
+
+      **One node that is always online replaces a dozen home ones.** Put the
+      "online" slider at 99% and look at the last row. This is the case for a
+      [[web seed]] — a plain HTTP server with a full copy, which will appear
+      on the diagram as insurance for unpopular torrents.
+
+      The model is crude: nodes are independent, while in reality they all
+      switch off at night together. Real numbers are worse than the calculated
+      ones, which only strengthens the conclusion.
+  - id: c1
+    title: 'C1: the network and everything that talks to it'
+    narration: |-
+      Now we can draw. The first frame is [[C1]]: the network as one block.
+
+      There are two people: the publisher puts a file into the network, the
+      downloader takes it out. Between them is a third element, and it is
+      outside the boundary: the place where the link lives. A site, a chat, an
+      email — the network does not care. It promises to find peers for a hash
+      and promises nothing about how the hash reached the user.
+
+      The boundary runs where it ran in the scope: search by name is not our
+      system. That is why it is dashed on the frame and has no connection to
+      the network at all: a person carries the link from one world to the
+      other.
+  - id: c2-tracker
+    title: 'The simplest network: a swarm and a tracker'
+    note: 'Addresses go through the tracker, not pieces of the file'
+    narration: |-
+      We start with a network that still has a centre and remove it part by
+      part.
+
+      Inside the boundary is `peer-client`, our node: a program that both
+      downloads and shares. Around it is the [[swarm]]: a [[seed]] with the
+      first full copy and the other nodes — the same program on other people's
+      machines. They are drawn dashed: inside the network, but not under our
+      control.
+
+      The `tracker` brings them together. A node tells it the torrent hash and
+      its own port and gets neighbours' addresses in return. The tracker takes
+      no further part: pieces travel between nodes directly.
+
+      There are two kinds of lines on the frame. Dashed ones are control: who
+      is in the swarm and how to reach them. Solid ones are data. Even in
+      this, the most centralised version, only the dashed lines have a centre.
+      The rest of the write-up is about removing it from them as well.
+
+      The tracker contract is the only HTTP in the whole network. The response
+      is compact: six bytes per peer, four for the address and two for the
+      port. Fifty neighbours take three hundred bytes, which is why a tracker
+      handles tens of thousands of requests per second on modest hardware.
+    added:
+      - element: p2p.client
+        role: 'Our node. One program both downloads and shares: there are no "client" and "server" roles in piece exchange.'
+      - element: p2p.seed
+        role: 'The first full copy. While it is the only one, the swarm lives only as long as the seed does.'
+      - element: p2p.peers
+        role: 'The rest of the swarm: the same program on other people''s machines. They may leave, lie or refuse to upload.'
+      - element: p2p.tracker
+        role: 'Brings the nodes of one torrent together. Returns addresses and passes no data through itself.'
+      - element: p2p.swarm_table
+        role: 'The table "torrent hash → addresses and last announce time". In memory: after a restart the nodes refill it within one interval.'
+  - id: pieces
+    title: 'Pieces, hashes and the link'
+    narration: |-
+      Before moving further along the diagram, let us look at what exactly
+      travels over the solid lines.
+
+      The file is cut into [[piece|pieces]] of equal size — a megabyte, by our
+      estimate. Three requirements hang on that at once. Different pieces can
+      be fetched from different neighbours simultaneously — that is FR-3. A
+      piece that has arrived can be shared without waiting for the rest —
+      FR-4. And a piece can be verified separately from the file — NFR-1.
+
+      Every piece has a hash in the metadata. On receiving a piece, a node
+      computes the hash itself and compares. On a mismatch the piece is thrown
+      away and requested from another neighbour, and the sender gets a mark;
+      after a few of those the connection is dropped. The neighbour does not
+      need to be trusted at all.
+
+      What remains is why the metadata can be trusted. The answer is in the
+      link. A [[magnet|magnet link]] holds the [[info_hash]]: the hash of the
+      metadata itself. The node gets the metadata from neighbours in the swarm
+      and checks it against the hash from the link. That makes a chain: the
+      link verifies the metadata, the metadata verifies the pieces. Only the
+      source of the link has to be trusted, and that is outside the network.
+
+      The chain has a consequence: a torrent is immutable. Change a byte in
+      the file and the piece hash changes, then the metadata, then the link.
+      A torrent cannot be "updated", only reissued. We wrote that into the
+      scope as a limitation; here it shows as the price of integrity without
+      trust.
+
+      Inside a piece, data travels in 16 KB blocks: that is the unit of a
+      network request. A piece is the unit of verification, a block is the
+      unit of transfer, and they should not be confused: one piece may arrive
+      in blocks from different neighbours, and if the hash does not match, one
+      of them is at fault, but which one is unknown.
+  - id: swarm-sim
+    title: 'Which piece to ask for next'
+    narration: |-
+      The formula at the estimate step assumed any node can give something
+      useful to any other. That holds only if nodes have different pieces.
+      Choosing the next piece is the one thing a node decides on its own, and
+      the survival of the swarm depends on it.
+
+      The simulator has a seed and seven downloaders, and a file of sixteen
+      pieces. Per tick a node uploads one piece and receives one. The seed
+      leaves after uploading sixteen pieces — exactly one copy of the file by
+      volume.
+
+      Run **"In order"**. That is what anyone writing a downloader for the
+      first time would do, and it is convenient for watching video. Everyone
+      asks the seed for the first piece, then the second. The seed spends its
+      sixteen uploads on several copies of the beginning of the file, leaves —
+      and nobody has the tail. The bottom number drops to zero, and the swarm
+      stalls forever. Across two hundred runs with different randomness, all
+      two hundred end this way.
+
+      **"Random"** is better but does not save the day: the seed still uploads
+      duplicates, and one run in twenty makes it to the end.
+
+      **"Rarest first"**: a node asks for the piece with the fewest copies in
+      the swarm. A piece the seed has already given out stops being the
+      rarest, and the next node asks for a different one. Sixteen seed uploads
+      are sixteen different pieces. The seed leaves and the file remains in
+      the swarm in full, smeared across the downloaders: none of them has it,
+      all of them together do.
+
+      Untick "Seed leaves". The swarm finishes under any rule, but "in order"
+      takes nearly twice as long: everybody has the same pieces and there is
+      nothing to trade. That is the distance between the formula and real
+      life.
+
+      The rule has two refinements. A node picks its first few pieces at
+      random: it needs to get anything at all quickly in order to start
+      uploading. And at the very end [[endgame]] kicks in: the last blocks are
+      requested from all neighbours at once, otherwise the download waits on
+      one slow one.
+  - id: choking
+    title: 'Whom to upload to: tit for tat'
+    narration: |-
+      The network is made of other people's upload, and the owner of a node
+      has no reason to provide it: uploading gives them nothing. If the
+      protocol ignores this, a rational user turns sharing off, and the
+      formula from the estimate step turns into the server one.
+
+      The answer is [[choking]]. A node uploads not to all neighbours but to
+      four. Three slots go to those who upload to it the fastest; every ten
+      seconds the rates are recomputed and the slots move. Want to download
+      fast — upload fast: neighbours will open a slot for you in return.
+
+      The fourth slot goes to a random neighbour every thirty seconds.
+      Without it a newcomer would never get into the swarm: it has no pieces,
+      nothing to upload, and by reciprocal rate it is always last. The random
+      slot gives it its first pieces and also lets the node discover
+      neighbours better than the current ones.
+
+      A seed lives by a different rule: it has no reciprocal rate, so it
+      uploads to those it can upload to fastest — that way pieces spread
+      through the swarm sooner.
+
+      The protection is incomplete. A node that uploads nothing still
+      downloads — through other people's random slots, slowly. Closing that
+      gap would mean keeping newcomers out of the swarm. That is why the
+      target says "downloads slower", not "does not download".
+
+      And the main thing choking does not solve: it works while a node is
+      downloading. A finished node has no use for reciprocal rate, and nothing
+      makes it stay as a seed. Private communities solve this with upload
+      accounting on the tracker; an open network does not solve it at all,
+      which is why it needs a seed that never leaves.
+  - id: c2-dht
+    title: 'A DHT instead of the tracker'
+    note: 'Needed once, on joining; after that a node remembers its neighbours'
+    narration: |-
+      We remove the centre from the dashed lines. There is no tracker on the
+      frame; its table lives in the `DHT` — on the nodes themselves. It is
+      drawn as a store on purpose: this is not a service somebody deploys but
+      data smeared across the peers.
+
+      A node does two things with it. `get_peers(info_hash)` — goes to the
+      nodes closest to the hash and asks who is sharing. `announce_peer` —
+      leaves its own address with them. A record lives for half an hour and
+      vanishes without a repeated announce, so departed nodes clean
+      themselves up.
+
+      The network does not specifically notice a node leaving. Routing tables
+      refresh along the way: whoever answers a query is alive, and its address
+      gets refreshed. A silent node is pinged and, failing a reply, replaced.
+      Meanwhile [[Kademlia]] does not evict old neighbours in favour of new
+      ones: a node that has been online for a day is more likely to last
+      another day than one that arrived a minute ago. It is a cheap defence
+      against [[churn]] and against a flood of fake nodes.
+
+      The only thing left of the centre is the `bootstrap-node`. A new node
+      needs at least one address to get in. It asks the bootstrap node for the
+      neighbours of its own identifier, fills its table and never goes back;
+      on the next start it takes addresses from the saved table. With the
+      bootstrap down, only those starting for the first time cannot join.
+
+      We do not throw the tracker out of the network: on the final diagram it
+      returns next to the DHT. The client asks all sources at once and takes
+      the peers that arrive first; once a swarm is found, neighbours fill in
+      the rest through [[PEX]].
+    added:
+      - element: p2p.dht
+        role: 'The same "hash → peers" table laid out across the nodes. A record lives on the k nodes closest to the hash.'
+      - element: p2p.bootstrap
+        role: 'A well-known address for the first entry into the DHT. Takes no part in looking up torrents.'
+  - id: c2-nat
+    title: 'Nodes behind NAT'
+    narration: |-
+      The DHT returned a neighbour's address. Most likely it cannot be
+      connected to: the neighbour sits behind a home router, and inbound
+      connections do not get through. Outbound ones always do, so a node
+      behind [[NAT]] can download from nodes with an open port. But two nodes
+      behind NAT cannot see each other, and in a home network those are the
+      majority. The swarm splits into "everyone" and "the few with a public
+      address", and the upload of the former sits idle.
+
+      There are three solutions, in decreasing order of cost to us.
+
+      **Ask the router.** On start-up the client asks it to open a port via
+      UPnP or NAT-PMP. Works on most home routers and costs nothing.
+
+      **Introduce the two.** If a port cannot be opened, [[hole punching]]
+      remains. Both nodes need a third one that both are already connected
+      to — on the frame that is the `rendezvous`. It tells each the external
+      address of the other, and both send packets towards each other at the
+      same moment. The router sees an inbound packet from the address an
+      outbound one has just gone to, takes it for a reply and lets it through.
+      It works over UDP — one of the reasons the network has a transport of
+      its own rather than TCP.
+
+      Any common neighbour with an open port can act as the rendezvous, so
+      this box is not a centre either but insurance for when there is no
+      common neighbour.
+
+      **Relay the data through an intermediary.** For pairs where nothing
+      worked, a relay remains. We do not deploy one: it puts our servers back
+      on the data path, which cancels the task. Such a pair simply does not
+      connect, and the swarm makes do with the rest.
+    added:
+      - element: p2p.rendezvous
+        role: 'Rendezvous: tells two nodes behind NAT each other''s external addresses. No data goes through it.'
+  - id: c2-webseed
+    title: 'A seed that never leaves'
+    narration: |-
+      The survival estimate gave thirteen full copies on home nodes — or one
+      on a node that is always online. A popular torrent finds its thirteen
+      seeds by itself. An unpopular one does not, and choking, as we saw, does
+      not keep a finished downloader around.
+
+      A `web-seed` is a plain HTTP server or bucket with a full copy. Its
+      address is in the metadata, and the client fetches pieces from it with
+      `Range` requests like from any neighbour, only without choking and
+      without reciprocal upload.
+
+      At first glance this brings back the server the task asked to get away
+      from. The difference is in when it works. The client goes to the web
+      seed for pieces the swarm lacks — by the same "rarest first" rule. While
+      the swarm is alive, the web seed uploads next to nothing: by our
+      estimate, hundreds of gigabytes instead of tens of terabytes. When the
+      swarm is dead, it uploads the whole file, but to a handful. The
+      expensive scenario — everyone downloading from the server at once —
+      never happens.
+
+      Industrial counterparts are built the same way: in Uber Kraken and
+      Alibaba Dragonfly an origin with a full copy stands behind the swarm,
+      and P2P takes the peak off it.
+    added:
+      - element: p2p.webseed
+        role: 'An HTTP server with a full copy. Uploads the pieces the swarm lacks; while the swarm is alive, it is almost idle.'
+  - id: c2-full
+    title: C2 in full
+    note: 'Dashed is addresses, solid is pieces. Only the dashed lines have a centre'
+    narration: |-
+      The network is assembled. Let us test it against the task: what happens
+      if we switch off each box that we operate.
+
+      - **tracker.** Peers are found through the DHT, a few seconds slower.
+      - **bootstrap-node.** Those starting for the first time cannot join the
+        DHT; they still download through the tracker. The rest do not notice.
+      - **rendezvous.** Pairs behind NAT are introduced by a common neighbour,
+        and where there is none, they do not connect. The swarm loses some
+        links but does not fall apart.
+      - **web-seed.** Popular torrents do not notice. Unpopular ones live as
+        long as the last home seed does.
+      - **initial seed.** If it managed to upload one copy and nodes picked
+        the rarest pieces, the swarm does not notice.
+
+      None of the boxes stands in the way of all torrents at once. That is the
+      test for NFR-2: not "we have no servers" but "none of them is required".
+
+      Solid lines run only between nodes and from the web seed. Our servers
+      never see the data: the traffic that ruined us in the task goes past us.
+  - id: seq-join
+    title: 'From a link to the first piece'
+    narration: |-
+      The C2 diagram shows who is connected to whom, but not in which order.
+      Here is the path that works without a single server of ours except the
+      bootstrap — top to bottom.
+
+      **Peer discovery.** The link holds only a hash. The node enters the DHT,
+      goes to the nodes closest to the hash and gets addresses. This is where
+      most of the five seconds from NFR-7 go.
+
+      **Handshake and metadata.** In the handshake nodes name the torrent
+      hash: a neighbour that is not sharing it drops the connection. A node
+      that came by a magnet link has no metadata yet — it asks a neighbour for
+      it and checks it against the hash from the link. Then the neighbour
+      sends a `bitfield`: a map of the pieces it has. From these maps the node
+      learns which pieces are rare in the swarm.
+
+      **Exchange.** `interested` — "you have something I lack". `unchoke` —
+      "I have opened a slot for you". Only then do requests for 16 KB blocks
+      go out. An assembled piece is checked against its hash, and the node
+      immediately sends `have` to its neighbours: from that moment it is a
+      source of that piece itself.
+
+      On the last line the node announces itself in the DHT. Not earlier:
+      announcing a torrent you have nothing to give for wastes other people's
+      connections.
+  - id: c3-client
+    title: 'C3: inside peer-client'
+    narration: |-
+      We go one level down. On [[C2]] the node was a single box, yet nearly
+      all the complexity of the network is inside it: there are no servers to
+      take it on.
+
+      - **torrent-session** — the state of one torrent: which pieces are here,
+        who the neighbours are, how much went up and down. Download progress
+        for FR-7 is read from here as well.
+      - **peer-discovery** — asks the tracker, the DHT and neighbours at once
+        and passes the addresses on. The other modules do not care where a
+        peer came from.
+      - **peer-wire** — connections and protocol messages. The only module
+        that talks to other nodes.
+      - **piece-picker** — decides from the neighbours' availability maps
+        which piece to ask for and from whom. The "rarest first" rule lives
+        here.
+      - **choker** — every ten seconds decides which neighbours get the upload
+        slots.
+      - **piece-verifier** — computes the hash of an assembled piece. Before
+        it, data counts as garbage; after it, it is shared with neighbours.
+      - **piece-store** — pieces on disk. After a restart the session
+        re-checks what is there and asks for what is missing: FR-6 is met
+        without a separate download journal.
+
+      Two decisions live in two different modules that know nothing of each
+      other: the picker decides what to ask for, the choker decides whom to
+      upload to. The first serves swarm survival, the second serves fairness,
+      and mixing them up is a common mistake in an interview answer.
+    added:
+      - element: p2p.client.session
+        role: 'The state of one torrent: pieces, neighbours, counters.'
+      - element: p2p.client.discovery
+        role: 'Looks up peers by info_hash in all sources at once: tracker, DHT, neighbours.'
+      - element: p2p.client.wire
+        role: 'Connections and protocol messages. The only module that talks to other nodes.'
+      - element: p2p.client.picker
+        role: 'Which piece to ask for next and from whom: rarest first, endgame at the end.'
+      - element: p2p.client.choker
+        role: 'Whom to upload to: three slots to the best reciprocal uploaders, one at random.'
+      - element: p2p.client.verifier
+        role: 'Checks a piece hash against the metadata before it is written to disk.'
+      - element: p2p.client.disk
+        role: 'Pieces on disk. Verified ones are shared with neighbours at once.'
+  - id: security
+    title: 'Malicious nodes'
+    narration: |-
+      Anyone can join an open network, in any quantity. There are three
+      threats, and they are covered unevenly.
+
+      **Garbage instead of data.** A node serves bad pieces to poison a
+      torrent. Fully covered: the piece does not match its hash, gets thrown
+      away, and the node is banned. The attack costs next to nothing, but
+      achieves nothing beyond wasted traffic.
+
+      **A thousand faces.** A node picks its DHT identifier itself, and
+      nothing stops one machine from creating a thousand of them — a [[Sybil]]
+      attack. Pick them next to a torrent's hash, and every query about it
+      reaches the attacker, who answers "nobody is sharing": an [[eclipse]],
+      and the torrent has vanished from lookup while the swarm is alive.
+
+      Partly covered. The identifier is bound to the node's external IP: the
+      high bits are a hash of the address, and nodes with somebody else's
+      identifier do not get into routing tables. A thousand faces now take a
+      thousand addresses. The client gathers answers from different subnets
+      and does not trust a single source. And Kademlia prefers old neighbours
+      to new ones, so a flood of fresh nodes evicts each other from the tables
+      rather than those who have been online for long.
+
+      This does not close the attack completely: whoever has a botnet has
+      addresses too. That is why the DHT is not the only source of peers: the
+      tracker and PEX work around it, and hiding a torrent means breaking all
+      three.
+
+      **Surveillance.** Any node in a swarm sees the addresses of the others —
+      that is how the network works. It is not covered at all and is written
+      into the scope: the network does not promise anonymity.
+  - id: tradeoffs
+    title: What we paid
+    narration: |-
+      The network fulfils the task. Here is what was given up for it.
+
+      **The complexity moved into the client.** A server system is updated by
+      a rollout. Here the protocol lives in millions of copies of the program
+      at different versions, and any change has to stay compatible with nodes
+      that will never update. A bug in piece selection cannot be hotfixed.
+
+      **Speed is not guaranteed.** It depends on other people's links. We can
+      promise peer discovery time and what the formula gives, but not "the
+      file in ten minutes" for a particular user.
+
+      **Survival of the unpopular is on us.** The network is good at keeping
+      what many people download. The long tail rests on the web seed, that is,
+      on our server and our storage bill.
+
+      **No control over content.** A torrent cannot be recalled: we have no
+      point it passes through. For the task that is the goal; for the lawyers
+      it is a question to ask before launch, not after.
+
+      **There is no privacy.** The addresses of a swarm's participants are
+      visible to all of its participants.
+
+      The design is worth revisiting in two cases. If the nodes are our own —
+      image distribution inside a datacentre — half of the diagram is not
+      needed: no NAT, no malicious nodes, the tracker can be central, and the
+      result is Kraken. If downloaders are few and arrive evenly, a swarm
+      never forms, and a CDN comes out cheaper and simpler.
+  - id: answer
+    title: 'The answer: decisions against requirements'
+    narration: |-
+      At the start we wrote down the requirements, and numbers were added to
+      them along the way. What remains is to check that each one has an
+      answer.
+
+      On the left are the decisions made along the way, on the right the full
+      requirements table. Put each card on the row it covers. NFR-4 has two
+      decisions, and that is no accident: one works while the swarm is alive,
+      the other when it is gone.
+
+      If a card lands in the wrong place, the note under it will say what it
+      actually answers.
+quiz:
+  - question: 'Why does the distribution time of a swarm barely depend on the number of downloaders?'
+    options:
+      - 'Because the seed has a very fat pipe'
+      - 'Because every new downloader brings its own upload, and total upload grows with demand'
+      - 'Because the DHT finds peers in logarithmic time'
+    answer: 1
+    explanation: 'In the formula N sits in both the numerator and the denominator. The seed link matters only for the first copy, and the DHT is responsible for finding peers, not for transfer speed.'
+  - question: 'The seed left after uploading exactly one copy of the file by volume. Under which piece selection rule will the swarm assemble the file?'
+    options:
+      - 'In order'
+      - 'Random piece'
+      - 'Rarest first'
+    answer: 2
+    explanation: 'Only with "rarest first" does the seed not waste upload on duplicates: every piece leaves it exactly once, and after it is gone the whole file remains in the swarm.'
+  - question: 'A piece has three copies on nodes that are online 30% of the time. Why is a file of 4096 such pieces practically unavailable?'
+    options:
+      - 'Because three copies are too few for a single piece'
+      - 'Because a file needs all pieces at once, and the probabilities multiply'
+      - 'Because the DHT loses the records about pieces'
+    answer: 1
+    explanation: 'A single piece is available 66% of the time, which is tolerable. But 0.66 to the power of 4096 is zero. The same copies gathered into full copies of the file give 66% for the file.'
+---
+
+Another task taken whole. The brief above is one of those that sound like a
+gift at an interview: everyone has used torrents, and a diagram with nodes and
+arrows takes a minute to draw.
+
+The difficulty is that there is almost nothing to draw. In a client–server
+task the board fills with services, databases and queues, and every decision is
+a new box. A P2P network has few boxes, and its decisions live in the protocol:
+which piece to ask for, whom to upload to, whom to trust. They do not show on a
+diagram, so the answers have to be given in numbers.
+
+The order is the same as in the [scraping jobs write-up](../scraping-jobs/):
+understand what is asked, ask questions, write down requirements, calculate —
+and only then draw. There are three estimates, and each answers a question the
+interviewer will ask: why a <span data-term="swarm">swarm</span> when there is
+a server; why a <span data-term="DHT">DHT</span> when there is a
+<span data-term="tracker">tracker</span>; and how many copies a file needs to
+survive until the next downloader.

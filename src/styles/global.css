@@ -5297,3 +5297,150 @@ vscode-tree-item.is-new {
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
+
+/* Симулятор роя: сид в центре, качающие вокруг, у каждого — карта кусков.
+   Переключатели и кнопки — те же, что у «шумного соседа»: читатель уже знает,
+   как они выглядят. */
+.swarm {
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.swarm__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.swarm__toggle input {
+  accent-color: var(--accent);
+}
+
+.swarm__step {
+  padding: 0.3rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fg);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.swarm__step:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.swarm__stage {
+  height: var(--flow-height, 440px);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.swarm-node {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  font-size: 0.75rem;
+}
+
+.swarm-node--seed {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.swarm-node.is-full {
+  border-color: var(--ok);
+}
+
+/* Ушедший сид остаётся на месте бледным: видно, что копия была и её нет. */
+.swarm-node.is-gone {
+  opacity: 0.35;
+  border-style: dashed;
+}
+
+/* Ручка в центре карточки: линия передачи идёт от середины к середине. */
+.swarm-node .swarm-node__handle {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.swarm-node__title {
+  font-weight: 600;
+}
+
+/* Карта кусков: восемь в ряд. Ширину карточке задаёт она. */
+.swarm-node__pieces {
+  display: grid;
+  grid-template-columns: repeat(8, 0.7rem);
+  gap: 2px;
+}
+
+.swarm-node__pieces i {
+  height: 0.7rem;
+  border-radius: 2px;
+  background: var(--border);
+}
+
+.swarm-node__pieces i.is-on {
+  background: var(--accent);
+}
+
+/* Кусок, пришедший в этом такте: зелёный на один такт, дальше — как все. */
+.swarm-node__pieces i.is-new {
+  background: var(--ok);
+}
+
+.swarm-edge .react-flow__edge-path {
+  stroke: var(--ok);
+  stroke-width: 2.5;
+}
+
+.swarm-edge--seed .react-flow__edge-path {
+  stroke: var(--accent);
+}
+
+.swarm__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0.9rem 0 0;
+}
+
+.swarm__stats div {
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.swarm__stats div.is-bad {
+  border-color: var(--bad);
+  background: var(--bad-soft);
+}
+
+.swarm__stats dt {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.swarm__stats dd {
+  margin: 0.1rem 0 0;
+  font-size: 1.1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.swarm .noisy__verdict.is-bad {
+  color: var(--bad);
+}

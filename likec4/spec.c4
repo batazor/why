@@ -154,6 +154,21 @@ specification {
     color sky
     line solid
   }
+  /**
+   * Две плоскости P2P-сети — цветом. Управление — кто есть в рое и как до него
+   * достучаться: анонсы, поиск в DHT, сводничество через NAT. Данные — куски
+   * файла. Разбор держится на том, что первая плоскость бывает
+   * централизованной, а вторая — никогда, и без цвета на общей схеме этого не
+   * видно.
+   */
+  relationship control {
+    color amber
+    line dashed
+  }
+  relationship data {
+    color sky
+    line solid
+  }
   relationship publishes
   relationship persists
   relationship owns

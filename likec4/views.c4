@@ -670,4 +670,153 @@ view scrape_full {
     autoLayout LeftRight 40 90
   }
 
+  /**
+   * Разбор P2P-сети: от одного блока до сети целиком.
+   *
+   * Порядок кадров — порядок отказа от центра: сперва трекер сводит всех,
+   * потом его работу берёт DHT, потом появляется то, без чего узлы за NAT не
+   * соединятся, и сид, который не уходит.
+   */
+
+  /** Экран `c1`: сеть одним блоком. Сайт со ссылками — снаружи. */
+  view p2p_context {
+    title 'The network and its neighbours'
+
+    include
+      p2pUser,
+      p2pPublisher,
+      p2pIndex,
+      p2p
+
+    autoLayout LeftRight
+  }
+
+  /**
+   * Экран `c2-tracker`: самая простая рабочая сеть. Управление — через один
+   * трекер, данные — напрямую между узлами.
+   */
+  view p2p_tracker {
+    title 'Swarm with a tracker'
+
+    include
+      p2pUser,
+      p2p,
+      p2p.client,
+      p2p.peers,
+      p2p.seed,
+      p2p.tracker,
+      p2p.swarm_table
+
+    autoLayout LeftRight
+  }
+
+  /** Экран `c2-dht`: трекера нет, его таблица лежит на самих узлах. */
+  view p2p_dht {
+    title 'DHT instead of the tracker'
+
+    include
+      p2pUser,
+      p2p,
+      p2p.client,
+      p2p.peers,
+      p2p.seed,
+      p2p.bootstrap,
+      p2p.dht
+
+    autoLayout LeftRight
+  }
+
+  /** Экран `c2-nat`: как соединяются два узла, ни к одному из которых нельзя постучаться. */
+  view p2p_nat {
+    title 'Peers behind NAT'
+
+    include
+      p2p,
+      p2p.client,
+      p2p.rendezvous,
+      p2p.peers
+
+    exclude p2p.peers -> p2p.client
+
+    autoLayout LeftRight
+  }
+
+  /** Экран `c2-webseed`: сид, который не уходит. */
+  view p2p_webseed {
+    title 'A seed that stays'
+
+    include
+      p2pPublisher,
+      p2p,
+      p2p.webseed,
+      p2p.seed,
+      p2p.client,
+      p2p.peers
+
+    autoLayout LeftRight
+  }
+
+  /** Экран `c2-full`: сеть целиком. Сверху вниз — так кадр выходит ближе к квадрату. */
+  view p2p_full {
+    title 'The network'
+
+    include
+      p2pUser,
+      p2pPublisher,
+      p2pIndex,
+      p2p,
+      p2p.client,
+      p2p.peers,
+      p2p.seed,
+      p2p.tracker,
+      p2p.swarm_table,
+      p2p.dht,
+      p2p.bootstrap,
+      p2p.rendezvous,
+      p2p.webseed
+
+    autoLayout TopBottom 30 90
+  }
+
+  /**
+   * Экран `seq-join`: от magnet-ссылки до первого куска. Трекера в
+   * последовательности нет намеренно: это путь, который работает без центра.
+   */
+  dynamic view p2p_join_seq {
+    title 'From a magnet link to the first piece'
+
+    p2pUser -> p2p.client 'magnet:?xt=urn:btih:info_hash'
+    p2p.client -> p2p.bootstrap 'find_node(own id)'
+    p2p.client <- p2p.bootstrap 'closest nodes'
+    p2p.client -> p2p.dht 'get_peers(info_hash), hop by hop'
+    p2p.client <- p2p.dht 'peer addresses'
+    p2p.client -> p2p.peers 'handshake: info_hash, peer_id'
+    p2p.client <- p2p.peers 'metadata, checked against info_hash'
+    p2p.client <- p2p.peers 'bitfield'
+    p2p.client -> p2p.peers 'interested'
+    p2p.client <- p2p.peers 'unchoke'
+    p2p.client -> p2p.peers 'request(piece, offset, 16 KB)'
+    p2p.client <- p2p.peers 'piece, checked against its hash'
+    p2p.client -> p2p.peers 'have(piece)'
+    p2p.client -> p2p.dht 'announce_peer(info_hash, port)'
+  }
+
+  /** Экран `c3-client`: внутри узла. Вертикально: кадр стоит в колонке рядом с текстом. */
+  view p2p_client {
+    title 'Inside peer-client'
+
+    include
+      p2p,
+      p2p.client,
+      p2p.client.*,
+      p2p.peers,
+      p2p.dht
+
+    exclude
+      p2p.peers -> p2p.dht,
+      p2p.client.nat
+
+    autoLayout TopBottom 40 60
+  }
+
 }

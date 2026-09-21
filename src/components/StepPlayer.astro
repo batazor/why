@@ -25,6 +25,8 @@ import JobLifecycle from './widgets/JobLifecycle';
 import RequirementMatch from './widgets/RequirementMatch';
 import BrokerMatrix from './widgets/BrokerMatrix';
 import ApiCards from './widgets/ApiCards';
+import P2PCalculator from './widgets/P2PCalculator';
+import SwarmSim from './widgets/SwarmSim';
 import { likec4model } from '../likec4/generated';
 
 interface NarrationStep {
@@ -531,6 +533,12 @@ const shikiOptions = {
         )}
         {widget.widget === 'broker-matrix' && (
           <BrokerMatrix client:visible data={widget.data} labels={labels} />
+        )}
+        {widget.widget === 'p2p-calculator' && (
+          <P2PCalculator client:visible lang={lang} data={widget.data} labels={labels} />
+        )}
+        {widget.widget === 'swarm-sim' && (
+          <SwarmSim client:visible data={widget.data} labels={labels} />
         )}
         {/* Без client: — карточки контракта статичные и рисуются при сборке. */}
         {widget.widget === 'api-cards' && <ApiCards data={widget.data} labels={labels} />}

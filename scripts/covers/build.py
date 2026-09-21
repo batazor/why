@@ -331,6 +331,49 @@ def littles_law():
     )
 
 
+def p2p_network():
+    """Слева все тянут с одного сервера, справа узлы раздают куски друг другу."""
+    import math
+    crowd = []
+    pulls = []
+    for i, y in enumerate((70, 112, 154, 196, 238)):
+        crowd += [circle(54, y, 11, ROSE, 0.8)]
+        pulls += arrow(150, 154, 72, y, bend=(i - 2) * 6)
+    ring = []
+    links = []
+    spots = []
+    for i in range(6):
+        a = math.pi * 2 * i / 6 - math.pi / 2
+        spots.append((500 + math.cos(a) * 110, 154 + math.sin(a) * 92))
+    for i, (x, y) in enumerate(spots):
+        ring += [rect(x - 24, y - 17, 48, 34, SAGE if i % 2 else MINT, op=0.9)]
+        # Карта кусков на узле: у каждого свои, целого файла нет ни у кого.
+        for k in range(4):
+            if (i + k) % 3:
+                ring += [rect(x - 19 + k * 10, y - 5, 8, 10, SAGE_D if (i + k) % 2 else TEAL, r=2, op=0.95)]
+    for i in range(6):
+        for j in (i + 1, i + 2):
+            (x1, y1), (x2, y2) = spots[i], spots[j % 6]
+            links += arrow(x1, y1, x2, y2, bend=10 if j == i + 1 else -6)
+    return (
+        bloom((110, 154, 120, 110, '#f3d6d6'), (500, 154, 170, 120, '#d4e6dc'), (320, 60, 60, 40, '#f3e8cc'))
+        + brush(*pulls, color=INK_ROSE, width=2, opacity=0.55)
+        + wash(*crowd)
+        # Один сервер под общей нагрузкой: стойка и пот над ней.
+        + wash(rect(150, 104, 70, 100, ROSE, op=0.85))
+        + brush('M164 128 h42 M164 152 h42 M164 176 h42', color=INK_ROSE, width=2.2, opacity=0.7)
+        + brush('M232 96 q6 -12 0 -22 M246 104 q8 -12 2 -24', color=INK_ROSE, width=2, opacity=0.6)
+        # Между схемами — файл, порезанный на куски.
+        + wash(rect(296, 118, 22, 22, BUTTER, r=4, op=0.95), rect(322, 118, 22, 22, PEACH, r=4, op=0.95),
+               rect(296, 144, 22, 22, PEACH, r=4, op=0.95), rect(322, 144, 22, 22, BUTTER, r=4, op=0.95),
+               rect(296, 170, 22, 22, BUTTER, r=4, op=0.95), rect(322, 170, 22, 22, CREAM, r=4, op=0.95))
+        + brush(*arrow(352, 154, 396, 154), color=INK_WARM, width=2.2, opacity=0.5, dash='5 8')
+        + brush(*links, color=INK_SAGE, width=1.7, opacity=0.4)
+        + wash(*ring)
+        + splashes((270, 250, 3, PEACH), (640, 60, 3, SAGE), (380, 40, 3, SKY))
+    )
+
+
 COVERS = {
     'circuit-breaker': (circuit_breaker, 'Ретраи долбят упавший сервис, рубильник между ними разомкнут.'),
     'discount-floor': (discount_floor, 'Две акции тянут цену ниже пола, доказательство держит её.'),
@@ -344,6 +387,7 @@ COVERS = {
     'why-ddd-specification': (ddd_specification, 'Одно правило вместо трёх копий.'),
     'why-ddd-transport': (ddd_transport, 'JSON через адаптер в домен, cmd/ собирает процесс.'),
     'system-design-interview': (interview, 'Задание, доска кандидата и рубрика интервьюера.'),
+    'p2p-network': (p2p_network, 'Слева все тянут с одного сервера, справа узлы раздают куски друг другу.'),
     'littles-law': (littles_law, 'Интенсивность и время пребывания измерены, число заявок в системе — оценено.'),
 }
 

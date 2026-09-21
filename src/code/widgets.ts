@@ -22,7 +22,9 @@ export type WidgetName =
   | 'job-lifecycle'
   | 'requirement-match'
   | 'broker-matrix'
-  | 'api-cards';
+  | 'api-cards'
+  | 'p2p-calculator'
+  | 'swarm-sim';
 
 /** Один ползунок калькулятора. Диапазон и шаг — часть конструкции, не перевод. */
 export type LoadInput = {
@@ -207,6 +209,84 @@ export type ApiEndpoint = {
 
 export type ApiCardsData = { endpoints: ApiEndpoint[] };
 
+/**
+ * Калькуляторы разбора P2P-сети. Модель — какая формула считается: время
+ * раздачи роем против одного сервера, цена трекера против DHT, доживёт ли файл
+ * до следующего качающего. Сами формулы — в `p2p-calc.ts`, рядом с
+ * симулятором роя: это чистые функции, их гоняет и node.
+ *
+ * У размера куска шкала своя — степени двойки: кусок в 1000 КБ не бывает, а
+ * логарифмический ползунок с округлением до двух знаков даёт именно его.
+ */
+export type P2PModel = 'swarm' | 'dht' | 'availability';
+
+export type P2PInput = Omit<LoadInput, 'scale'> & { scale?: 'linear' | 'log' | 'pow2' };
+
+export type P2PCalculatorData = { model: P2PModel; inputs: P2PInput[] };
+
+/** В каком виде итог показывается: число, объём, время, доля. */
+export type P2PFormat = 'number' | 'bytes' | 'duration' | 'percent' | 'times';
+
+/** Итоги по моделям: порядок задаёт порядок в таблице, `key` — выделенные. */
+export const P2P_OUTPUTS: Record<P2PModel, { key: string; format: P2PFormat; main?: boolean }[]> = {
+  swarm: [
+    { key: 'clientServer', format: 'duration', main: true },
+    { key: 'p2p', format: 'duration', main: true },
+    { key: 'speedup', format: 'times' },
+    { key: 'seedEgressCs', format: 'bytes' },
+    { key: 'seedEgressP2p', format: 'bytes' },
+    { key: 'pieces', format: 'number' },
+    { key: 'metainfo', format: 'bytes' },
+    { key: 'bitfield', format: 'bytes' },
+  ],
+  dht: [
+    { key: 'trackerRps', format: 'number', main: true },
+    { key: 'nodeMessages', format: 'number', main: true },
+    { key: 'hops', format: 'number' },
+    { key: 'lookup', format: 'duration' },
+    { key: 'lookupMessages', format: 'number' },
+    { key: 'contacts', format: 'number' },
+    { key: 'table', format: 'bytes' },
+    { key: 'records', format: 'number' },
+  ],
+  availability: [
+    { key: 'pieceUp', format: 'percent' },
+    { key: 'scattered', format: 'percent', main: true },
+    { key: 'whole', format: 'percent', main: true },
+    { key: 'copiesScattered', format: 'number' },
+    { key: 'copiesWhole', format: 'number' },
+  ],
+};
+
+/** Вердикты по моделям: какой из них выпал, решает формула. */
+export const P2P_VERDICTS: Record<P2PModel, string[]> = {
+  swarm: ['seed', 'download', 'upload'],
+  dht: ['tracker', 'cluster', 'dht'],
+  availability: ['dead', 'flaky', 'ok'],
+};
+
+/** Сколько строк-формул под таблицей у каждой модели. */
+export const P2P_LINES: Record<P2PModel, number> = { swarm: 2, dht: 2, availability: 2 };
+
+/**
+ * Симулятор роя: сид, качающие и правило выбора следующего куска.
+ *
+ * Числа — конструкция: роя из восьми узлов и шестнадцати кусков хватает, чтобы
+ * за десяток тактов увидеть, как «по порядку» оставляет рой без хвоста файла,
+ * а «сначала редкие» — нет.
+ */
+export type SwarmStrategy = 'sequential' | 'random' | 'rarest';
+
+export type SwarmSimData = {
+  leechers: number;
+  pieces: number;
+  strategies: SwarmStrategy[];
+  /** Сид уходит, раздав столько кусков, сколько их в файле: одна полная копия. */
+  seedLeaves: boolean;
+  /** Зерно генератора: прогон повторяется, и «ещё раз» сдвигает его на единицу. */
+  seed: number;
+};
+
 export type WidgetStep =
   | { widget: 'load-calculator'; wide?: boolean; data: LoadCalculatorData }
   | { widget: 'littles-law'; wide?: boolean; data: LittlesLawData }
@@ -217,7 +297,9 @@ export type WidgetStep =
   | { widget: 'job-lifecycle'; wide?: boolean; data: JobLifecycleData }
   | { widget: 'requirement-match'; wide?: boolean; data: RequirementMatchData }
   | { widget: 'broker-matrix'; wide?: boolean; data: BrokerMatrixData }
-  | { widget: 'api-cards'; wide?: boolean; data: ApiCardsData };
+  | { widget: 'api-cards'; wide?: boolean; data: ApiCardsData }
+  | { widget: 'p2p-calculator'; wide?: boolean; data: P2PCalculatorData }
+  | { widget: 'swarm-sim'; wide?: boolean; data: SwarmSimData };
 
 /** Шаг разбора → врезка, которая на нём стоит. */
 export type WidgetSpec = Record<string, WidgetStep>;
@@ -367,6 +449,43 @@ export function widgetLabelKeys(step: WidgetStep): string[] {
           `bm.row.${row.key}`,
           ...step.data.brokers.map((broker) => `bm.cell.${row.key}.${broker.key}`),
         ]),
+      ];
+    case 'p2p-calculator': {
+      // Префикс с моделью: калькуляторов в разборе три, и подписи у них разные.
+      const prefix = `p2p.${step.data.model}`;
+      return [
+        'p2p.inputs',
+        'p2p.result',
+        ...step.data.inputs.flatMap((input) => [`${prefix}.${input.key}`, `${prefix}.${input.key}.unit`]),
+        ...P2P_OUTPUTS[step.data.model].flatMap((out) => [
+          `${prefix}.out.${out.key}`,
+          // Единица нужна только числу: объём, время и доля несут её сами.
+          ...(out.format === 'number' ? [`${prefix}.out.${out.key}.unit`] : []),
+        ]),
+        ...Array.from({ length: P2P_LINES[step.data.model] }, (_, i) => `${prefix}.line.${i + 1}`),
+        ...P2P_VERDICTS[step.data.model].map((key) => `${prefix}.verdict.${key}`),
+        ...['s', 'min', 'h', 'd'].map((unit) => `p2p.time.${unit}`),
+      ];
+    }
+    case 'swarm-sim':
+      return [
+        'swarm.strategy',
+        'swarm.seedLeaves',
+        'swarm.start',
+        'swarm.pause',
+        'swarm.step',
+        'swarm.reset',
+        'swarm.tick',
+        'swarm.done',
+        'swarm.rarest',
+        'swarm.seed',
+        'swarm.gone',
+        'swarm.peer',
+        'swarm.idle',
+        'swarm.running',
+        'swarm.finished',
+        'swarm.stuck',
+        ...step.data.strategies.map((key) => `swarm.strategy.${key}`),
       ];
     case 'requirement-match':
       return [

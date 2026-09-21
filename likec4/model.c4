@@ -307,4 +307,130 @@ model {
   scraper.scheduler.retries -[calls]-> scraper.scheduler.repo 'failed attempts'
   scraper.jobs_db -[read]-> scraper.scheduler.repo 'expired leases, failed attempts'
   scraper.scheduler.repo -[write]-> scraper.jobs_db 'queued / failed, published_at = null'
+
+  /*
+   * Разбор P2P-сети для раздачи файлов. Элементы появляются по мере разбора:
+   * сперва рой с трекером, потом DHT вместо трекера, потом всё, что нужно,
+   * чтобы узлы за NAT вообще друг друга увидели.
+   */
+  p2pUser = actor 'Downloader'
+  p2pPublisher = actor 'Publisher'
+
+  /**
+   * Откуда берётся magnet-ссылка: сайт, чат, письмо. Снаружи границы: поиск
+   * по содержимому сеть не обещает, она находит пиров по уже известному хешу.
+   */
+  p2pIndex = external 'Link index' {
+    technology 'web'
+  }
+
+  p2p = context 'P2P network' {
+
+    /**
+     * Наш узел. Одна и та же программа и качает, и раздаёт: «клиент» здесь —
+     * имя программы, а не роль в обмене.
+     */
+    client = service 'peer-client' {
+
+      /** Состояние одной раздачи: какие куски есть, кто соседи, сколько отдано. */
+      session = component 'torrent-session'
+
+      /** Ищет пиров по info_hash: трекер, DHT, обмен списками с соседями. */
+      discovery = component 'peer-discovery'
+
+      /** Пробивает NAT: узнаёт свой внешний адрес и просит свести с соседом. */
+      nat = component 'nat-traversal'
+
+      /** Соединения и сообщения протокола: handshake, bitfield, request, piece. */
+      wire = component 'peer-wire'
+
+      /** Какой кусок просить следующим: сначала редкие, в конце — endgame. */
+      picker = component 'piece-picker'
+
+      /** Кому отдавать: четыре слота, три лучшим по отдаче и один наугад. */
+      choker = component 'choker'
+
+      /** Сверяет хеш куска с метаданными до записи на диск. */
+      verifier = component 'piece-verifier'
+
+      /** Куски на диске: проверенные отдаются соседям сразу. */
+      disk = component 'piece-store'
+    }
+
+    /** Остальные узлы роя: та же программа на чужих машинах. Мы ими не управляем. */
+    peers = external 'other peers'
+
+    /** Первая полная копия. Пока она одна, рой живёт, только пока жив сид. */
+    seed = service 'initial seed'
+
+    /**
+     * Трекер: таблица «хеш раздачи → кто её сейчас раздаёт». Данных через
+     * себя не пропускает, только сводит узлы.
+     */
+    tracker = service 'tracker'
+
+    swarm_table = store 'swarm-table' {
+      technology 'in-memory'
+    }
+
+    /**
+     * DHT: та же таблица, размазанная по всем узлам. Хранилищем нарисована
+     * намеренно: это не сервис, который кто-то разворачивает, а данные,
+     * лежащие на самих пирах.
+     */
+    dht = store 'DHT' {
+      technology 'Kademlia'
+    }
+
+    /** Известный адрес, с которого новый узел входит в DHT. Дальше он не нужен. */
+    bootstrap = service 'bootstrap-node'
+
+    /** Сводник для узлов за NAT: оба стучатся к нему, он сообщает им адреса друг друга. */
+    rendezvous = service 'rendezvous'
+
+    /** Обычный HTTP-сервер с полной копией: сид, который не уходит. */
+    webseed = store 'web-seed' {
+      technology 'http'
+    }
+  }
+
+  p2pPublisher -[control]-> p2pIndex 'publish magnet link'
+  p2pUser -[control]-> p2pIndex 'find magnet link'
+  p2pPublisher -[data]-> p2p.seed 'file'
+  p2pPublisher -[data]-> p2p.webseed 'file'
+  p2pUser -[control]-> p2p.client.session 'add magnet link'
+
+  /*
+   * Связи клиента — от модулей, как у планировщика в разборе скрейпинга: на
+   * C2, где клиент одной коробкой, LikeC4 сам поднимает их до сервиса.
+   */
+  p2p.client.discovery -[control]-> p2p.tracker 'announce: info_hash, port'
+  p2p.peers -[control]-> p2p.tracker 'announce'
+  p2p.seed -[control]-> p2p.tracker 'announce'
+  p2p.tracker -[control]-> p2p.swarm_table 'info_hash: peers, last seen'
+
+  p2p.seed -[data]-> p2p.peers 'pieces'
+  p2p.seed -[data]-> p2p.client.wire 'pieces'
+  p2p.peers -[data]-> p2p.client.wire 'pieces'
+  p2p.client.wire -[data]-> p2p.peers 'pieces'
+
+  p2p.client.discovery -[control]-> p2p.bootstrap 'first contacts'
+  p2p.client.discovery -[control]-> p2p.dht 'get_peers, announce_peer'
+  p2p.peers -[control]-> p2p.dht 'announce_peer'
+  p2p.seed -[control]-> p2p.dht 'announce_peer'
+
+  p2p.client.nat -[control]-> p2p.rendezvous 'my public address'
+  p2p.rendezvous -[control]-> p2p.peers 'connect request'
+
+  p2p.webseed -[data]-> p2p.client.wire 'HTTP range'
+
+  p2p.client.session -[calls]-> p2p.client.discovery 'need peers'
+  p2p.client.discovery -[calls]-> p2p.client.wire 'peer addresses'
+  p2p.client.nat -[calls]-> p2p.client.wire 'punched address'
+  p2p.client.wire -[calls]-> p2p.client.picker 'bitfield, have'
+  p2p.client.picker -[calls]-> p2p.client.wire 'request'
+  p2p.client.choker -[calls]-> p2p.client.wire 'choke, unchoke'
+  p2p.client.wire -[calls]-> p2p.client.verifier 'piece'
+  p2p.client.verifier -[calls]-> p2p.client.disk 'verified piece'
+  p2p.client.disk -[calls]-> p2p.client.wire 'blocks to upload'
 }
