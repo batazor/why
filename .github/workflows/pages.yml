@@ -45,6 +45,9 @@ jobs:
       - run: npm run build
         env:
           SITE_URL: ${{ steps.pages.outputs.base_url }}
+          # Живая сессия песочницы. Пустые — песочница соберётся без входа и комнат.
+          PUBLIC_SUPABASE_URL: ${{ vars.PUBLIC_SUPABASE_URL }}
+          PUBLIC_SUPABASE_ANON_KEY: ${{ vars.PUBLIC_SUPABASE_ANON_KEY }}
 
       - uses: actions/upload-pages-artifact@v3
         with:

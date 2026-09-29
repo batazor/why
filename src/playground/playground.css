@@ -3149,3 +3149,152 @@ body:has(.pg) .site-footer {
 .pg-checklist li.is-off {
   opacity: 0.55;
 }
+
+/* ── Совместная работа: вход, комната, чужие курсоры ───────────────────── */
+
+.pg {
+  --pg-live-candidate: #d9480f;
+  --pg-live-interviewer: var(--pg-accent);
+  --pg-live-other: var(--pg-muted);
+}
+
+.pg-button--primary {
+  background: var(--pg-accent);
+  border-color: var(--pg-accent);
+  color: #fff;
+}
+
+.pg-button--primary:hover {
+  color: #fff;
+  filter: brightness(1.08);
+}
+
+.pg-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.pg-live__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  color: var(--pg-muted);
+  white-space: nowrap;
+}
+
+.pg-live__status .codicon {
+  font-size: 9px;
+}
+
+.pg-live__status.is-live .codicon {
+  color: var(--pg-good);
+}
+
+.pg-live__status.is-error .codicon {
+  color: var(--pg-bad);
+}
+
+.pg-live__status.is-connecting .codicon {
+  animation: pg-blink 1.6s ease-in-out infinite;
+}
+
+.pg-live__peers {
+  display: inline-flex;
+}
+
+.pg-live__peers > span + span {
+  margin-left: -6px;
+}
+
+.pg-live__alone {
+  font-size: 0.8rem;
+  color: var(--pg-muted);
+  white-space: nowrap;
+}
+
+.pg-live__me {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  border-radius: 50%;
+}
+
+.pg-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--pg-accent-soft);
+  color: var(--pg-accent);
+  font-size: 0.65rem;
+  font-weight: 600;
+  box-shadow: 0 0 0 2px var(--pg-panel);
+}
+
+.pg-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pg-avatar--candidate {
+  box-shadow: 0 0 0 2px var(--pg-live-candidate);
+}
+
+.pg-avatar--interviewer {
+  box-shadow: 0 0 0 2px var(--pg-live-interviewer);
+}
+
+.pg-cursor {
+  --pg-cursor: var(--pg-live-other);
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+  z-index: 1000;
+  /* Точки приходят 20 раз в секунду — между ними курсор доезжает, а не прыгает. */
+  transition: transform 80ms linear;
+}
+
+.pg-cursor--candidate {
+  --pg-cursor: var(--pg-live-candidate);
+}
+
+.pg-cursor--interviewer {
+  --pg-cursor: var(--pg-live-interviewer);
+}
+
+.pg-cursor svg {
+  display: block;
+  fill: var(--pg-cursor);
+  stroke: #fff;
+  stroke-width: 1.2;
+}
+
+.pg-cursor__name {
+  position: absolute;
+  top: 16px;
+  left: 12px;
+  padding: 0.05rem 0.4rem;
+  border-radius: 4px;
+  background: var(--pg-cursor);
+  color: #fff;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pg-cursor {
+    transition: none;
+  }
+
+  .pg-live__status.is-connecting .codicon {
+    animation: none;
+  }
+}

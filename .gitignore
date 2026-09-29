@@ -4,3 +4,6 @@ dist/
 .DS_Store
 src/likec4/generated.jsx
 src/likec4/generated.d.ts
+.env
+.env.*
+!.env.example

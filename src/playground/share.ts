@@ -100,6 +100,8 @@ export async function decodeDesign(payload: string): Promise<Design> {
 export function shareUrl(payload: string, role: Role): string {
   const url = new URL(location.href);
   url.searchParams.set('role', role);
+  // Комната собеседования едет только тем, кто в нём участвует.
+  if (role !== 'candidate' && role !== 'interviewer') url.searchParams.delete('room');
   url.hash = `s=${payload}`;
   return url.toString();
 }

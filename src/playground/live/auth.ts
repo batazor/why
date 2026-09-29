@@ -1,0 +1,72 @@
+import { useCallback, useEffect, useState } from 'react';
+import type { User } from '@supabase/supabase-js';
+import { supabase } from './client';
+
+/**
+ * Вход через Google.
+ *
+ * Имя и аватар берутся из профиля Google: интервьюеру важно видеть, что в
+ * комнате именно тот человек, которого звали, а не «Гость 2».
+ */
+
+export interface Person {
+  id: string;
+  name: string;
+  avatar?: string;
+}
+
+function person(user: User): Person {
+  const meta = user.user_metadata ?? {};
+  return {
+    id: user.id,
+    name: (meta.full_name as string) || (meta.name as string) || user.email || '—',
+    avatar: (meta.avatar_url as string) || (meta.picture as string) || undefined,
+  };
+}
+
+export function useAuth() {
+  const client = supabase();
+  const [me, setMe] = useState<Person | null>(null);
+  /** Пока клиент не дочитал сессию (и не обменял ?code= после Google), кнопку входа не показываем. */
+  const [ready, setReady] = useState(!client);
+
+  /**
+   * Токен обновляется раз в час, и на каждое обновление приходит новый
+   * объект пользователя. Тот же человек должен остаться тем же объектом —
+   * иначе комната переподключалась бы на каждое обновление токена.
+   */
+  const same = (next: Person | null) => (previous: Person | null) =>
+    previous && next && previous.id === next.id && previous.name === next.name && previous.avatar === next.avatar
+      ? previous
+      : next;
+
+  useEffect(() => {
+    if (!client) return;
+    let alive = true;
+    client.auth.getSession().then(({ data }) => {
+      if (!alive) return;
+      setMe(same(data.session ? person(data.session.user) : null));
+      setReady(true);
+    });
+    const { data } = client.auth.onAuthStateChange((_event, session) => {
+      setMe(same(session ? person(session.user) : null));
+    });
+    return () => {
+      alive = false;
+      data.subscription.unsubscribe();
+    };
+  }, [client]);
+
+  /** Возвращаемся на тот же адрес: в нём роль и комната. */
+  const signIn = useCallback(async () => {
+    const back = new URL(location.href);
+    back.hash = '';
+    await client?.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: back.toString() } });
+  }, [client]);
+
+  const signOut = useCallback(async () => {
+    await client?.auth.signOut();
+  }, [client]);
+
+  return { enabled: Boolean(client), ready, me, signIn, signOut };
+}

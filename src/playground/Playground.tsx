@@ -22,6 +22,7 @@ import {
   pickBoard,
   candidateEstimates,
   uid,
+  type Board,
   type Design,
   type DesignSummary,
 } from './model';
@@ -31,6 +32,9 @@ import { ShareDialog } from './share-dialog';
 import { clearPayload, decodeDesign, payloadFromUrl } from './share';
 import { translator } from './i18n';
 import { PERMISSIONS, ROLES, initialRole, rememberRole, type Role, type Tab } from './roles';
+import { useAuth } from './live/auth';
+import { closeRoom, openRoom, roomFromUrl, useRoom } from './live/room';
+import { LiveBar, RemoteCursors } from './live/live-ui';
 
 /**
  * Песочница системного дизайна для собеседований.
@@ -87,6 +91,25 @@ export default function Playground({ lang, repository }: Props) {
   const readOnly = !perms.editBoard;
 
   const refresh = useCallback(async () => setProjects(await repo.list()), [repo]);
+
+  /**
+   * Комната собеседования: интервьюер видит курсор кандидата и его доску
+   * вживую. Без входа комнаты нет — канал приватный.
+   */
+  const auth = useAuth();
+  const [room, setRoom] = useState(roomFromUrl);
+  const onBoard = useCallback(
+    ({ designId, board: incoming }: { designId: string; board: Board }) =>
+      // Доска чужого проекта сюда не относится: интервьюер открыл другой сценарий.
+      update((current) => (current.id === designId ? { ...current, ...incoming } : current)),
+    [update],
+  );
+  const live = useRoom({ room: auth.me ? room : null, me: auth.me, role, design, onBoard });
+  const { sendCursor } = live;
+  // Эталон у интервьюера — другая схема: курсор над ним кандидату ни о чём не скажет.
+  useEffect(() => {
+    if (board !== 'answer') sendCursor(null);
+  }, [board, sendCursor]);
 
   const open = useCallback((next: Design) => {
     load(next);
@@ -408,6 +431,27 @@ export default function Playground({ lang, repository }: Props) {
           </>
         )}
 
+        {auth.enabled && (
+          <LiveBar
+            t={t}
+            role={role}
+            me={auth.me}
+            ready={auth.ready}
+            room={room}
+            status={live.status}
+            peers={live.peers}
+            onSignIn={auth.signIn}
+            onSignOut={() => {
+              if (confirm(t('live.signOutConfirm'))) auth.signOut();
+            }}
+            onStart={() => setRoom(openRoom())}
+            onLeave={() => {
+              closeRoom();
+              setRoom(null);
+            }}
+          />
+        )}
+
         {role !== 'candidate' && (
           <button type="button" className="pg-button" onClick={() => setSharing(true)}>
             <i className="codicon codicon-link" aria-hidden="true" /> {t('share.button')}
@@ -504,6 +548,8 @@ export default function Playground({ lang, repository }: Props) {
             readOnly={readOnly}
             banner={banner}
             overlay={<BriefCard design={design} t={t} />}
+            onPointer={room && board === 'answer' ? sendCursor : undefined}
+            layer={room && board === 'answer' ? <RemoteCursors cursors={live.cursors} peers={live.peers} /> : undefined}
           />
         </ReactFlowProvider>
 

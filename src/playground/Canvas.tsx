@@ -111,9 +111,13 @@ interface Props {
   banner?: string;
   /** Что висит над полотном: карточка задания. */
   overlay?: ReactNode;
+  /** Слой внутри полотна, в его координатах: чужие курсоры. */
+  layer?: ReactNode;
+  /** Где курсор на схеме, `null` — ушёл с полотна. Нужно комнате собеседования. */
+  onPointer?: (point: { x: number; y: number } | null) => void;
 }
 
-export default function Canvas({ design, update, onSelect, t, addRef, readOnly = false, banner, overlay }: Props) {
+export default function Canvas({ design, update, onSelect, t, addRef, readOnly = false, banner, overlay, layer, onPointer }: Props) {
   const flow = useReactFlow();
 
   /**
@@ -335,6 +339,8 @@ export default function Canvas({ design, update, onSelect, t, addRef, readOnly =
       className={`pg-canvas ${readOnly ? 'is-readonly' : ''}`}
       onDragOver={onDragOver}
       onDrop={onDrop}
+      onPointerMove={onPointer && ((event) => onPointer(flow.screenToFlowPosition({ x: event.clientX, y: event.clientY })))}
+      onPointerLeave={onPointer && (() => onPointer(null))}
       onDragLeave={(event) => {
         // `Node` в этом файле — узел схемы из @xyflow/react; здесь нужен узел
         // DOM, поэтому имя берётся из глобальной области явно.
@@ -382,6 +388,7 @@ export default function Canvas({ design, update, onSelect, t, addRef, readOnly =
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
         <Controls showInteractive={false} />
         <MiniMap pannable zoomable className="pg-minimap" />
+        {layer}
       </ReactFlow>
       {banner && <p className="pg-canvas__banner">{banner}</p>}
       {overlay}
