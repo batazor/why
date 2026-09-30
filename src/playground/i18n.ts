@@ -32,6 +32,7 @@ const en = {
   'task.source': 'Who set the task',
   'task.hint': 'Everyone sees the task as a card pinned over the canvas. Blank line — new paragraph, lines starting with “- ” — a list.',
   'brief.label': 'Task',
+  'brief.locked': 'The task opens when the interviewer starts the interview.',
   'brief.collapse': 'Collapse the task',
   'brief.expand': 'Show the task',
   'task.placeholder':
@@ -775,6 +776,7 @@ const ru: Record<Key, string> = {
   'task.source': 'Кто поставил задачу',
   'task.hint': 'Задание у всех висит карточкой над полотном. Пустая строка — новый абзац, строки с «- » — список.',
   'brief.label': 'Задание',
+  'brief.locked': 'Задание откроется, когда интервьюер начнёт собеседование.',
   'brief.collapse': 'Свернуть задание',
   'brief.expand': 'Показать задание',
   'task.placeholder':

@@ -80,6 +80,8 @@ export default defineConfig({
         // Палитра песочницы анимируется React-обёрткой motion — она отдельный вход.
         'motion/react',
         '@tisoap/react-flow-smart-edge',
+        // Живая сессия песочницы: клиент Supabase грузится лениво, со входом.
+        '@supabase/supabase-js',
       ],
     },
   },

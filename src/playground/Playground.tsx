@@ -141,8 +141,26 @@ export default function Playground({ lang, repository }: Props) {
    * подсказки, заданные вопросы. Оценки не трогаются — они у каждого свои.
    * Кандидат из хода берёт ещё и тексты подсказок: своих у него нет.
    */
+  /** Задание у кандидата ещё закрыто — ждём старта. Ref: обработчик хода живёт дольше рендера. */
+  const taskLocked = useRef(false);
+  taskLocked.current = Boolean(design?.session.taskLocked);
   const onCourse = useCallback(
-    (next: Course) =>
+    (next: Course) => {
+      /*
+       * Началось — кандидату пора получить задание: сервер отдаёт его только
+       * теперь. Весть о старте приходит раньше, чем интервьюер успеет записать
+       * его в базу (автосохранение ждёт 400 мс), поэтому задание спрашиваем
+       * несколько раз с паузой, пока сервер не согласится его отдать.
+       */
+      if (next.startedAt && interview?.as === 'candidate' && taskLocked.current) {
+        const fetchTask = async (attempt: number) => {
+          const text = await interview.task().catch(() => null);
+          if (text !== null)
+            update((current) => ({ ...current, session: { ...current.session, taskLocked: false, openedTask: text } }));
+          else if (attempt < 8 && taskLocked.current) setTimeout(() => fetchTask(attempt + 1), 750);
+        };
+        fetchTask(0);
+      }
       update((current) => ({
         ...current,
         session: {
@@ -155,8 +173,9 @@ export default function Playground({ lang, repository }: Props) {
           asked: next.asked,
           estimateSnapshot: next.estimateSnapshot,
         },
-      })),
-    [update],
+      }));
+    },
+    [update, interview],
   );
 
   const onBoard = useCallback(

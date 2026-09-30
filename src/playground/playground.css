@@ -3824,3 +3824,9 @@ td.pg-level--3 { color: #1f7a4d; font-weight: 600; }
   font-size: 0.9rem;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
 }
+
+.pg-brief__locked {
+  margin: 0;
+  color: var(--pg-muted);
+  font-style: italic;
+}

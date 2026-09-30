@@ -55,7 +55,10 @@ export function BriefCard({ design, t }: { design: Design; t: T }) {
     });
   };
 
-  if (!design.task.trim() && !hints.length) return null;
+  // Задание кандидату открывается со стартом собеседования — до него только обещание.
+  const locked = Boolean(design.session.taskLocked);
+  const task = design.session.openedTask ?? design.task;
+  if (!locked && !task.trim() && !hints.length) return null;
 
   return (
     <figure className={`pg-brief ${collapsed ? 'is-collapsed' : ''}`}>
@@ -82,7 +85,8 @@ export function BriefCard({ design, t }: { design: Design; t: T }) {
         <div className="pg-brief__body">
           {/* blockquote: это дословная чужая постановка, как и в разборе. */}
           <blockquote className="pg-brief__text">
-            {blocks(design.task).map((block, index) =>
+            {locked && <p className="pg-brief__locked">{t('brief.locked')}</p>}
+            {blocks(task).map((block, index) =>
               block.kind === 'ul' ? (
                 <ul key={index}>
                   {block.items.map((item, i) => (

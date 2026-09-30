@@ -158,6 +158,8 @@ do $$ begin
     'the interview keeps the task it was created with';
   assert (select jsonb_array_length(content -> 'rubric') from public.interview_scenarios where interview_id = current_setting('test.interview')::uuid) = 1,
     'and the rubric it will be scored by';
+  assert (select task from public.interview_tasks where interview_id = current_setting('test.interview')::uuid) = 'Design a URL shortener',
+    'staff read the task before the start';
   perform public.refresh_interview_snapshot(current_setting('test.second')::uuid);
   assert (select brief ->> 'title' from public.interviews where id = current_setting('test.second')::uuid) = 'URL shortener v2',
     'before the start the snapshot can be refreshed';
@@ -193,10 +195,12 @@ do $$ begin
   assert public.claim_interview(current_setting('test.token')) = current_setting('test.interview')::uuid, 'claim is idempotent';
 
   assert (select count(*) from public.interviews) = 1, 'candidate sees her interview';
-  assert (select task from public.scenarios) = 'Design a URL shortener', 'candidate reads the task';
+  assert (select count(*) from public.scenarios) = 0, 'candidate does not read the live scenario';
   assert (select count(*) from public.scenario_private) = 0, 'candidate never reads the reference';
   assert (select count(*) from public.interview_scenarios) = 0, 'nor its snapshot';
-  assert (select brief ->> 'task' from public.interviews) = 'Design a URL shortener', 'but reads the task from the snapshot';
+  assert not (select brief ? 'task' from public.interviews), 'the task is not in what the candidate reads before the start';
+  assert (select count(*) from public.interview_tasks) = 0, 'nor anywhere else until the interviewer starts';
+  assert (select brief ->> 'title' from public.interviews) = 'URL shortener', 'the title is known in advance';
   assert (select count(*) from public.interview_reviews) = 0, 'candidate never reads the review';
   assert (select count(*) from public.workspaces) = 0, 'candidate is not in the workspace';
   assert (select count(*) from public.workspace_members) = 0, 'candidate does not see the staff list';
@@ -341,6 +345,7 @@ select set_config('request.jwt.claims', '{"sub": "00000000-0000-4000-8000-000000
 set role authenticated;
 do $$ begin
   assert (select revealed_hints -> 0 ->> 'text' from public.interviews) = 'Think about the read path', 'the candidate sees a revealed hint';
+  assert (select task from public.interview_tasks) = 'Design a URL shortener', 'after the start the candidate reads the task';
   begin
     insert into public.interview_feedback (interview_id, rating) values (current_setting('test.interview')::uuid, 5);
     raise exception 'FAIL: feedback before the end';

@@ -821,7 +821,8 @@ export class InterviewRepository implements DesignRepository {
 
     // Собеседование живёт по своему снимку сценария, а не по живому: правка
     // сценария после приглашения не должна менять ни задание, ни критерии.
-    const [scenario, secret, board, review, interviewer] = await Promise.all([
+    // Текст задания кандидату сервер отдаёт только после старта; до него строки просто нет.
+    const [scenario, secret, board, review, interviewer, task] = await Promise.all([
       row.brief ? null : db().from('scenarios').select('*').eq('id', row.scenario_id).single(),
       staff ? db().from('interview_scenarios').select('content').eq('interview_id', id).maybeSingle() : null,
       db().from('interview_boards').select('board').eq('interview_id', id).maybeSingle(),
@@ -829,7 +830,9 @@ export class InterviewRepository implements DesignRepository {
         ? db().from('interview_reviews').select('session').eq('interview_id', id).eq('reviewer_id', this.me).maybeSingle()
         : null,
       db().from('profiles').select('id, name, email, avatar_url').eq('id', row.interviewer_id).maybeSingle(),
+      db().from('interview_tasks').select('task').eq('interview_id', id).maybeSingle(),
     ]);
+    const taskRow = must(task) as { task: string } | null;
     const candidate =
       staff && row.candidate_id
         ? (must(
@@ -855,6 +858,7 @@ export class InterviewRepository implements DesignRepository {
     const design = migrate({
       ...base,
       id,
+      task: taskRow?.task ?? base.task,
       ...answer,
       session: {
         ...emptySession(),
@@ -870,6 +874,8 @@ export class InterviewRepository implements DesignRepository {
       },
     });
     design.session.revealedHints = row.revealed_hints ?? [];
+    // Кандидат до старта: задания ещё нет — придёт со стартом.
+    if (!staff && !taskRow) design.session.taskLocked = true;
     // Снимки в журнал — только изменения: доска, с которой пришли, уже известна.
     this.snapshot = { board: JSON.stringify(pickBoard(design)), at: 0 };
     this.saved = {
@@ -952,6 +958,14 @@ export class InterviewRepository implements DesignRepository {
       notes: row.session.notes ?? '',
       mine: row.reviewer_id === this.me,
     }));
+  }
+
+  /** Текст задания — кандидату, когда собеседование началось. До старта — null. */
+  async task(): Promise<string | null> {
+    const row = must(
+      await db().from('interview_tasks').select('task').eq('interview_id', this.interviewId).maybeSingle(),
+    ) as { task: string } | null;
+    return row?.task ?? null;
   }
 
   async feedback(): Promise<Feedback | null> {
