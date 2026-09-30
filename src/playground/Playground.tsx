@@ -521,21 +521,26 @@ export default function Playground({ lang, repository }: Props) {
 
         {role === 'interviewer' && (
           <>
-            <button
-              type="button"
-              className="pg-button"
-              onClick={() =>
-                update((current) => ({
-                  ...current,
-                  session: running
-                    ? { ...current.session, finishedAt: new Date().toISOString() }
-                    : { ...current.session, startedAt: new Date().toISOString(), finishedAt: undefined },
-                }))
-              }
-            >
-              <i className={`codicon codicon-${running ? 'debug-stop' : 'play'}`} aria-hidden="true" />{' '}
-              {t(running ? 'session.stop' : 'session.start')}
-            </button>
+            {/* Законченное собеседование не перезапускается: оценка — про доску на момент «Стопа».
+                Что оно закончено, уже сказано у заголовка. */}
+            {!frozen && (
+              <button
+                type="button"
+                className="pg-button"
+                onClick={() => {
+                  if (running && interview && !confirm(t('iv.stopConfirm'))) return;
+                  update((current) => ({
+                    ...current,
+                    session: running
+                      ? { ...current.session, finishedAt: new Date().toISOString() }
+                      : { ...current.session, startedAt: new Date().toISOString(), finishedAt: undefined },
+                  }));
+                }}
+              >
+                <i className={`codicon codicon-${running ? 'debug-stop' : 'play'}`} aria-hidden="true" />{' '}
+                {t(running ? 'session.stop' : 'session.start')}
+              </button>
+            )}
             {!interview && (
             <button
               type="button"

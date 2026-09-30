@@ -229,6 +229,8 @@ function EstimateControl({ design, update, t }: Props) {
       <div className="pg-guide">
         <p>{design.estimate.trim() || t('estimate.beforeEmpty')}</p>
       </div>
+      {/* После конца собеседования калькулятор кандидату уже ни к чему. */}
+      {!design.session.finishedAt && (
       <button
         type="button"
         className={`pg-button pg-button--small ${unlocked ? 'is-on' : ''}`}
@@ -248,6 +250,7 @@ function EstimateControl({ design, update, t }: Props) {
         <i className={`codicon codicon-${unlocked ? 'lock' : 'unlock'}`} aria-hidden="true" />{' '}
         {t(unlocked ? 'conduct.calcClose' : 'conduct.calcUnlock')}
       </button>
+      )}
     </section>
   );
 }

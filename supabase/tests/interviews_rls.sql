@@ -206,6 +206,25 @@ do $$ begin
   assert (select count(*) from public.interview_reviews) = 0, 'candidate still cannot read the review';
 end $$;
 
+-- ─── bob: законченное собеседование не перезапустить ───────────────────────
+reset role;
+select set_config('request.jwt.claims', '{"sub": "00000000-0000-4000-8000-00000000000b", "email": "bob@corp.test", "role": "authenticated"}', false);
+set role authenticated;
+
+do $$ begin
+  begin
+    update public.interviews set status = 'live', finished_at = null;
+    raise exception 'FAIL: a finished interview was restarted';
+  exception when check_violation then null;
+  end;
+  begin
+    update public.interviews set calc_unlocked_at = now();
+    raise exception 'FAIL: a finished interview changed its timing';
+  exception when check_violation then null;
+  end;
+  assert (select status from public.interviews) = 'finished', 'the interview stays finished';
+end $$;
+
 -- ─── anon: никуда ──────────────────────────────────────────────────────────
 reset role;
 set role anon;
