@@ -244,6 +244,15 @@ export interface Session {
    */
   taskLocked?: boolean;
   openedTask?: string;
+  /** Разговор с ИИ-интервьюером в тренировке. */
+  aiChat?: AiTurn[];
+}
+
+/** Реплика разговора с ИИ-интервьюером; kind — не слова, а действие: попросил вопрос или разбор. */
+export interface AiTurn {
+  role: 'interviewer' | 'candidate';
+  text: string;
+  kind?: 'ask' | 'review';
 }
 
 /**
@@ -454,6 +463,7 @@ export function migrate(raw: unknown): Design {
       startedAt: session.startedAt,
       finishedAt: session.finishedAt,
       signals: list(session.signals),
+      ...(Array.isArray(session.aiChat) ? { aiChat: session.aiChat } : {}),
       calcUnlockedAt: session.calcUnlockedAt,
       estimateSnapshot: session.estimateSnapshot,
     },

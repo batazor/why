@@ -3977,3 +3977,86 @@ td.pg-level--3 { color: #1f7a4d; font-weight: 600; }
     display: none !important;
   }
 }
+
+/* ── ИИ-интервьюер ──────────────────────────────────────────────────────── */
+
+.pg-ai {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.pg-ai__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.pg-ai__bar .pg-icon-button:hover {
+  color: var(--pg-accent);
+  background: var(--pg-accent-soft);
+}
+
+.pg-ai__log {
+  flex: 1;
+  min-height: 8rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+}
+
+.pg-ai__turn {
+  max-width: 92%;
+  padding: 0.5rem 0.7rem;
+  border-radius: var(--pg-radius);
+  font-size: 0.88rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.pg-ai__turn.is-interviewer {
+  align-self: flex-start;
+  background: var(--pg-accent-soft);
+}
+
+.pg-ai__turn.is-candidate {
+  align-self: flex-end;
+  border: 1px solid var(--pg-border);
+  background: var(--pg-panel);
+}
+
+.pg-ai__turn.is-streaming::after {
+  content: '▍';
+  margin-left: 0.1rem;
+  animation: pg-blink 1s steps(1) infinite;
+}
+
+.pg-ai__action {
+  align-self: center;
+  margin: 0;
+  color: var(--pg-muted);
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+.pg-ai__form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--pg-border);
+}
+
+.pg-ai-settings .pg-switch {
+  align-self: flex-start;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pg-ai__turn.is-streaming::after {
+    animation: none;
+  }
+}

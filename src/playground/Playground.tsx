@@ -45,6 +45,7 @@ import { CalibrationDialog } from './live/calibration-dialog';
 import { formatSchedule } from './live/calendar';
 import { CandidateEnd } from './live/candidate-end';
 import { ReportPanel } from './live/report-panel';
+import { AiPanel } from './ai/ai-panel';
 
 /**
  * Песочница системного дизайна для собеседований.
@@ -796,7 +797,9 @@ export default function Playground({ lang, repository }: Props) {
                         : 'group.board'
                       : role === 'author'
                         ? 'group.scenario'
-                        : 'group.interview',
+                        : role === 'trainee'
+                          ? 'group.training'
+                          : 'group.interview',
                   )}
                 </button>
               ))}
@@ -913,6 +916,7 @@ export default function Playground({ lang, repository }: Props) {
                 sizeValues={role === 'author' || candidateEstimates(design) === 'calc' ? design.calc.values : undefined}
               />
             )}
+            {activeTab === 'ai' && <AiPanel design={view} update={update} t={t} lang={lang} />}
             {activeTab === 'check' && <ChecksPanel {...panelProps} extra={extraFindings} />}
           </div>
         </section>

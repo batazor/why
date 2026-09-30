@@ -21,7 +21,8 @@ export type Tab =
   | 'calc'
   | 'inspect'
   | 'check'
-  | 'report';
+  | 'report'
+  | 'ai';
 
 export interface Permissions {
   /** Какую доску показывает полотно: эталон автора или ответ кандидата. */
@@ -75,7 +76,7 @@ export const PERMISSIONS: Record<Role, Permissions> = {
     editTask: false,
     manageProjects: true,
     compare: false,
-    tabs: ['train', 'req', 'api', 'calc', 'inspect'],
+    tabs: ['train', 'ai', 'req', 'api', 'calc', 'inspect'],
   },
 };
 

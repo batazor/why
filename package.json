@@ -16,6 +16,10 @@
     "check:pricing": "node scripts/check-pricing.mjs"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.69",
+    "@ai-sdk/google": "^4.0.86",
+    "@ai-sdk/openai": "^4.0.82",
+    "@ai-sdk/openai-compatible": "^3.0.60",
     "@astrojs/mdx": "^8.0.1",
     "@astrojs/react": "^6.0.5",
     "@astrojs/sitemap": "^3.7.4",
@@ -26,6 +30,7 @@
     "@vscode-elements/elements": "^2.5.1",
     "@vscode/codicons": "^0.0.46-24",
     "@xyflow/react": "^12.11.6",
+    "ai": "^7.0.123",
     "astro": "^7.3.2",
     "elkjs": "^0.12.0",
     "motion": "^13.4.0",
