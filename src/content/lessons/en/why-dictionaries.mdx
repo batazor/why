@@ -9,26 +9,6 @@ problem: >-
   of countries with cash on delivery lives in the next one. Every new country
   is a ticket, a review and a release, and the second list gets forgotten. The
   data changes on the business's schedule and ships on the release schedule.
-incidents:
-  - title: 'Cloudflare, November 2025: a file with duplicates every five minutes'
-    text: >-
-      The bot-protection feature file was rebuilt from a database every five
-      minutes and pushed across the network. After a permissions change in the
-      database the query started returning every row twice, the file grew past
-      a hard limit, and the proxy that read it crashed. For about three hours a
-      large share of traffic did not get through. The fix was to stop the
-      distribution and manually insert the last good file — the very previous
-      copy the service could have kept for itself by rejecting the batch.
-    url: https://blog.cloudflare.com/18-november-2025-outage/
-  - title: 'Google Cloud, June 2025: blank fields in policy data'
-    text: >-
-      A record with blank fields got into the quota policy tables and
-      replicated to every region within seconds. The code reading the policies
-      did not check for blank fields and crashed on a null pointer — everywhere
-      at once. API authorization was down across dozens of products for about
-      three hours. Validating rows on load and rejecting the whole batch would
-      have stopped it at the first read.
-    url: https://www.thousandeyes.com/blog/google-cloud-outage-analysis-june-12-2025
 tags: [system-design, reference-data, reliability]
 order: 16
 deck: why-dictionaries
