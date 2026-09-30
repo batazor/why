@@ -8,8 +8,17 @@ import { migrate, totalScore, type Criterion, type Scenario, type Session, type 
 
 export interface CalibrationRow {
   id: string;
+  scenarioId: string;
+  /** Название из снимка сценария — как оно было на собеседовании, а не сейчас. */
+  scenarioTitle: string;
   status: InterviewStatus;
   candidate: string;
+  /** Кандидат уже принял приглашение — есть кому проходить. */
+  accepted: boolean;
+  /** Кто назначил собеседование. */
+  scheduledBy: Person;
+  scheduledAt: string | null;
+  durationMinutes: number;
   /** Кто оценивал; если никто — тот, кто назначил. */
   interviewers: Person[];
   /** Оценки каждого, кто вёл: итог по его баллам. */
@@ -39,9 +48,22 @@ export async function calibration(scenarioId: string): Promise<CalibrationRow[]>
   const rows = must(
     await db().from('interviews').select('*').eq('scenario_id', scenarioId).neq('status', 'cancelled'),
   ) as InterviewRow[];
+  return collect(rows);
+}
+
+/** Все собеседования пространства — кабинет интервьюера: что назначено, что прошло и с каким итогом. */
+export async function cabinet(workspaceId: string): Promise<CalibrationRow[]> {
+  const rows = must(await db().from('interviews').select('*').eq('workspace_id', workspaceId)) as InterviewRow[];
+  return collect(rows);
+}
+
+/** Строки собеседований — в строки сравнения: люди, оценки по снимку, сигналы из журнала. */
+async function collect(rows: InterviewRow[]): Promise<CalibrationRow[]> {
   if (!rows.length) return [];
   const ids = rows.map((row) => row.id);
-  const [snapshots, reviews, events] = await Promise.all([
+  // Название сценария — из снимка; у собеседований, назначенных до снимков, — из живого сценария.
+  const untitled = [...new Set(rows.filter((row) => !row.brief).map((row) => row.scenario_id))];
+  const [snapshots, reviews, events, scenarios] = await Promise.all([
     db().from('interview_scenarios').select('interview_id, content').in('interview_id', ids),
     db().from('interview_reviews').select('interview_id, reviewer_id, session').in('interview_id', ids),
     db()
@@ -50,10 +72,12 @@ export async function calibration(scenarioId: string): Promise<CalibrationRow[]>
       .eq('kind', 'signal')
       .in('interview_id', ids)
       .order('id'),
+    untitled.length ? db().from('scenarios').select('id, title').in('id', untitled) : null,
   ]);
   const content = new Map(
     (must(snapshots) as { interview_id: string; content: Partial<Scenario> }[]).map((row) => [row.interview_id, row.content]),
   );
+  const titles = new Map((scenarios ? (must(scenarios) as { id: string; title: string }[]) : []).map((row) => [row.id, row.title]));
   const reviewRows = must(reviews) as { interview_id: string; reviewer_id: string; session: Partial<Session> }[];
   const people = [
     ...new Set([...rows.flatMap((row) => [row.interviewer_id, row.candidate_id]), ...reviewRows.map((row) => row.reviewer_id)]),
@@ -89,8 +113,14 @@ export async function calibration(scenarioId: string): Promise<CalibrationRow[]>
     const ended = row.finished_at ? Date.parse(row.finished_at) : null;
     return {
       id: row.id,
+      scenarioId: row.scenario_id,
+      scenarioTitle: row.brief?.title ?? titles.get(row.scenario_id) ?? '',
       status: row.status,
       candidate: (row.candidate_id && byId.get(row.candidate_id)?.name) || row.candidate_email || '',
+      accepted: Boolean(row.candidate_id),
+      scheduledBy: person(row.interviewer_id),
+      scheduledAt: row.scheduled_at,
+      durationMinutes: row.duration_minutes,
       interviewers: own.length ? own.map((review) => review.reviewer) : [person(row.interviewer_id)],
       reviews: own,
       at: row.started_at ?? row.scheduled_at ?? row.created_at,

@@ -42,6 +42,7 @@ import { openShare, paramFromUrl, setParams } from './live/links';
 import { InterviewsDialog } from './live/interviews-dialog';
 import { TeamDialog } from './live/team-dialog';
 import { CalibrationDialog } from './live/calibration-dialog';
+import { CabinetDialog } from './live/cabinet-dialog';
 import { formatSchedule } from './live/calendar';
 import { CandidateEnd } from './live/candidate-end';
 import { ReportPanel } from './live/report-panel';
@@ -99,7 +100,7 @@ export default function Playground({ lang, repository }: Props) {
   /** Отчёт на пол-экрана: таблице оценок панели в узкой колонке тесно. */
   const [reportWide, setReportWide] = useState(false);
   /** Какое окно открыто поверх песочницы — одно за раз. */
-  const [dialog, setDialog] = useState<'share' | 'interviews' | 'team' | 'calibration' | null>(null);
+  const [dialog, setDialog] = useState<'share' | 'interviews' | 'team' | 'calibration' | 'cabinet' | null>(null);
   const closeDialog = useCallback(() => setDialog(null), []);
   /** Кандидат закрыл экран конца собеседования — смотрит свою доску. */
   const [endSeen, setEndSeen] = useState(false);
@@ -207,7 +208,8 @@ export default function Playground({ lang, repository }: Props) {
           if (!found) return setLoadError(t('iv.notFound'));
           setLoadError('');
           setRole(repo.as);
-          setTab(PERMISSIONS[repo.as].tabs[0]);
+          // Законченное собеседование интервьюер открывает ради результата — сразу отчёт.
+          setTab(repo.as === 'interviewer' && found.session.finishedAt ? 'report' : PERMISSIONS[repo.as].tabs[0]);
           setCompareView('answer');
           setReplay(null);
           setJournal(repo.as === 'interviewer' ? await repo.journal() : []);
@@ -664,6 +666,12 @@ export default function Playground({ lang, repository }: Props) {
           }}
         />
 
+        {inWorkspace && (role === 'interviewer' || role === 'author') && (
+          <button type="button" className="pg-button" onClick={() => setDialog('cabinet')} title={t('cab.hint')}>
+            <i className="codicon codicon-dashboard" aria-hidden="true" /> {t('cab.button')}
+          </button>
+        )}
+
         {inWorkspace && isCloudId(design.id) && (
           <WorkspaceButtons
             t={t}
@@ -758,6 +766,19 @@ export default function Playground({ lang, repository }: Props) {
             switchWorkspace(next);
           }}
           onChanged={reloadWorkspace}
+          onClose={closeDialog}
+        />
+      )}
+      {dialog === 'cabinet' && cloud.mode === 'workspace' && auth.me && (
+        <CabinetDialog
+          t={t}
+          lang={lang}
+          me={auth.me}
+          workspaceId={cloud.workspace.id}
+          onOpen={(id) => {
+            closeDialog();
+            openInterview(id);
+          }}
           onClose={closeDialog}
         />
       )}

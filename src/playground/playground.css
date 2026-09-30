@@ -3743,6 +3743,51 @@ td.pg-level--1 { color: #c7791b; font-weight: 600; }
 td.pg-level--2 { color: var(--pg-compute); font-weight: 600; }
 td.pg-level--3 { color: #1f7a4d; font-weight: 600; }
 
+/* ── Кабинет интервьюера ────────────────────────────────────────────────── */
+
+.pg-cab {
+  width: min(64rem, calc(100vw - 2rem));
+  max-width: none;
+}
+
+.pg-cab__summary {
+  margin: 0 0 0 auto;
+}
+
+.pg-cab__section {
+  margin-top: 1rem;
+}
+
+.pg-cab__section h4 {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.4rem;
+  font-size: 0.9rem;
+}
+
+.pg-cab__table tbody tr.is-live td:first-child {
+  box-shadow: inset 3px 0 0 var(--pg-good);
+}
+
+.pg-cab__table td.is-live {
+  color: var(--pg-good);
+  font-weight: 600;
+}
+
+.pg-cab__table td.is-live .codicon {
+  font-size: 9px;
+}
+
+.pg-cab__table tbody tr.is-static {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.pg-cab__table tbody tr.is-static:hover {
+  background: transparent;
+}
+
 /* ── Сторона кандидата и панель ─────────────────────────────────────────── */
 
 .pg-end {
