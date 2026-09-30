@@ -1,6 +1,8 @@
 ---
 import Base from '../../../layouts/Base.astro';
 import { locales, localePath, assetPath, type Locale } from '../../../i18n/ui';
+import FeatureGrid from '../../../components/landing/FeatureGrid.astro';
+import Icon from '../../../components/landing/Icon.astro';
 
 export function getStaticPaths() {
   return locales.map((lang) => ({ params: { lang } }));
@@ -13,17 +15,17 @@ const lang = Astro.params.lang as Locale;
  *
  * Тексты живут здесь, а не в общем словаре: они нужны одной странице, и
  * словарь интерфейса от них только распух бы. Каждое утверждение — про то,
- * что песочница уже умеет: числа (27 блоков, оценка 0–3, веса ×2 и ×3) взяты
- * из её кода, и если там поменяются, менять и здесь.
+ * что песочница уже умеет: числа (27 блоков, оценка 0–3, веса ×2 и ×3, пять
+ * шагов тренировки) взяты из её кода, и если там поменяются, менять и здесь.
  */
 const copy = {
   ru: {
     title: 'Песочница для собеседований по системному дизайну',
     description:
-      'Собеседование по системному дизайну на одной доске: кандидат рисует, интервьюер видит эталон, подсказки и рубрику и ставит оценку по ходу разговора.',
-    eyebrow: 'Для тех, кто проводит собеседования',
-    heading: 'Собеседование по системному дизайну на одной доске',
-    lead: 'Кандидат видит задание и пустое полотно. Интервьюер видит то же полотно, а рядом — эталон, подсказки и рубрику. Оценка ставится по ходу разговора, а не по памяти после звонка. Бесплатно и без регистрации.',
+      'Собеседование по системному дизайну вживую: кандидат рисует у себя, интервьюер видит доску и курсор, открывает подсказки, ставит баллы с коллегами по панели и получает отчёт с записью доски.',
+    eyebrow: 'Для команд, которые нанимают инженеров',
+    heading: 'Собеседование по системному дизайну — вживую, на одной доске',
+    lead: 'Кандидат рисует у себя, интервьюер видит его доску и курсор и может дорисовать сам. Рядом — эталон, подсказки, рубрика и ИИ-помощник. После звонка остаётся отчёт: баллы панели, подсказки, сигналы и запись того, как росла доска.',
     open: 'Открыть песочницу',
     how: 'Как проходит собеседование',
     painTitle: 'Четыре вкладки на одно собеседование',
@@ -34,41 +36,102 @@ const copy = {
       'заметки интервьюера.',
     ],
     painAfter:
-      'Интервьюер переключается между тремя из них, пока кандидат говорит, и половину сказанного пропускает. Оценку дописывают после звонка, и два интервьюера оценивают одного кандидата по-разному. Здесь задание, доска, подсказки и рубрика — части одной страницы.',
+      'Интервьюер переключается между ними, пока кандидат говорит, и половину сказанного пропускает. Оценку дописывают после звонка, два интервьюера оценивают одного кандидата по-разному, а как кандидат пришёл к решению, потом не восстановить. Здесь задание, доска, подсказки, рубрика и запись — части одной страницы.',
     rolesTitle: 'Три роли',
     roles: [
       {
         key: 'author',
         name: 'Автор сценария',
         points: [
-          'Пишет задание: у всех оно висит карточкой над полотном.',
-          'Рисует эталон — с ним потом сравнивают ответ.',
+          'Пишет задание и рисует эталон, с которым потом сравнивают ответ.',
           'Раскладывает подсказки в порядке, в каком их стоит открывать.',
           'Составляет рубрику: каждый критерий от 0 до 3, главным — вес ×2 или ×3.',
-          'Готовит вопросы на углубление и решает, дать ли кандидату калькулятор и проверки.',
+          'Готовит вопросы на углубление и заметки для интервьюера.',
+          'Сценарий общий на команду; собеседование берёт его снимок — правка не меняет уже назначенные.',
         ],
       },
       {
         key: 'candidate',
         name: 'Кандидат',
         points: [
-          'Видит только задание и пустое полотно — эталона и рубрики у него нет.',
-          'Собирает систему из блоков: клиенты, вход, вычисления, хранилища, очереди.',
-          'Записывает требования, HTTP API и оценки нагрузки.',
+          'Приходит по приглашению, привязанному к его почте, и входит через Google.',
+          'Видит задание только после «Старта» — и ни эталона, ни рубрики, ни заметок.',
+          'Собирает систему из блоков, пишет требования, HTTP API и оценки нагрузки.',
           'Открытая подсказка появляется у него под заданием.',
+          'В конце видит, что собеседование закончено, и может оставить отзыв.',
         ],
       },
       {
         key: 'interviewer',
         name: 'Интервьюер',
         points: [
-          'Смотрит на доску кандидата, ничего на ней не меняя.',
-          'Открывает подсказку, когда кандидат застрял, — и она учитывается в оценке.',
-          'Ставит баллы по рубрике прямо во время разговора.',
-          'В конце видит, чего в ответе нет по сравнению с эталоном и что в нём лишнее.',
+          'Видит доску и курсор кандидата вживую и в любой момент может дорисовать сам.',
+          'Открывает подсказки и калькулятор, отмечает заданные вопросы — всё это видно в отчёте.',
+          'Ставит баллы по рубрике по ходу разговора; у каждого в панели свои.',
+          'Спрашивает ИИ-помощника, что спросить дальше, и берёт у него черновик оценки.',
         ],
       },
     ],
+    liveTitle: 'Живое собеседование',
+    live: [
+      {
+        icon: 'cursor', tone: 'sky', wide: true, demo: ['курсор кандидата', 'дорисовал интервьюер', 'в комнате: 3'],
+        name: 'Общая доска',
+        text: 'Кандидат и интервьюер рисуют одновременно, правки сливаются по блокам и не затирают друг друга. Курсор виден в координатах схемы — у интервьюера другой масштаб, а указывает он туда же. Нарисованное интервьюером помечено: в оценке видно, что подсказали.',
+      },
+      {
+        icon: 'mail', tone: 'butter', demo: ['.ics', 'Google Календарь'],
+        name: 'Приглашение и время',
+        text: 'Ссылка для кандидата со сроком действия: её можно продлить или отозвать. Время собеседования уходит в Google Календарь или файлом .ics.',
+      },
+      {
+        icon: 'panel', tone: 'lavender', demo: ['2 из 3 оценили'],
+        name: 'Панель интервьюеров',
+        text: 'В одной комнате несколько интервьюеров. Ход собеседования общий, баллы и заметки у каждого свои.',
+      },
+      {
+        icon: 'eye', tone: 'rose', demo: ['ушёл с вкладки · 42 с', 'вставка · 380 символов'],
+        name: 'Сигналы честности',
+        text: 'Уход со вкладки и из окна, смена размера, признаки devtools, копирование и вставка. Время серверное — задним числом не переписать.',
+      },
+      {
+        icon: 'replay', tone: 'peach', demo: ['запись доски', 'PDF'],
+        name: 'Отчёт',
+        text: 'Кто, когда и сколько, баллы панели, заметки, открытые подсказки, сигналы и запись того, как росла доска, — на одной странице. Коллеги открывают по ссылке, остальным — печать в PDF.',
+      },
+      {
+        icon: 'team', tone: 'mint', demo: ['владелец', 'автор', 'интервьюер'],
+        name: 'Команда',
+        text: 'Пространство с ролями: автор пишет сценарии, интервьюер ведёт собеседования. Права проверяет сервер, а не интерфейс.',
+      },
+      {
+        icon: 'bars', tone: 'sage', wide: true, demo: ['итог 72', 'разброс панели', 'подсказок 2 из 5'],
+        name: 'Калибровка',
+        text: 'Все кандидаты по сценарию в одной таблице: итог, баллы по критериям, сколько подсказок открыли, сигналы. Видно и кандидатов, и интервьюеров — кто оценивает строже.',
+      },
+    ],
+    aiTitle: 'ИИ на вашем ключе',
+    ai: [
+      {
+        name: 'ИИ-помощник интервьюеру',
+        points: [
+          '«Что спросить сейчас» — три вопроса по расхождениям с эталоном и незаданным вопросам.',
+          '«Черновик оценки» — балл по каждому критерию с обоснованием и черновик заметок.',
+          'Черновик принимают по одному критерию или целиком. Итоговую оценку ставит человек.',
+          'Кандидат ответов помощника не видит.',
+        ],
+      },
+      {
+        name: 'ИИ-интервьюер в тренировке',
+        points: [
+          'Задаёт вопросы по вашей доске и видит её заново на каждом ходу — рисуйте и отвечайте вперемешку.',
+          'Отвечает на ваши ответы, просит углубиться, в конце даёт разбор.',
+          'Разговор сохраняется вместе с проектом.',
+        ],
+      },
+    ],
+    aiKeys:
+      'Ключ — свой: Anthropic, OpenAI, Google или OpenRouter, либо локальная модель через Ollama или LM Studio. Ключ лежит только в вашем браузере и уходит только в API выбранного сервиса. Имени и почты кандидата модель не получает.',
     featuresTitle: 'Что есть на доске',
     features: [
       {
@@ -107,31 +170,43 @@ const copy = {
         text: 'Блок без связей, требование без блока, свойство без числа, единая точка отказа. Для интервьюера — отличия ответа от эталона.',
       },
     ],
+    practiceTitle: 'Тренировка без интервьюера',
+    practiceLead: 'Тот же сценарий можно пройти одному — чтобы подготовиться к собеседованию или разогреться перед ним.',
+    practice: [
+      'Пять шагов: требования, API, схема, оценки, слабые места. Следующий открывается, когда зеленеют проверки текущего.',
+      'По ходу прилетают вводные — поток вырос вдесятеро, упала зона доступности, — и схему приходится менять.',
+      'В конце — счёт и снимок проверок, который потом не меняется задним числом.',
+      'Ссылка на тренировку открывается без входа: задание, проверки и подсказки есть, эталона нет.',
+    ],
     flowTitle: 'Как проходит собеседование',
     flow: [
-      ['Подготовьте сценарий', 'В роли автора: задание, эталон, подсказки и рубрика. Один раз на задачу.'],
-      ['Откройте собеседование', 'Кандидату — ссылка с ?role=candidate, себе — роль интервьюера.'],
-      ['Кандидат рисует', 'По ходу вы открываете подсказки; каждая отмечается и учитывается в оценке.'],
-      ['Оцените', 'От 0 до 3 по каждому пункту рубрики с весами, заметки и итог.'],
-      ['Сравните с эталоном', 'Какие блоки кандидат не нарисовал и какие добавил сверх эталона.'],
+      ['Подготовьте сценарий', 'В пространстве команды: задание, эталон, подсказки, рубрика и вопросы. Один раз на задачу.'],
+      ['Назначьте собеседование', 'Почта кандидата и время. Приглашение — ссылкой и в календарь.'],
+      ['Кандидат заходит', 'Вы видите это сразу, даже если вкладка в фоне. По «Старту» он получает задание, и пошло время.'],
+      ['Ведите', 'Открывайте подсказки и калькулятор, отмечайте вопросы, дорисовывайте на его доске, спрашивайте ИИ-помощника.'],
+      ['Оцените', 'От 0 до 3 по каждому критерию с весами — каждый в панели сам. Кандидат оставляет отзыв.'],
+      ['Сравните', 'Отчёт с записью доски — по одному кандидату, калибровка — по всем кандидатам сценария.'],
     ],
-    privacyTitle: 'Без аккаунтов и сервера',
-    privacy:
-      'Проекты лежат в хранилище браузера и никуда не отправляются. Собеседование идёт в одном браузере, например с общего экрана. Сценарий и ответ кандидата передаются файлом JSON.',
+    privacyTitle: 'Кто что видит',
+    privacy: [
+      'Права проверяет база, а не интерфейс: кандидат получает только задание и свою доску — ни эталона, ни рубрики, ни чужих заметок, и задание — только после старта.',
+      'Законченное собеседование не перезапустить, а доска кандидата после конца заморожена.',
+      'Без входа песочница работает целиком в браузере: проекты лежат в его хранилище, сценарий и ответ передаются файлом JSON.',
+    ],
     exampleTitle: 'Как выглядит разобранная задача',
     example:
       'Разбор сервиса скрейпинг-джоб проходит весь путь: задание, вопросы, требования, расчёты, C1 → C2 → C3 и сверку решений с требованиями.',
     exampleLink: 'Открыть разбор',
     finalTitle: 'Начните с готового сценария',
-    finalText: 'В песочнице есть пример — сокращатель ссылок с эталоном, подсказками и рубрикой. Переключайте роли и посмотрите на собеседование с каждой стороны.',
+    finalText: 'В песочнице есть пример — сокращатель ссылок с эталоном, подсказками и рубрикой. Переключайте роли без входа, а для живого собеседования войдите через Google.',
   },
   en: {
     title: 'A playground for system design interviews',
     description:
-      'A system design interview on one board: the candidate draws, the interviewer sees the reference, hints and rubric and scores during the conversation.',
-    eyebrow: 'For people who run interviews',
-    heading: 'A system design interview on one board',
-    lead: 'The candidate sees the task and an empty canvas. The interviewer sees the same canvas plus the reference, the hints and the rubric. Scores go in during the conversation, not from memory after the call. Free, no sign-up.',
+      'A live system design interview: the candidate draws on their side, the interviewer sees the board and the cursor, reveals hints, scores with the rest of the panel and gets a report with a replay of the board.',
+    eyebrow: 'For teams that hire engineers',
+    heading: 'A system design interview — live, on one board',
+    lead: 'The candidate draws on their side; the interviewer sees their board and cursor and can draw on it too. Next to it: the reference, the hints, the rubric and an AI assistant. After the call there is a report: the panel’s scores, the hints, the signals and a replay of how the board grew.',
     open: 'Open the playground',
     how: 'How an interview goes',
     painTitle: 'Four tabs for one interview',
@@ -142,41 +217,102 @@ const copy = {
       'the interviewer’s notes.',
     ],
     painAfter:
-      'The interviewer switches between three of them while the candidate talks and misses half of what is said. The score is written after the call, and two interviewers grade the same candidate differently. Here the task, the board, the hints and the rubric are parts of one page.',
+      'The interviewer switches between them while the candidate talks and misses half of what is said. The score is written after the call, two interviewers grade the same candidate differently, and how the candidate got to the answer cannot be recovered later. Here the task, the board, the hints, the rubric and the recording are parts of one page.',
     rolesTitle: 'Three roles',
     roles: [
       {
         key: 'author',
         name: 'Scenario author',
         points: [
-          'Writes the task: everyone sees it as a card pinned over the canvas.',
-          'Draws the reference the answer is compared against.',
+          'Writes the task and draws the reference the answer is compared against.',
           'Puts the hints in the order they should be revealed.',
           'Builds the rubric: each criterion from 0 to 3, weight ×2 or ×3 for the key ones.',
-          'Prepares deep-dive questions and decides whether the candidate gets the calculator and the checks.',
+          'Prepares deep-dive questions and notes for the interviewer.',
+          'The scenario is shared by the team; an interview takes a snapshot, so edits do not change scheduled ones.',
         ],
       },
       {
         key: 'candidate',
         name: 'Candidate',
         points: [
-          'Sees only the task and an empty canvas — no reference, no rubric.',
-          'Builds the system from blocks: clients, edge, compute, storage, messaging.',
-          'Writes requirements, the HTTP API and load estimates.',
+          'Comes in through an invite bound to their email and signs in with Google.',
+          'Sees the task only after “Start” — and never the reference, the rubric or the notes.',
+          'Builds the system from blocks, writes requirements, the HTTP API and load estimates.',
           'A revealed hint shows up under the task.',
+          'At the end sees that the interview is over and can leave feedback.',
         ],
       },
       {
         key: 'interviewer',
         name: 'Interviewer',
         points: [
-          'Watches the candidate’s board without changing it.',
-          'Reveals a hint when the candidate is stuck — and it counts toward the score.',
-          'Scores against the rubric during the conversation.',
-          'At the end sees what the answer lacks compared with the reference and what it adds.',
+          'Sees the candidate’s board and cursor live and can draw on it at any moment.',
+          'Reveals hints and the calculator, ticks off questions asked — all of it shows in the report.',
+          'Scores against the rubric during the conversation; everyone on the panel scores on their own.',
+          'Asks the AI assistant what to ask next and takes a draft score from it.',
         ],
       },
     ],
+    liveTitle: 'A live interview',
+    live: [
+      {
+        icon: 'cursor', tone: 'sky', wide: true, demo: ['candidate’s cursor', 'drawn by the interviewer', 'in the room: 3'],
+        name: 'A shared board',
+        text: 'The candidate and the interviewer draw at the same time; edits merge per block and do not overwrite each other. The cursor is sent in diagram coordinates — the interviewer’s zoom differs, and it still points at the same block. What the interviewer draws is marked, so the score shows what was prompted.',
+      },
+      {
+        icon: 'mail', tone: 'butter', demo: ['.ics', 'Google Calendar'],
+        name: 'Invite and time',
+        text: 'A link for the candidate with an expiry date: it can be renewed or revoked. The interview time goes to Google Calendar or out as an .ics file.',
+      },
+      {
+        icon: 'panel', tone: 'lavender', demo: ['2 of 3 scored'],
+        name: 'An interview panel',
+        text: 'Several interviewers in one room. The course of the interview is shared; scores and notes are each person’s own.',
+      },
+      {
+        icon: 'eye', tone: 'rose', demo: ['left the tab · 42 s', 'paste · 380 chars'],
+        name: 'Integrity signals',
+        text: 'Leaving the tab or the window, resizing, signs of devtools, copy and paste. Timestamps come from the server and cannot be backdated.',
+      },
+      {
+        icon: 'replay', tone: 'peach', demo: ['board replay', 'PDF'],
+        name: 'Report',
+        text: 'Who, when and how long, the panel’s scores, notes, revealed hints, signals and a replay of how the board grew — on one page. Colleagues open it by link; for everyone else, print to PDF.',
+      },
+      {
+        icon: 'team', tone: 'mint', demo: ['owner', 'author', 'interviewer'],
+        name: 'Team',
+        text: 'A workspace with roles: authors write scenarios, interviewers run interviews. Permissions are enforced by the server, not the UI.',
+      },
+      {
+        icon: 'bars', tone: 'sage', wide: true, demo: ['total 72', 'panel spread', '2 of 5 hints'],
+        name: 'Calibration',
+        text: 'Every candidate for a scenario in one table: total, per-criterion scores, how many hints were revealed, signals. It shows candidates and interviewers alike — who grades harder.',
+      },
+    ],
+    aiTitle: 'AI on your own key',
+    ai: [
+      {
+        name: 'AI assistant for the interviewer',
+        points: [
+          '“What to ask now” — three questions based on gaps against the reference and questions not yet asked.',
+          '“Draft score” — a score per criterion with reasoning and a draft of the notes.',
+          'The draft is accepted one criterion at a time or all at once. The final score is a human’s.',
+          'The candidate does not see the assistant’s answers.',
+        ],
+      },
+      {
+        name: 'AI interviewer for practice',
+        points: [
+          'Asks about your board and sees it afresh on every turn — draw and answer in any order.',
+          'Replies to your answers, asks you to go deeper and gives a review at the end.',
+          'The conversation is saved with the design.',
+        ],
+      },
+    ],
+    aiKeys:
+      'The key is yours: Anthropic, OpenAI, Google or OpenRouter, or a local model through Ollama or LM Studio. It stays in your browser and goes only to the API of the service you picked. The model never gets the candidate’s name or email.',
     featuresTitle: 'What is on the board',
     features: [
       { icon: 'board', tone: 'sky', wide: true, demo: ['clients', 'edge', 'compute', 'storage', 'messaging', 'platform'], name: 'Canvas', text: '27 blocks in six groups, synchronous and asynchronous connections, undo and redo.' },
@@ -211,38 +347,41 @@ const copy = {
         text: 'A block with no connections, a requirement with no block, a property with no number, a single point of failure. For the interviewer — how the answer differs from the reference.',
       },
     ],
+    practiceTitle: 'Practice without an interviewer',
+    practiceLead: 'The same scenario can be done solo — to prepare for an interview or to warm up before one.',
+    practice: [
+      'Five steps: requirements, API, design, estimates, weak spots. The next one opens once the checks of the current one go green.',
+      'Twists arrive along the way — traffic grew tenfold, an availability zone went down — and the design has to change.',
+      'At the end: a score and a snapshot of the checks that does not change afterwards.',
+      'A practice link opens without signing in: the task, the checks and the hints are there, the reference is not.',
+    ],
     flowTitle: 'How an interview goes',
     flow: [
-      ['Prepare the scenario', 'As the author: task, reference, hints and rubric. Once per problem.'],
-      ['Open the interview', 'The candidate gets a link with ?role=candidate; you take the interviewer role.'],
-      ['The candidate draws', 'You reveal hints along the way; each one is recorded and counted toward the score.'],
-      ['Score', 'From 0 to 3 per rubric item with weights, notes and a verdict.'],
-      ['Compare with the reference', 'Which blocks the candidate missed and which they added beyond the reference.'],
+      ['Prepare the scenario', 'In the team workspace: task, reference, hints, rubric and questions. Once per problem.'],
+      ['Schedule the interview', 'The candidate’s email and a time. The invite goes out as a link and to the calendar.'],
+      ['The candidate joins', 'You see it at once, even with the tab in the background. On “Start” they get the task and the clock runs.'],
+      ['Run it', 'Reveal hints and the calculator, tick off questions, draw on their board, ask the AI assistant.'],
+      ['Score', 'From 0 to 3 per criterion with weights — each panelist on their own. The candidate leaves feedback.'],
+      ['Compare', 'A report with a board replay for one candidate; calibration across every candidate for the scenario.'],
     ],
-    privacyTitle: 'No accounts, no server',
-    privacy:
-      'Designs live in browser storage and are not sent anywhere. The interview runs in one browser, for example on a shared screen. A scenario or an answer travels as a JSON file.',
+    privacyTitle: 'Who sees what',
+    privacy: [
+      'Access is enforced by the database, not the UI: the candidate gets only the task and their own board — no reference, no rubric, no one else’s notes — and the task only after the start.',
+      'A finished interview cannot be restarted, and the candidate’s board is frozen after the end.',
+      'Without signing in the playground runs entirely in the browser: designs live in its storage, a scenario or an answer travels as a JSON file.',
+    ],
     exampleTitle: 'What a worked problem looks like',
     example:
       'The scraping jobs write-up goes all the way: the task, questions, requirements, estimates, C1 → C2 → C3 and matching decisions to requirements.',
     exampleLink: 'Open the write-up',
     finalTitle: 'Start from a ready-made scenario',
-    finalText: 'The playground has an example — a URL shortener with a reference, hints and a rubric. Switch roles and see the interview from each side.',
+    finalText: 'The playground has an example — a URL shortener with a reference, hints and a rubric. Switch roles without signing in; sign in with Google for a live interview.',
   },
 }[lang];
 
 const playground = localePath(lang, 'playground');
 
-/** Иконки фич — те же линии 1.6 и скруглённые концы, что у значков на правом краю. */
-const ICONS: Record<string, string> = {
-  board: '<rect x="3.5" y="4.5" width="7" height="5" rx="1"/><rect x="13.5" y="4.5" width="7" height="5" rx="1"/><rect x="8.5" y="15" width="7" height="5" rx="1"/><path d="M10.5 7h3M7 9.5l3.5 5.5M17 9.5 13.5 15"/>',
-  req: '<rect x="4.5" y="3.5" width="15" height="17" rx="1.5"/><path d="M8 8h8M8 12h8M8 16h5"/>',
-  api: '<path d="M8 8 4 12l4 4M16 8l4 4-4 4M13.5 5l-3 14"/>',
-  calc: '<rect x="5" y="3.5" width="14" height="17" rx="1.5"/><path d="M8 7.5h8M8.5 12h1M12 12h1M15.5 12h0M8.5 16h1M12 16h1M15.5 16h0"/>',
-  compare: '<path d="M4 6h7v13H4zM13 6h7v13h-7z"/><path d="M6 10h3M6 13h3M15 10h3M15 13h3"/>',
-  schema: '<ellipse cx="12" cy="6" rx="7" ry="2.5"/><path d="M5 6v12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V6M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/>',
-  check: '<path d="M12 3.5 19.5 6v5.5c0 4.5-3.2 7.7-7.5 9-4.3-1.3-7.5-4.5-7.5-9V6z"/><path d="m8.8 12 2.3 2.3 4.2-4.6"/>',
-};
+
 ---
 
 <Base lang={lang} title={copy.title} description={copy.description} path="landing/system-design-interview">
@@ -283,40 +422,39 @@ const ICONS: Record<string, string> = {
     </section>
 
     <section class="features" data-reveal>
-      <h2>{copy.featuresTitle}</h2>
-      <div class="features__grid">
+      <h2>{copy.liveTitle}</h2>
+      <FeatureGrid cards={copy.live} />
+    </section>
+
+    <section class="ai" data-reveal>
+      <h2>{copy.aiTitle}</h2>
+      <div class="ai__grid">
         {
-          copy.features.map((feature) => (
-            <article
-              class:list={['feature', `feature--${feature.tone}`, feature.wide && 'feature--wide']}
-              data-reveal-item
-            >
-              <div class="feature__top">
-                <span class="feature__tile">
-                  <svg
-                    viewBox="0 0 24 24"
-                    width="20"
-                    height="20"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.6"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    aria-hidden="true"
-                    set:html={ICONS[feature.icon]}
-                  />
+          copy.ai.map((card) => (
+            <article class="ai__card" data-reveal-item>
+              <div class="ai__top">
+                <span class="ai__tile">
+                  <Icon name="spark" />
                 </span>
-                <h3>{feature.name}</h3>
+                <h3>{card.name}</h3>
               </div>
-              <p>{feature.text}</p>
-              {/* Кусочек того, как это выглядит на доске: не обещание, а образец. */}
-              <ul class="feature__demo" aria-hidden="true">
-                {feature.demo.map((item) => <li>{item}</li>)}
-              </ul>
+              <ul>{card.points.map((point) => <li>{point}</li>)}</ul>
             </article>
           ))
         }
       </div>
+      <p class="ai__keys">{copy.aiKeys}</p>
+    </section>
+
+    <section class="features" data-reveal>
+      <h2>{copy.featuresTitle}</h2>
+      <FeatureGrid cards={copy.features} />
+    </section>
+
+    <section class="practice" data-reveal>
+      <h2>{copy.practiceTitle}</h2>
+      <p class="practice__lead">{copy.practiceLead}</p>
+      <ul class="practice__list">{copy.practice.map((item) => <li data-reveal-item>{item}</li>)}</ul>
     </section>
 
     <section class="flow" id="flow" data-reveal>
@@ -339,7 +477,7 @@ const ICONS: Record<string, string> = {
     <section class="aside-pair" data-reveal>
       <article class="note">
         <h2>{copy.privacyTitle}</h2>
-        <p>{copy.privacy}</p>
+        {copy.privacy.map((item) => <p>{item}</p>)}
       </article>
       <article class="note">
         <h2>{copy.exampleTitle}</h2>
@@ -548,76 +686,37 @@ const ICONS: Record<string, string> = {
     margin-top: 0.35rem;
   }
 
-  /* ---------- фичи ---------- */
+  /* ---------- ИИ ---------- */
 
-  /* Бенто 3 × 3: полотно и проверки — во всю ширину двух колонок, остальные
-     по одной. Семь карточек закрывают девять клеток без дыры в конце. */
-  .features__grid {
+  .ai__grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.9rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
   }
 
-  /* Тон карточки — из палитры акварели на первом экране: плитка под иконкой
-     и лёгкая заливка. `--tone` — насыщенный цвет, всё остальное от него. */
-  .feature {
-    --tone: #5b9bd0;
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    gap: 0.55rem;
-    padding: 1.15rem 1.2rem 1.1rem;
+  /* Тон ИИ — лавандовый, как у роли интервьюера: помощник работает на него. */
+  .ai__card {
+    --tone: #8a70c9;
+    padding: 1.15rem 1.2rem 1.2rem;
     border: 1px solid color-mix(in srgb, var(--tone) 22%, var(--border));
     border-radius: 14px;
     background:
       radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--tone) 10%, transparent), transparent 60%),
       var(--panel);
-    overflow: hidden;
-    transition:
-      border-color 0.2s ease,
-      box-shadow 0.2s ease,
-      transform 0.2s ease;
   }
 
-  .feature:hover {
-    border-color: color-mix(in srgb, var(--tone) 55%, var(--border));
-    box-shadow: 0 10px 28px color-mix(in srgb, var(--tone) 18%, transparent);
-    transform: translateY(-3px);
-  }
-
-  .feature--wide {
-    grid-column: span 2;
-  }
-
-  .feature--sky {
-    --tone: #5b9bd0;
-  }
-  .feature--lavender {
-    --tone: #8a70c9;
-  }
-  .feature--butter {
-    --tone: #c9a24a;
-  }
-  .feature--peach {
-    --tone: #d98a5c;
-  }
-  .feature--sage {
-    --tone: #6f9e6a;
-  }
-  .feature--mint {
-    --tone: #4f9e8e;
-  }
-  .feature--rose {
-    --tone: #c7707a;
-  }
-
-  .feature__top {
+  .ai__top {
     display: flex;
     align-items: center;
     gap: 0.65rem;
+    margin-bottom: 0.7rem;
   }
 
-  .feature__tile {
+  .ai__top h3 {
+    margin: 0;
+  }
+
+  .ai__tile {
     display: grid;
     place-items: center;
     flex: none;
@@ -628,60 +727,44 @@ const ICONS: Record<string, string> = {
     color: var(--tone);
   }
 
-  .feature h3 {
+  .ai__card ul {
     margin: 0;
-    font-size: 1.02rem;
+    padding-left: 1.1rem;
+    font-size: 0.92rem;
+    line-height: 1.55;
   }
 
-  .feature p {
-    margin: 0;
-    font-size: 0.9rem;
-    line-height: 1.55;
+  .ai__card li + li {
+    margin-top: 0.35rem;
+  }
+
+  .ai__keys {
+    max-width: 44rem;
+    margin: 1rem 0 0;
+    line-height: 1.6;
     color: var(--muted);
   }
 
-  /* Образец снизу, прижат к низу карточки: в ряду карточки разной длины
-     текста, и образцы стоят на одной линии. */
-  .feature__demo {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.3rem;
-    margin: auto 0 0;
-    padding: 0.4rem 0 0;
-    list-style: none;
+  /* ---------- тренировка ---------- */
+
+  .practice {
+    max-width: 44rem;
   }
 
-  .feature__demo li {
-    padding: 0.12rem 0.5rem;
-    border: 1px solid color-mix(in srgb, var(--tone) 28%, var(--border));
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--tone) 7%, var(--panel));
-    color: color-mix(in srgb, var(--tone) 75%, var(--fg));
-    font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 0.72rem;
-    white-space: nowrap;
+  .practice__lead {
+    margin: 0 0 0.8rem;
+    line-height: 1.6;
+    color: var(--muted);
   }
 
-  /* В две колонки последняя широкая становится обычной: иначе справа от
-     «Схем» оставалась бы пустая клетка. */
-  @media (max-width: 60rem) {
-    .features__grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .feature--wide:last-child {
-      grid-column: auto;
-    }
+  .practice__list {
+    margin: 0;
+    padding-left: 1.2rem;
+    line-height: 1.65;
   }
 
-  @media (max-width: 40rem) {
-    .features__grid {
-      grid-template-columns: minmax(0, 1fr);
-    }
-
-    .feature--wide {
-      grid-column: auto;
-    }
+  .practice__list li + li {
+    margin-top: 0.4rem;
   }
 
   /* ---------- ход собеседования ---------- */
@@ -781,7 +864,8 @@ const ICONS: Record<string, string> = {
       grid-template-columns: minmax(0, 1fr);
     }
 
-    .roles__grid {
+    .roles__grid,
+    .ai__grid {
       grid-template-columns: minmax(0, 1fr);
     }
   }

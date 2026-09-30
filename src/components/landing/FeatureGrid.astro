@@ -1,0 +1,181 @@
+---
+import Icon from './Icon.astro';
+
+/**
+ * Бенто из карточек лендинга: значок в плитке, название, текст и образец
+ * снизу — кусочек того, как это выглядит в песочнице.
+ */
+export interface Card {
+  icon: string;
+  /** sky, lavender, butter, peach, sage, mint или rose — тона акварели с первого экрана. */
+  tone: string;
+  /** Во всю ширину двух колонок. */
+  wide?: boolean;
+  name: string;
+  text: string;
+  demo: string[];
+}
+
+interface Props {
+  cards: Card[];
+}
+
+const { cards } = Astro.props;
+---
+
+<div class="features__grid">
+  {
+    cards.map((card) => (
+      <article class:list={['feature', `feature--${card.tone}`, card.wide && 'feature--wide']} data-reveal-item>
+        <div class="feature__top">
+          <span class="feature__tile">
+            <Icon name={card.icon} />
+          </span>
+          <h3>{card.name}</h3>
+        </div>
+        <p>{card.text}</p>
+        {/* Кусочек того, как это выглядит на доске: не обещание, а образец. */}
+        <ul class="feature__demo" aria-hidden="true">
+          {card.demo.map((item) => <li>{item}</li>)}
+        </ul>
+      </article>
+    ))
+  }
+</div>
+
+<style>
+  /* Бенто 3 × 3: первая и последняя карточки — во всю ширину двух колонок,
+     остальные по одной. Семь карточек закрывают девять клеток без дыры в конце. */
+  .features__grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.9rem;
+  }
+
+  /* Тон карточки — из палитры акварели на первом экране: плитка под иконкой
+     и лёгкая заливка. `--tone` — насыщенный цвет, всё остальное от него. */
+  .feature {
+    --tone: #5b9bd0;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    padding: 1.15rem 1.2rem 1.1rem;
+    border: 1px solid color-mix(in srgb, var(--tone) 22%, var(--border));
+    border-radius: 14px;
+    background:
+      radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--tone) 10%, transparent), transparent 60%),
+      var(--panel);
+    overflow: hidden;
+    transition:
+      border-color 0.2s ease,
+      box-shadow 0.2s ease,
+      transform 0.2s ease;
+  }
+
+  .feature:hover {
+    border-color: color-mix(in srgb, var(--tone) 55%, var(--border));
+    box-shadow: 0 10px 28px color-mix(in srgb, var(--tone) 18%, transparent);
+    transform: translateY(-3px);
+  }
+
+  .feature--wide {
+    grid-column: span 2;
+  }
+
+  .feature--sky {
+    --tone: #5b9bd0;
+  }
+  .feature--lavender {
+    --tone: #8a70c9;
+  }
+  .feature--butter {
+    --tone: #c9a24a;
+  }
+  .feature--peach {
+    --tone: #d98a5c;
+  }
+  .feature--sage {
+    --tone: #6f9e6a;
+  }
+  .feature--mint {
+    --tone: #4f9e8e;
+  }
+  .feature--rose {
+    --tone: #c7707a;
+  }
+
+  .feature__top {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+  }
+
+  .feature__tile {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 2.3rem;
+    height: 2.3rem;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--tone) 16%, var(--panel));
+    color: var(--tone);
+  }
+
+  .feature h3 {
+    margin: 0;
+    font-size: 1.02rem;
+  }
+
+  .feature p {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.55;
+    color: var(--muted);
+  }
+
+  /* Образец снизу, прижат к низу карточки: в ряду карточки разной длины
+     текста, и образцы стоят на одной линии. */
+  .feature__demo {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin: auto 0 0;
+    padding: 0.4rem 0 0;
+    list-style: none;
+  }
+
+  .feature__demo li {
+    padding: 0.12rem 0.5rem;
+    border: 1px solid color-mix(in srgb, var(--tone) 28%, var(--border));
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--tone) 7%, var(--panel));
+    color: color-mix(in srgb, var(--tone) 75%, var(--fg));
+    font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.72rem;
+    white-space: nowrap;
+  }
+
+  /* В две колонки последняя широкая становится обычной: иначе справа от
+     «Схем» оставалась бы пустая клетка. */
+  @media (max-width: 60rem) {
+    .features__grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .feature--wide:last-child {
+      grid-column: auto;
+    }
+  }
+
+  @media (max-width: 40rem) {
+    .features__grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .feature--wide {
+      grid-column: auto;
+    }
+  }
+
+</style>
