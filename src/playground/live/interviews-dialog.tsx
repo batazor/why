@@ -5,11 +5,16 @@ import {
   inviteUrl,
   listInterviews,
   mailtoUrl,
+  refreshSnapshot,
   renewInvite,
+  reschedule,
+  scenarioUpdatedAt as fetchScenarioUpdatedAt,
   type Interview,
+  type Schedule,
   type Workspace,
 } from './cloud';
-import { LinkBox } from './cloud-share';
+import { LinkBox, mailBody } from './cloud-share';
+import { CalendarButtons, ScheduleFields, formatSchedule } from './calendar';
 import type { T } from '../i18n';
 
 /**
@@ -34,6 +39,7 @@ export function InterviewsDialog({
   scenarioId: string;
   /** Название сценария — для письма с приглашением. */
   title: string;
+
   onOpen: (id: string) => void;
   onClose: () => void;
 }) {
@@ -44,10 +50,17 @@ export function InterviewsDialog({
   const [copied, setCopied] = useState<string | null>(null);
   /** Какое приглашение показано ссылкой: буфер обмена есть не везде, а ссылку можно выделить руками. */
   const [shown, setShown] = useState<string | null>(null);
+  const [schedule, setSchedule] = useState<Schedule>({ at: null, minutes: 60 });
+  /** Какое собеседование сейчас переносят и на когда. */
+  const [moving, setMoving] = useState<{ id: string; schedule: Schedule } | null>(null);
+  /** Когда сценарий правили последний раз на сервере — чтобы заметить, что снимок отстал. */
+  const [scenarioUpdatedAt, setScenarioUpdatedAt] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
-      setItems(await listInterviews(scenarioId));
+      const [list, updated] = await Promise.all([listInterviews(scenarioId), fetchScenarioUpdatedAt(scenarioId)]);
+      setItems(list);
+      setScenarioUpdatedAt(updated);
     } catch (reason) {
       setError((reason as Error).message);
       setItems([]);
@@ -68,8 +81,9 @@ export function InterviewsDialog({
     setBusy(true);
     setError('');
     try {
-      const id = await createInterview(workspace, scenarioId, email);
+      const id = await createInterview(workspace, scenarioId, email, schedule);
       setEmail('');
+      setSchedule({ at: null, minutes: 60 });
       await refresh();
       setShown(id);
     } catch (reason) {
@@ -111,6 +125,7 @@ export function InterviewsDialog({
             }}
           >
             <span className="pg-field__label">{t('iv.new')}</span>
+            <ScheduleFields t={t} value={schedule} onChange={setSchedule} />
             <div className="pg-iv-new">
               <input
                 className="pg-input"
@@ -138,13 +153,22 @@ export function InterviewsDialog({
                 const open = item.status === 'scheduled' || item.status === 'live';
                 const pending = !item.candidate && open;
                 const expired = pending && item.inviteExpiresAt !== null && Date.parse(item.inviteExpiresAt) <= Date.now();
+                const when = formatSchedule({ at: item.scheduledAt, minutes: item.durationMinutes }, lang, t);
+                const notStarted = item.status === 'scheduled' && !item.startedAt;
+                // Сценарий правили после приглашения: до старта снимок можно подтянуть.
+                const stale =
+                  notStarted &&
+                  item.snapshotOf !== null &&
+                  scenarioUpdatedAt !== null &&
+                  Date.parse(scenarioUpdatedAt) > Date.parse(item.snapshotOf) + 1000;
+                const url = inviteUrl(item.inviteToken);
                 return (
                   <li key={item.id} className={`pg-iv is-${item.status}`}>
                     <div className="pg-iv__row">
                     <span className="pg-iv__who">
                       <strong>{item.candidate?.name ?? item.candidateEmail ?? t('iv.byLink')}</strong>
                       <span className="pg-hint">
-                        {t(`iv.status.${item.status}`)} · {date.format(new Date(item.createdAt))}
+                        {t(`iv.status.${item.status}`)} · {when ? `${t('when.on')} ${when}` : date.format(new Date(item.createdAt))}
                         {pending ? ` · ${t('iv.notAccepted')}` : ''}
                         {pending && item.inviteExpiresAt
                           ? ` · ${expired ? t('link.expiredShort') : t('link.until', { date: date.format(new Date(item.inviteExpiresAt)) })}`
@@ -155,6 +179,21 @@ export function InterviewsDialog({
                       <button type="button" className="pg-button pg-button--small" onClick={() => copy(item)}>
                         <i className={`codicon codicon-${copied === item.id ? 'check' : 'link'}`} aria-hidden="true" />{' '}
                         {t(copied === item.id ? 'share.copied' : 'iv.copy')}
+                      </button>
+                    )}
+                    {notStarted && (
+                      <button
+                        type="button"
+                        className="pg-button pg-button--small"
+                        onClick={() =>
+                          setMoving(
+                            moving?.id === item.id
+                              ? null
+                              : { id: item.id, schedule: { at: item.scheduledAt, minutes: item.durationMinutes } },
+                          )
+                        }
+                      >
+                        <i className="codicon codicon-calendar" aria-hidden="true" /> {t(item.scheduledAt ? 'when.move' : 'when.set')}
                       </button>
                     )}
                     {pending && (
@@ -201,16 +240,70 @@ export function InterviewsDialog({
                       </button>
                     )}
                     </div>
+                    {stale && (
+                      <p className="pg-note pg-iv__stale">
+                        {t('iv.stale')}{' '}
+                        <button
+                          type="button"
+                          className="pg-link-button"
+                          onClick={async () => {
+                            try {
+                              await refreshSnapshot(item.id);
+                              await refresh();
+                            } catch (reason) {
+                              setError((reason as Error).message);
+                            }
+                          }}
+                        >
+                          {t('iv.refresh')}
+                        </button>
+                      </p>
+                    )}
+                    {moving?.id === item.id && (
+                      <form
+                        className="pg-iv__move"
+                        onSubmit={async (event) => {
+                          event.preventDefault();
+                          try {
+                            await reschedule(item.id, moving.schedule);
+                            setMoving(null);
+                            await refresh();
+                          } catch (reason) {
+                            setError((reason as Error).message);
+                          }
+                        }}
+                      >
+                        <ScheduleFields t={t} value={moving.schedule} onChange={(next) => setMoving({ id: item.id, schedule: next })} />
+                        <button type="submit" className="pg-button pg-button--small">
+                          {t('when.save')}
+                        </button>
+                      </form>
+                    )}
                     {shown === item.id && pending && !expired && (
                       <LinkBox
                         t={t}
-                        url={inviteUrl(item.inviteToken)}
+                        url={url}
                         expires={item.inviteExpiresAt ? t('link.until', { date: date.format(new Date(item.inviteExpiresAt)) }) : t('link.forever')}
                         mail={mailtoUrl(
                           item.candidateEmail ?? '',
                           t('link.mail.subject.candidate', { title, workspace: workspace.name }),
-                          t('link.mail.body.candidate', { title, workspace: workspace.name, url: inviteUrl(item.inviteToken) }),
+                          mailBody(t, 'candidate', title, workspace.name, url, when),
                         )}
+                        extra={
+                          item.scheduledAt && (
+                            <CalendarButtons
+                              t={t}
+                              event={{
+                                title: t('when.eventTitle', { title }),
+                                details: t('when.eventDetails'),
+                                url,
+                                start: item.scheduledAt,
+                                minutes: item.durationMinutes,
+                                guest: item.candidateEmail ?? undefined,
+                              }}
+                            />
+                          )
+                        }
                       />
                     )}
                   </li>

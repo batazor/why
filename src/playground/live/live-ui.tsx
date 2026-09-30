@@ -3,6 +3,7 @@ import { ViewportPortal, useViewport } from '@xyflow/react';
 import type { Person } from './auth';
 import type { Peer, Point, RoomStatus } from './room';
 import type { InvitePreview } from './cloud';
+import { formatSchedule } from './calendar';
 import type { Role } from '../roles';
 import type { T } from '../i18n';
 
@@ -221,6 +222,13 @@ export function Gate({
                 ? t('gate.preview.team', { inviter: preview.inviter, workspace: preview.workspace, role: t(`team.role.${preview.role}`) })
                 : t('gate.preview.interview', { inviter: preview.inviter, title: preview.title ?? '', workspace: preview.workspace })}
             </p>
+            {preview.state === 'open' && preview.scheduledAt && (
+              <p>
+                <strong>
+                  {t('gate.preview.when', { when: formatSchedule({ at: preview.scheduledAt, minutes: preview.duration ?? 60 }, lang, t) })}
+                </strong>
+              </p>
+            )}
             {preview.state === 'open' && preview.expiresAt && (
               <p className="pg-hint">{t('gate.preview.until', { date: date.format(new Date(preview.expiresAt)) })}</p>
             )}

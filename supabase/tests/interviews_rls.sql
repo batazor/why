@@ -129,6 +129,40 @@ begin
   fresh := public.renew_interview_invite(iv);
   assert fresh <> tok, 'renewing issues a new token';
   perform set_config('test.stale', tok, false);
+  perform set_config('test.second', iv::text, false);
+
+  -- Назначено через месяц: приглашение доживает до собеседования.
+  insert into public.interviews (workspace_id, scenario_id, scheduled_at, duration_minutes)
+  values (current_setting('test.ws')::uuid, current_setting('test.scenario')::uuid, now() + interval '30 days', 90)
+  returning id, invite_token into iv, tok;
+  assert (select invite_expires_at from public.interviews where id = iv) >= now() + interval '31 days' - interval '1 minute',
+    'an invitation lives past its scheduled time';
+  assert (public.invite_preview('interview', tok) ->> 'duration')::int = 90, 'the preview tells the length';
+  assert public.invite_preview('interview', tok) ->> 'scheduled_at' is not null, 'and when it is';
+end $$;
+
+-- ─── Снимок: правка сценария не трогает собеседование ────────────────────
+reset role;
+select set_config('request.jwt.claims', '{"sub": "00000000-0000-4000-8000-00000000000a", "email": "alice@corp.test", "role": "authenticated"}', false);
+set role authenticated;
+do $$ begin
+  update public.scenarios set title = 'URL shortener v2' where id = current_setting('test.scenario')::uuid;
+  update public.scenario_private set content = '{"rubric": []}' where scenario_id = current_setting('test.scenario')::uuid;
+end $$;
+
+reset role;
+select set_config('request.jwt.claims', '{"sub": "00000000-0000-4000-8000-00000000000b", "email": "bob@corp.test", "role": "authenticated"}', false);
+set role authenticated;
+do $$ begin
+  assert (select brief ->> 'title' from public.interviews where id = current_setting('test.interview')::uuid) = 'URL shortener',
+    'the interview keeps the task it was created with';
+  assert (select jsonb_array_length(content -> 'rubric') from public.interview_scenarios where interview_id = current_setting('test.interview')::uuid) = 1,
+    'and the rubric it will be scored by';
+  perform public.refresh_interview_snapshot(current_setting('test.second')::uuid);
+  assert (select brief ->> 'title' from public.interviews where id = current_setting('test.second')::uuid) = 'URL shortener v2',
+    'before the start the snapshot can be refreshed';
+  assert (select jsonb_array_length(content -> 'rubric') from public.interview_scenarios where interview_id = current_setting('test.second')::uuid) = 0,
+    'rubric included';
 end $$;
 
 reset role;
@@ -161,6 +195,8 @@ do $$ begin
   assert (select count(*) from public.interviews) = 1, 'candidate sees her interview';
   assert (select task from public.scenarios) = 'Design a URL shortener', 'candidate reads the task';
   assert (select count(*) from public.scenario_private) = 0, 'candidate never reads the reference';
+  assert (select count(*) from public.interview_scenarios) = 0, 'nor its snapshot';
+  assert (select brief ->> 'task' from public.interviews) = 'Design a URL shortener', 'but reads the task from the snapshot';
   assert (select count(*) from public.interview_reviews) = 0, 'candidate never reads the review';
   assert (select count(*) from public.workspaces) = 0, 'candidate is not in the workspace';
   assert (select count(*) from public.workspace_members) = 0, 'candidate does not see the staff list';
@@ -307,6 +343,11 @@ do $$ begin
   exception when check_violation then null;
   end;
   assert (select status from public.interviews where id = current_setting('test.interview')::uuid) = 'finished', 'the interview stays finished';
+  begin
+    perform public.refresh_interview_snapshot(current_setting('test.interview')::uuid);
+    raise exception 'FAIL: the snapshot of a finished interview was refreshed';
+  exception when check_violation then null;
+  end;
 end $$;
 
 -- ─── Ссылки из базы: открыть без входа, отозвать, срок ─────────────────────

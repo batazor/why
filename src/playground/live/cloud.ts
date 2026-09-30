@@ -7,14 +7,17 @@ import {
   emptyTraining,
   migrate,
   pickBoard,
+  totalScore,
   type Board,
+  type Criterion,
+  type Signal,
   type Design,
   type DesignSummary,
   type Scenario,
   type Session,
 } from '../model';
 import type { DesignRepository } from '../storage';
-import { toEntry, type JournalEntry, type JournalRow } from './journal';
+import { signalsFrom, toEntry, type JournalEntry, type JournalRow } from './journal';
 
 /** Снимок доски в журнал — не чаще раза в 15 секунд, пока доска меняется. */
 const SNAPSHOT_MS = 15_000;
@@ -47,6 +50,11 @@ export interface Interview {
   candidate: Person | null;
   inviteToken: string;
   inviteExpiresAt: string | null;
+  scheduledAt: string | null;
+  durationMinutes: number;
+  startedAt: string | null;
+  /** Сценарий к моменту снимка: если с тех пор его правили, снимок можно обновить до старта. */
+  snapshotOf: string | null;
   createdAt: string;
 }
 
@@ -213,6 +221,84 @@ export async function acceptTeamInvite(token: string): Promise<string> {
   return must(await db().rpc('accept_workspace_invite', { token })) as string;
 }
 
+// ─── Сравнение кандидатов ───────────────────────────────────────────────────
+
+export interface CalibrationRow {
+  id: string;
+  status: InterviewStatus;
+  candidate: string;
+  interviewer: Person;
+  /** Когда было: начало, иначе назначенное время, иначе создание. */
+  at: string;
+  durationMs: number | null;
+  /** Критерии из снимка этого собеседования — у разных собеседований они могут отличаться. */
+  rubric: Criterion[];
+  scores: Record<string, number>;
+  total: number | null;
+  revealed: number;
+  hints: number;
+  signals: Signal[];
+}
+
+/**
+ * Все собеседования по сценарию — для сравнения кандидатов и интервьюеров.
+ *
+ * Итог каждого считается по критериям его собственного снимка: если автор
+ * поменял критерии между собеседованиями, старые оценки остаются про старые
+ * критерии, а не пересчитываются по новым.
+ */
+export async function calibration(scenarioId: string): Promise<CalibrationRow[]> {
+  const rows = must(
+    await db().from('interviews').select('*').eq('scenario_id', scenarioId).neq('status', 'cancelled'),
+  ) as InterviewRow[];
+  if (!rows.length) return [];
+  const ids = rows.map((row) => row.id);
+  const people = [...new Set(rows.flatMap((row) => [row.interviewer_id, row.candidate_id]).filter(Boolean))] as string[];
+  const [snapshots, reviews, profiles, events] = await Promise.all([
+    db().from('interview_scenarios').select('interview_id, content').in('interview_id', ids),
+    db().from('interview_reviews').select('interview_id, session').in('interview_id', ids),
+    db().from('profiles').select('id, name, email, avatar_url').in('id', people),
+    db()
+      .from('interview_events')
+      .select('id, interview_id, kind, payload, created_at')
+      .eq('kind', 'signal')
+      .in('interview_id', ids)
+      .order('id'),
+  ]);
+  const content = new Map(
+    (must(snapshots) as { interview_id: string; content: Partial<Scenario> }[]).map((row) => [row.interview_id, row.content]),
+  );
+  const session = new Map(
+    (must(reviews) as { interview_id: string; session: Partial<Session> }[]).map((row) => [row.interview_id, row.session]),
+  );
+  const byId = new Map((must(profiles) as ProfileRow[]).map((row) => [row.id, toPerson(row)]));
+  const journal = new Map<string, JournalEntry[]>();
+  for (const row of must(events) as (JournalRow & { interview_id: string })[])
+    journal.set(row.interview_id, [...(journal.get(row.interview_id) ?? []), toEntry(row)]);
+
+  return rows.map((row) => {
+    // Через migrate — чтобы у критериев были веса и прочие умолчания, как в документе.
+    const scenario = migrate({ scenario: content.get(row.id) ?? {} }).scenario;
+    const scores = session.get(row.id)?.scores ?? {};
+    const started = row.started_at ? Date.parse(row.started_at) : null;
+    const ended = row.finished_at ? Date.parse(row.finished_at) : null;
+    return {
+      id: row.id,
+      status: row.status,
+      candidate: (row.candidate_id && byId.get(row.candidate_id)?.name) || row.candidate_email || '',
+      interviewer: byId.get(row.interviewer_id) ?? { id: row.interviewer_id, name: '—' },
+      at: row.started_at ?? row.scheduled_at ?? row.created_at,
+      durationMs: started && ended ? ended - started : null,
+      rubric: scenario.rubric,
+      scores,
+      total: totalScore(scenario.rubric, scores),
+      revealed: session.get(row.id)?.revealed?.length ?? 0,
+      hints: scenario.hints.length,
+      signals: signalsFrom(journal.get(row.id) ?? []),
+    };
+  });
+}
+
 // ─── Ссылки из базы ─────────────────────────────────────────────────────────
 
 export type ShareRole = 'candidate' | 'trainee' | 'interviewer' | 'author';
@@ -311,6 +397,8 @@ export interface InvitePreview {
   role?: WorkspaceRole;
   inviter: string;
   expiresAt: string | null;
+  scheduledAt?: string | null;
+  duration?: number;
   state: 'open' | 'taken' | 'expired' | 'over';
   /** Маска почты, если приглашение на неё: d***@mail.test. */
   email: string | null;
@@ -325,6 +413,8 @@ export async function invitePreview(kind: 'interview' | 'team', token: string): 
     role?: WorkspaceRole;
     inviter: string;
     expires_at: string | null;
+    scheduled_at?: string | null;
+    duration?: number;
     state: InvitePreview['state'];
     email: string | null;
   } | null;
@@ -336,6 +426,8 @@ export async function invitePreview(kind: 'interview' | 'team', token: string): 
         role: row.role,
         inviter: row.inviter,
         expiresAt: row.expires_at,
+        scheduledAt: row.scheduled_at ?? null,
+        duration: row.duration,
         state: row.state,
         email: row.email,
       }
@@ -497,7 +589,23 @@ interface InterviewRow {
   started_at: string | null;
   finished_at: string | null;
   calc_unlocked_at: string | null;
+  scheduled_at: string | null;
+  duration_minutes: number;
+  /** Снимок открытой части сценария на момент создания собеседования. */
+  brief: Brief | null;
   created_at: string;
+}
+
+/** Открытая часть сценария в снимке — поля scenarios, как их положил private.scenario_brief. */
+interface Brief {
+  title: string;
+  task: string;
+  task_source: string;
+  calc: Design['calc'];
+  allow_checks: boolean;
+  format_version: number;
+  /** Когда сценарий менялся последний раз к моменту снимка — по нему видно, что снимок отстал. */
+  updated_at: string;
 }
 
 interface ProfileRow {
@@ -526,6 +634,10 @@ export async function listInterviews(scenarioId: string): Promise<Interview[]> {
     candidate: row.candidate_id ? (byId.get(row.candidate_id) ?? null) : null,
     inviteToken: row.invite_token,
     inviteExpiresAt: row.invite_expires_at,
+    scheduledAt: row.scheduled_at,
+    durationMinutes: row.duration_minutes,
+    startedAt: row.started_at,
+    snapshotOf: row.brief?.updated_at ?? null,
     createdAt: row.created_at,
   }));
 }
@@ -534,14 +646,48 @@ export async function listInterviews(scenarioId: string): Promise<Interview[]> {
  * id задаётся здесь, а не сервером: вставка без чтения назад не требует
  * права читать строку, и не нужно ждать, пока политика чтения её увидит.
  */
-export async function createInterview(workspace: Workspace, scenarioId: string, email: string): Promise<string> {
+export interface Schedule {
+  /** ISO-время начала; null — не назначено. */
+  at: string | null;
+  minutes: number;
+}
+
+export async function createInterview(
+  workspace: Workspace,
+  scenarioId: string,
+  email: string,
+  schedule: Schedule = { at: null, minutes: 60 },
+): Promise<string> {
   const id = crypto.randomUUID();
   must(
-    await db()
-      .from('interviews')
-      .insert({ id, workspace_id: workspace.id, scenario_id: scenarioId, candidate_email: email.trim() || null }),
+    await db().from('interviews').insert({
+      id,
+      workspace_id: workspace.id,
+      scenario_id: scenarioId,
+      candidate_email: email.trim() || null,
+      scheduled_at: schedule.at,
+      duration_minutes: schedule.minutes,
+    }),
   );
   return id;
+}
+
+/** Перенести собеседование. Приглашение сервер сам продлит до нового времени. */
+export async function reschedule(id: string, schedule: Schedule): Promise<void> {
+  must(
+    await db().from('interviews').update({ scheduled_at: schedule.at, duration_minutes: schedule.minutes }).eq('id', id),
+  );
+}
+
+/** Когда сценарий на сервере меняли последний раз — сверить со снимками собеседований. */
+export async function scenarioUpdatedAt(id: string): Promise<string | null> {
+  const row = must(await db().from('scenarios').select('updated_at').eq('id', id).maybeSingle()) as { updated_at: string } | null;
+  return row?.updated_at ?? null;
+}
+
+/** Взять в собеседование сценарий в нынешнем виде — пока оно не началось. */
+export async function refreshSnapshot(id: string): Promise<void> {
+  must(await db().rpc('refresh_interview_snapshot', { interview: id }));
 }
 
 /** Новая ссылка на то же собеседование: старая перестаёт работать, срок — заново. */
@@ -596,6 +742,8 @@ export class InterviewRepository implements DesignRepository {
   interviewer: Person | null = null;
   candidate: Person | null = null;
   createdAt = '';
+  scheduledAt: string | null = null;
+  durationMinutes = 60;
   private title = '';
   private saved = { board: '', review: '', timing: '' };
   /** Что из сигналов уже в журнале: сигнал «ушёл» дописывается ещё раз, когда человек вернулся. */
@@ -618,9 +766,11 @@ export class InterviewRepository implements DesignRepository {
     this.as = row.candidate_id === this.me ? 'candidate' : 'interviewer';
     const staff = this.as === 'interviewer';
 
+    // Собеседование живёт по своему снимку сценария, а не по живому: правка
+    // сценария после приглашения не должна менять ни задание, ни критерии.
     const [scenario, secret, board, review, interviewer] = await Promise.all([
-      db().from('scenarios').select('*').eq('id', row.scenario_id).single(),
-      staff ? db().from('scenario_private').select('content').eq('scenario_id', row.scenario_id).maybeSingle() : null,
+      row.brief ? null : db().from('scenarios').select('*').eq('id', row.scenario_id).single(),
+      staff ? db().from('interview_scenarios').select('content').eq('interview_id', id).maybeSingle() : null,
       db().from('interview_boards').select('board').eq('interview_id', id).maybeSingle(),
       staff ? db().from('interview_reviews').select('session').eq('interview_id', id).maybeSingle() : null,
       db().from('profiles').select('id, name, email, avatar_url').eq('id', row.interviewer_id).maybeSingle(),
@@ -634,9 +784,13 @@ export class InterviewRepository implements DesignRepository {
     this.candidate = candidate ? toPerson(candidate) : null;
     this.createdAt = row.created_at;
     const base = fromScenario(
-      must(scenario) as ScenarioRow,
+      row.brief
+        ? { ...row.brief, id: row.scenario_id, created_at: row.created_at }
+        : (must(scenario!) as ScenarioRow),
       secret ? ((must(secret) as { content: Partial<Scenario> } | null)?.content ?? null) : null,
     );
+    this.scheduledAt = row.scheduled_at;
+    this.durationMinutes = row.duration_minutes;
     const answer = (must(board) as { board: Board } | null)?.board ?? emptyBoard();
     const work = review ? ((must(review) as { session: Partial<Session> } | null)?.session ?? {}) : {};
     const who = must(interviewer) as ProfileRow | null;

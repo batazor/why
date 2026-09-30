@@ -39,6 +39,8 @@ import { useCloud } from './live/use-cloud';
 import { InterviewRepository, isCloudId, openShare, paramFromUrl, setParams, type Timing } from './live/cloud';
 import { InterviewsDialog } from './live/interviews-dialog';
 import { TeamDialog } from './live/team-dialog';
+import { CalibrationDialog } from './live/calibration-dialog';
+import { formatSchedule } from './live/calendar';
 import { ReportPanel } from './live/report-panel';
 import { merge, signalsFrom, snapshotsFrom, type JournalEntry } from './live/journal';
 
@@ -88,6 +90,7 @@ export default function Playground({ lang, repository }: Props) {
   const [sharing, setSharing] = useState(false);
   const [interviewsOpen, setInterviewsOpen] = useState(false);
   const [teamOpen, setTeamOpen] = useState(false);
+  const [calibrationOpen, setCalibrationOpen] = useState(false);
   /**
    * Журнал собеседования — у интервьюера. Из него сигналы честности (со
    * временем сервера) и снимки доски для записи; `replay` — какой снимок
@@ -510,6 +513,14 @@ export default function Playground({ lang, repository }: Props) {
               </span>
             )}
             {frozen && <span className="pg-live__alone">{t('iv.finished')}</span>}
+            {/* До старта кандидат видит, на когда назначено: пришёл заранее — знает, что ждать. */}
+            {interview && role === 'candidate' && !design.session.startedAt && interview.scheduledAt && (
+              <span className="pg-live__alone">
+                {t('when.startsAt', {
+                  when: formatSchedule({ at: interview.scheduledAt, minutes: interview.durationMinutes }, lang, t),
+                })}
+              </span>
+            )}
           </>
         ) : (
           <label className="pg-toolbar__project">
@@ -647,6 +658,12 @@ export default function Playground({ lang, repository }: Props) {
         {inWorkspace && (
           <button type="button" className="pg-button" onClick={() => setTeamOpen(true)} title={t('team.hint')}>
             <i className="codicon codicon-organization" aria-hidden="true" /> {t('team.button')}
+          </button>
+        )}
+
+        {(role === 'interviewer' || role === 'author') && inWorkspace && isCloudId(design.id) && (
+          <button type="button" className="pg-button" onClick={() => setCalibrationOpen(true)} title={t('cal.hint')}>
+            <i className="codicon codicon-graph" aria-hidden="true" /> {t('cal.button')}
           </button>
         )}
 
@@ -828,6 +845,19 @@ export default function Playground({ lang, repository }: Props) {
           }}
           onChanged={reloadWorkspace}
           onClose={() => setTeamOpen(false)}
+        />
+      )}
+      {calibrationOpen && cloud.mode === 'workspace' && (
+        <CalibrationDialog
+          t={t}
+          lang={lang}
+          scenarioId={design.id}
+          title={design.title}
+          onOpen={(id) => {
+            setCalibrationOpen(false);
+            openInterview(id);
+          }}
+          onClose={() => setCalibrationOpen(false)}
         />
       )}
       {interviewsOpen && cloud.mode === 'workspace' && (

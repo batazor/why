@@ -3621,3 +3621,106 @@ body:has(.pg) .site-footer {
 .pg-gate__invite p {
   margin: 0.2rem 0;
 }
+
+/* ── Назначение и калибровка ────────────────────────────────────────────── */
+
+.pg-iv__move {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.pg-iv__stale {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.pg-cal {
+  width: min(72rem, calc(100vw - 2rem));
+  max-width: none;
+}
+
+.pg-cal__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.pg-cal__bar .pg-button {
+  margin-left: auto;
+}
+
+.pg-cal__scroll {
+  overflow-x: auto;
+  border: 1px solid var(--pg-border);
+  border-radius: var(--pg-radius);
+}
+
+.pg-cal__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.pg-cal__table th,
+.pg-cal__table td {
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--pg-border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.pg-cal__table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--pg-panel);
+  color: var(--pg-muted);
+  font-weight: 600;
+}
+
+.pg-cal__table tbody tr {
+  cursor: pointer;
+}
+
+.pg-cal__table tbody tr:hover {
+  background: var(--pg-accent-soft);
+}
+
+.pg-cal__table tfoot td {
+  color: var(--pg-muted);
+  font-weight: 600;
+}
+
+.pg-cal__crit span:first-child {
+  display: inline-block;
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+
+.pg-cal__total {
+  font-weight: 700;
+  text-align: right !important;
+}
+
+.pg-cal__level {
+  text-align: center !important;
+}
+
+.pg-cal__level.is-empty {
+  color: var(--pg-muted);
+}
+
+.pg-cal__table .is-warn {
+  color: var(--pg-bad);
+  font-weight: 600;
+}
+
+/* Уровень оценки в таблицах — тем же цветом, что кнопка уровня. */
+td.pg-level--0 { color: var(--pg-bad); font-weight: 600; }
+td.pg-level--1 { color: #c7791b; font-weight: 600; }
+td.pg-level--2 { color: var(--pg-compute); font-weight: 600; }
+td.pg-level--3 { color: #1f7a4d; font-weight: 600; }

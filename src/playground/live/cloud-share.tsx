@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { CalendarButtons, ScheduleFields, formatSchedule } from './calendar';
 import { shared } from '../share';
 import type { Design } from '../model';
 import type { T } from '../i18n';
@@ -12,6 +13,7 @@ import {
   listTeamInvites,
   mailtoUrl,
   revokeShare,
+  type Schedule,
   type ShareLink,
   type Workspace,
   type WorkspaceRole,
@@ -42,6 +44,7 @@ interface Issued {
   url: string;
   expiresAt: string | null;
   email: string;
+  schedule: Schedule;
 }
 
 export function CloudShare({
@@ -65,6 +68,7 @@ export function CloudShare({
   const [email, setEmail] = useState('');
   const [days, setDays] = useState<number | null>(7);
   const [role, setRole] = useState<WorkspaceRole>('interviewer');
+  const [schedule, setSchedule] = useState<Schedule>({ at: null, minutes: 60 });
   const [issued, setIssued] = useState<Issued | null>(null);
   const [links, setLinks] = useState<ShareLink[]>([]);
   const [busy, setBusy] = useState(false);
@@ -95,19 +99,19 @@ export function CloudShare({
     setError('');
     try {
       if (target === 'candidate') {
-        const id = await createInterview(workspace, design.id, email);
+        const id = await createInterview(workspace, design.id, email, schedule);
         const created = (await listInterviews(design.id)).find((item) => item.id === id);
-        if (created) setIssued({ url: inviteUrl(created.inviteToken), expiresAt: created.inviteExpiresAt, email });
+        if (created) setIssued({ url: inviteUrl(created.inviteToken), expiresAt: created.inviteExpiresAt, email, schedule });
       } else if (target === 'colleague') {
         const id = await createTeamInvite(workspace.id, role, email);
         const created = (await listTeamInvites(workspace.id)).find((item) => item.id === id);
-        if (created) setIssued({ url: inviteUrl(created.token, 'join'), expiresAt: created.expiresAt, email });
+        if (created) setIssued({ url: inviteUrl(created.token, 'join'), expiresAt: created.expiresAt, email, schedule: { at: null, minutes: 60 } });
       } else {
         const shareRole = target === 'copy' ? 'author' : 'trainee';
         // Что уедет, решает shared(): тренировке — без эталона, копии — целиком.
         const payload = shared(design, { role: shareRole, scenario: target === 'copy', board: target === 'copy' });
         const link = await createShare(workspace, design.id, shareRole, payload, days);
-        setIssued({ url: inviteUrl(link.token, 'share'), expiresAt: link.expiresAt, email });
+        setIssued({ url: inviteUrl(link.token, 'share'), expiresAt: link.expiresAt, email, schedule: { at: null, minutes: 60 } });
         await refresh();
       }
     } catch (reason) {
@@ -154,6 +158,7 @@ export function CloudShare({
             issue();
           }}
         >
+          {target === 'candidate' && <ScheduleFields t={t} value={schedule} onChange={setSchedule} />}
           <div className="pg-iv-new">
             {target === 'colleague' && (
               <select
@@ -214,8 +219,23 @@ export function CloudShare({
           mail={mailtoUrl(
             issued.email,
             t(`link.mail.subject.${target}`, { title: design.title, workspace: workspace.name }),
-            t(`link.mail.body.${target}`, { title: design.title, workspace: workspace.name, url: issued.url }),
+            mailBody(t, target, design.title, workspace.name, issued.url, formatSchedule(issued.schedule, lang, t)),
           )}
+          extra={
+            issued.schedule.at && (
+              <CalendarButtons
+                t={t}
+                event={{
+                  title: t('when.eventTitle', { title: design.title }),
+                  details: t('when.eventDetails'),
+                  url: issued.url,
+                  start: issued.schedule.at,
+                  minutes: issued.schedule.minutes,
+                  guest: issued.email.trim() || undefined,
+                }}
+              />
+            )
+          }
         />
       )}
 
@@ -270,8 +290,26 @@ export function CloudShare({
   );
 }
 
-/** Выпущенная ссылка: поле, копировать, письмом, срок. */
-export function LinkBox({ t, url, expires, mail }: { t: T; url: string; expires: string; mail: string }) {
+/** Текст письма; если время назначено — с ним. */
+export function mailBody(t: T, target: string, title: string, workspace: string, url: string, when: string): string {
+  const body = t(`link.mail.body.${target}`, { title, workspace, url });
+  return when ? `${body}\n\n${t('link.mail.when', { when })}` : body;
+}
+
+/** Выпущенная ссылка: поле, копировать, письмом, срок; `extra` — например, календарь. */
+export function LinkBox({
+  t,
+  url,
+  expires,
+  mail,
+  extra,
+}: {
+  t: T;
+  url: string;
+  expires: string;
+  mail: string;
+  extra?: ReactNode;
+}) {
   return (
     <div className="pg-linkbox">
       <input className="pg-input" readOnly value={url} aria-label={t('iv.link')} onFocus={(event) => event.currentTarget.select()} />
@@ -280,6 +318,7 @@ export function LinkBox({ t, url, expires, mail }: { t: T; url: string; expires:
         <a className="pg-button" href={mail}>
           <i className="codicon codicon-mail" aria-hidden="true" /> {t('link.mail')}
         </a>
+        {extra}
         <span className="pg-hint">{expires}</span>
       </div>
     </div>
