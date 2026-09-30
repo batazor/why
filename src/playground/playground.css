@@ -569,7 +569,8 @@ body:has(.pg) .site-footer {
 
 .pg-canvas__empty {
   position: absolute;
-  inset: 40% 15% auto;
+  /* Внизу, над баннером: верх и левый край занимает карточка задания. */
+  inset: auto 15% 3.5rem;
   margin: 0;
   text-align: center;
   color: var(--pg-muted);
@@ -3829,4 +3830,150 @@ td.pg-level--3 { color: #1f7a4d; font-weight: 600; }
   margin: 0;
   color: var(--pg-muted);
   font-style: italic;
+}
+
+/* ── Меню строки инструментов ───────────────────────────────────────────── */
+
+.pg-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.pg-menu__trigger .codicon-chevron-down {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+/* Меню аватара: кнопка — сам аватар, без рамки. */
+.pg-live .pg-menu__trigger {
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+}
+
+.pg-menu__list {
+  position: absolute;
+  top: calc(100% + 4px);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  min-width: 13rem;
+  padding: 0.3rem;
+  border: 1px solid var(--pg-border);
+  border-radius: var(--pg-radius);
+  background: var(--pg-panel);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+}
+
+.pg-menu__list--left {
+  left: 0;
+}
+
+.pg-menu__list--right {
+  right: 0;
+}
+
+.pg-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.55rem;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.88rem;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pg-menu__item:hover,
+.pg-menu__item:focus-visible {
+  background: var(--pg-accent-soft);
+  color: var(--pg-accent);
+}
+
+.pg-menu__item.is-danger:hover,
+.pg-menu__item.is-danger:focus-visible {
+  background: var(--pg-bad-soft);
+  color: var(--pg-bad);
+}
+
+.pg-menu__sep {
+  margin: 0.25rem 0;
+  border: 0;
+  border-top: 1px solid var(--pg-border);
+}
+
+.pg-menu__note {
+  display: flex;
+  flex-direction: column;
+  padding: 0.35rem 0.55rem 0.45rem;
+  font-size: 0.85rem;
+}
+
+.pg-menu__note span {
+  color: var(--pg-muted);
+  font-size: 0.78rem;
+}
+
+.pg-live__status.is-over .codicon {
+  color: var(--pg-muted);
+  font-size: 12px;
+}
+
+/* ── Группы вкладок и широкий отчёт ─────────────────────────────────────── */
+
+.pg-tab-groups {
+  display: flex;
+  margin: 0.5rem 0.6rem 0;
+}
+
+.pg-tab-groups button {
+  flex: 1;
+}
+
+.pg-body--wide-side {
+  grid-template-columns: auto minmax(0, 1fr) min(58rem, 60%);
+}
+
+/* Без палитры колонок две — у интервьюера доска кандидата только для чтения. */
+.pg-body--no-palette.pg-body--wide-side {
+  grid-template-columns: minmax(0, 1fr) min(58rem, 60%);
+}
+
+.pg-report__title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.pg-report__widen:hover {
+  color: var(--pg-accent);
+  background: var(--pg-accent-soft);
+}
+
+/* В широком отчёте разделы идут в две колонки: оценки рядом с ходом и сигналами. */
+.pg-report.is-wide {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem 1.5rem;
+  align-items: start;
+}
+
+.pg-report.is-wide > .pg-report__head,
+.pg-report.is-wide > .pg-report__replay,
+.pg-report.is-wide > .pg-report__actions {
+  grid-column: 1 / -1;
+}
+
+@media print {
+  .pg-tab-groups,
+  .pg-report__widen {
+    display: none !important;
+  }
 }

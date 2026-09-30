@@ -1,4 +1,5 @@
 import type { Design, DesignSummary } from './model';
+import { Menu, MenuItem, MenuSeparator } from './menu';
 import type { Role } from './roles';
 import type { T } from './i18n';
 
@@ -119,46 +120,91 @@ export function SessionControls({
 }
 
 /**
- * Кнопки пространства: команда, сравнение, собеседования и перенос проекта
- * из браузера на сервер. Вне пространства их нет.
+ * Всё, что делают с проектом целиком, — одним меню: новый, копия, пример,
+ * импорт и экспорт, перенос в пространство, удаление. Нужно это редко, а
+ * кнопками занимало полстроки.
  */
+export function ProjectMenu({
+  t,
+  onNew,
+  onDuplicate,
+  onExample,
+  onImport,
+  onExport,
+  onCopyToWorkspace,
+  onDelete,
+}: {
+  t: T;
+  onNew: () => void;
+  onDuplicate: () => void;
+  onExample: () => void;
+  onImport: () => void;
+  onExport: () => void;
+  /** Проект из браузера можно скопировать в пространство — только тогда пункт есть. */
+  onCopyToWorkspace?: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <Menu
+      label={t('menu.project')}
+      trigger={
+        <>
+          <i className="codicon codicon-folder" aria-hidden="true" /> {t('menu.project')}
+          <i className="codicon codicon-chevron-down" aria-hidden="true" />
+        </>
+      }
+    >
+      <MenuItem icon="add" onClick={onNew}>
+        {t('pg.new')}
+      </MenuItem>
+      <MenuItem icon="copy" onClick={onDuplicate}>
+        {t('pg.duplicate')}
+      </MenuItem>
+      <MenuItem icon="lightbulb" onClick={onExample}>
+        {t('pg.example')}
+      </MenuItem>
+      {onCopyToWorkspace && (
+        <MenuItem icon="cloud-upload" onClick={onCopyToWorkspace} title={t('ws.copyHint')}>
+          {t('ws.copy')}
+        </MenuItem>
+      )}
+      <MenuSeparator />
+      <MenuItem icon="cloud-upload" onClick={onImport}>
+        {t('pg.import')}
+      </MenuItem>
+      <MenuItem icon="cloud-download" onClick={onExport}>
+        {t('pg.export')}
+      </MenuItem>
+      <MenuSeparator />
+      <MenuItem icon="trash" danger onClick={onDelete}>
+        {t('pg.delete')}
+      </MenuItem>
+    </Menu>
+  );
+}
+
+/** Сценарий пространства: сравнение кандидатов и собеседования по нему. */
 export function WorkspaceButtons({
   t,
   role,
-  onServer,
-  onTeam,
   onCompare,
   onInterviews,
-  onCopy,
 }: {
   t: T;
   role: Role;
-  /** Открыт сценарий пространства, а не проект этого браузера. */
-  onServer: boolean;
-  onTeam: () => void;
   onCompare: () => void;
   onInterviews: () => void;
-  onCopy: () => void;
 }) {
   return (
     <>
-      <button type="button" className="pg-button" onClick={onTeam} title={t('team.hint')}>
-        <i className="codicon codicon-organization" aria-hidden="true" /> {t('team.button')}
-      </button>
-      {(role === 'interviewer' || role === 'author') && onServer && (
+      {(role === 'interviewer' || role === 'author') && (
         <button type="button" className="pg-button" onClick={onCompare} title={t('cal.hint')}>
           <i className="codicon codicon-graph" aria-hidden="true" /> {t('cal.button')}
         </button>
       )}
-      {role === 'interviewer' && onServer && (
-        <button type="button" className="pg-button" onClick={onInterviews}>
+      {role === 'interviewer' && (
+        <button type="button" className="pg-button pg-button--primary" onClick={onInterviews}>
           <i className="codicon codicon-broadcast" aria-hidden="true" /> {t('iv.button')}
-        </button>
-      )}
-      {role === 'author' && !onServer && (
-        // Копия, а не перенос: браузерный проект остаётся, если с сервером что-то пойдёт не так.
-        <button type="button" className="pg-button" title={t('ws.copyHint')} onClick={onCopy}>
-          <i className="codicon codicon-cloud-upload" aria-hidden="true" /> {t('ws.copy')}
         </button>
       )}
     </>

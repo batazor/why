@@ -171,7 +171,7 @@ const en = {
 
   'tab.scenario': 'Scenario',
   'tab.conduct': 'Conduct',
-  'tab.score': 'Score',
+  'tab.score': 'Scores',
 
   'scenario.intro': 'Everything here is hidden from the candidate. The canvas in this role is the reference solution.',
   'scenario.candidateSees': 'The candidate gets',
@@ -540,6 +540,17 @@ const en = {
   'join.candidate': '{name} joined the room',
   'join.title': '{name} is in the room',
 
+  'menu.project': 'Design',
+  'menu.signOut': 'Sign out',
+  'live.over': 'Finished',
+  'canvas.emptyReadOnly': 'The board is empty — nothing has been drawn on it yet.',
+  'group.scenario': 'Task & scenario',
+  'group.interview': 'Interview',
+  'group.board': 'Candidate board',
+  'group.reference': 'Reference',
+  'report.expand': 'Wide report',
+  'report.collapse': 'Narrow report',
+
   'iv.button': 'Interviews',
   'iv.title': 'Interviews on this scenario',
   'iv.new': 'Invite a candidate',
@@ -767,7 +778,7 @@ const ru: Record<Key, string> = {
 
   'tab.task': 'Задача',
   'tab.req': 'Требования',
-  'tab.calc': 'Оценки',
+  'tab.calc': 'Прикидка',
   'tab.inspect': 'Выбранное',
   'tab.check': 'Проверки',
 
@@ -915,7 +926,7 @@ const ru: Record<Key, string> = {
 
   'tab.scenario': 'Сценарий',
   'tab.conduct': 'Ведение',
-  'tab.score': 'Оценка',
+  'tab.score': 'Баллы',
 
   'scenario.intro': 'Всё здесь скрыто от кандидата. Полотно в этой роли — эталонное решение.',
   'scenario.candidateSees': 'Кандидату доступно',
@@ -1283,6 +1294,17 @@ const ru: Record<Key, string> = {
   'wait.here': 'Интервьюер здесь и сейчас начнёт',
   'join.candidate': '{name} зашёл в комнату',
   'join.title': '{name} в комнате',
+
+  'menu.project': 'Проект',
+  'menu.signOut': 'Выйти',
+  'live.over': 'Закончено',
+  'canvas.emptyReadOnly': 'Доска пуста — на ней пока ничего не нарисовано.',
+  'group.scenario': 'Задание и сценарий',
+  'group.interview': 'Собеседование',
+  'group.board': 'Доска кандидата',
+  'group.reference': 'Эталон',
+  'report.expand': 'Отчёт шире',
+  'report.collapse': 'Отчёт уже',
 
   'iv.button': 'Собеседования',
   'iv.title': 'Собеседования по сценарию',

@@ -4,6 +4,7 @@ import type { Person } from './auth';
 import type { Peer, Point, RoomStatus } from './room';
 import type { InvitePreview } from './links';
 import { formatSchedule } from './calendar';
+import { Menu, MenuItem, MenuNote, MenuSeparator } from '../menu';
 import type { Role } from '../roles';
 import type { T } from '../i18n';
 
@@ -98,6 +99,11 @@ interface BarProps {
   ready: boolean;
   /** Открыто собеседование: показываем комнату. */
   inRoom: boolean;
+  /** Собеседование закончено: комната больше не «в эфире» и никого не ждёт. */
+  finished?: boolean;
+  /** В пространстве: его название в меню и пункт «Команда». */
+  workspaceName?: string;
+  onTeam?: () => void;
   status: RoomStatus;
   peers: Peer[];
   onSignIn: () => void;
@@ -115,7 +121,22 @@ interface BarProps {
  * Тренировка остаётся локальной, а кандидат входит по приглашению — у него
  * своя заставка.
  */
-export function LiveBar({ t, role, me, ready, inRoom, status, peers, onSignIn, onGuest, onSignOut, onLeave }: BarProps) {
+export function LiveBar({
+  t,
+  role,
+  me,
+  ready,
+  inRoom,
+  finished = false,
+  workspaceName,
+  onTeam,
+  status,
+  peers,
+  onSignIn,
+  onGuest,
+  onSignOut,
+  onLeave,
+}: BarProps) {
   const [asGuest, setAsGuest] = useState(false);
   if (!ready) return null;
 
@@ -140,10 +161,16 @@ export function LiveBar({ t, role, me, ready, inRoom, status, peers, onSignIn, o
     <span className="pg-live">
       {inRoom && (
         <>
-          <span className={`pg-live__status is-${status}`} title={t(`live.status.${status}`)}>
-            <i className="codicon codicon-circle-filled" aria-hidden="true" /> {t('live.room')}
-          </span>
-          {peers.length ? (
+          {finished ? (
+            <span className="pg-live__status is-over">
+              <i className="codicon codicon-pass" aria-hidden="true" /> {t('live.over')}
+            </span>
+          ) : (
+            <span className={`pg-live__status is-${status}`} title={t(`live.status.${status}`)}>
+              <i className="codicon codicon-circle-filled" aria-hidden="true" /> {t('live.room')}
+            </span>
+          )}
+          {finished ? null : peers.length ? (
             <span className="pg-live__peers">
               {peers.map((peer) => (
                 <span key={peer.key} title={`${peer.person.name} · ${t(`role.${peer.role}`)}`}>
@@ -161,9 +188,21 @@ export function LiveBar({ t, role, me, ready, inRoom, status, peers, onSignIn, o
           )}
         </>
       )}
-      <button type="button" className="pg-live__me" onClick={onSignOut} title={t('live.signOut', { name: me.name })}>
-        <Avatar person={me} />
-      </button>
+      <Menu label={me.name} align="right" trigger={<Avatar person={me} />}>
+        <MenuNote>
+          <strong>{me.name}</strong>
+          {workspaceName && <span>{workspaceName}</span>}
+        </MenuNote>
+        {onTeam && (
+          <MenuItem icon="organization" onClick={onTeam}>
+            {t('team.button')}
+          </MenuItem>
+        )}
+        <MenuSeparator />
+        <MenuItem icon="sign-out" onClick={onSignOut}>
+          {t('menu.signOut')}
+        </MenuItem>
+      </Menu>
     </span>
   );
 }

@@ -387,12 +387,13 @@ export default function Canvas({ design, update, onSelect, t, addRef, readOnly =
         )}
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
         <Controls showInteractive={false} />
-        <MiniMap pannable zoomable className="pg-minimap" />
+        {/* Карта пустой схемы — просто белый прямоугольник, от которого кажется, что что-то не загрузилось. */}
+        {design.nodes.length > 0 && <MiniMap pannable zoomable className="pg-minimap" />}
         {layer}
       </ReactFlow>
       {banner && <p className="pg-canvas__banner">{banner}</p>}
       {overlay}
-      {!design.nodes.length && !readOnly && <p className="pg-canvas__empty">{t('canvas.empty')}</p>}
+      {!design.nodes.length && <p className="pg-canvas__empty">{t(readOnly ? 'canvas.emptyReadOnly' : 'canvas.empty')}</p>}
     </div>
   );
 }

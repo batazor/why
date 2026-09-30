@@ -32,6 +32,9 @@ interface Props {
   /** Оценки всех ведущих и отзыв кандидата — с сервера. */
   loadReviews: () => Promise<Review[]>;
   loadFeedback: () => Promise<Feedback | null>;
+  /** Отчёт на пол-экрана — таблица панели и записи шире. */
+  wide: boolean;
+  onToggleWide: () => void;
   now: number;
   t: T;
   lang: string;
@@ -49,6 +52,8 @@ export function ReportPanel({
   createdAt,
   loadReviews,
   loadFeedback,
+  wide,
+  onToggleWide,
   now,
   t,
   lang,
@@ -102,9 +107,20 @@ export function ReportPanel({
   };
 
   return (
-    <div className="pg-panel pg-report">
+    <div className={`pg-panel pg-report ${wide ? 'is-wide' : ''}`}>
       <header className="pg-report__head">
-        <h3>{design.title || t('pg.untitled')}</h3>
+        <div className="pg-report__title">
+          <h3>{design.title || t('pg.untitled')}</h3>
+          <button
+            type="button"
+            className="pg-icon-button pg-report__widen"
+            onClick={onToggleWide}
+            title={t(wide ? 'report.collapse' : 'report.expand')}
+            aria-label={t(wide ? 'report.collapse' : 'report.expand')}
+          >
+            <i className={`codicon codicon-${wide ? 'screen-normal' : 'screen-full'}`} aria-hidden="true" />
+          </button>
+        </div>
         <dl className="pg-report__facts">
           {facts.map(([key, value]) => (
             <div key={key}>

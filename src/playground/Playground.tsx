@@ -28,7 +28,7 @@ import {
 import { LocalRepository, exportFile, importFile, lastOpened, type DesignRepository } from './storage';
 import { exampleDesign, isUntouched } from './example';
 import { ShareDialog } from './share-dialog';
-import { HistoryButtons, ProjectPicker, SaveStatus, SessionControls, WorkspaceButtons, type SaveState } from './toolbar';
+import { HistoryButtons, ProjectMenu, ProjectPicker, SaveStatus, SessionControls, WorkspaceButtons, type SaveState } from './toolbar';
 import { clearPayload, decodeDesign, payloadFromUrl } from './share';
 import { translator } from './i18n';
 import { PERMISSIONS, ROLES, initialRole, rememberRole, type Role, type Tab } from './roles';
@@ -64,6 +64,9 @@ interface Props {
 
 type Selection = { node?: string; edge?: string };
 
+/** Вкладки про доску — у всех ролей одни и те же. */
+const BOARD_TABS: Tab[] = ['req', 'api', 'calc', 'inspect', 'check'];
+
 export default function Playground({ lang, repository }: Props) {
   const local = useMemo(() => repository ?? new LocalRepository(), [repository]);
   const t = useMemo(() => translator(lang), [lang]);
@@ -89,6 +92,10 @@ export default function Playground({ lang, repository }: Props) {
   const [status, setStatus] = useState<SaveState>('saved');
   const [canvasKey, setCanvasKey] = useState(0);
   const [now, setNow] = useState(() => Date.now());
+  /** Последняя вкладка в каждой группе: вернулся в группу — там же, где был. */
+  const lastInGroup = useRef<{ own?: Tab; board?: Tab }>({});
+  /** Отчёт на пол-экрана: таблице оценок панели в узкой колонке тесно. */
+  const [reportWide, setReportWide] = useState(false);
   /** Какое окно открыто поверх песочницы — одно за раз. */
   const [dialog, setDialog] = useState<'share' | 'interviews' | 'team' | 'calibration' | null>(null);
   const closeDialog = useCallback(() => setDialog(null), []);
@@ -428,6 +435,25 @@ export default function Playground({ lang, repository }: Props) {
   });
   const activeTab = tabs.includes(tab) ? tab : tabs[0];
 
+  /**
+   * Вкладок у интервьюера и автора больше, чем влезает в строку. Они делятся
+   * на свои у роли (ведение, баллы, отчёт — или задание со сценарием) и на
+   * доску (требования, API, прикидка, выбранное, проверки); сверху —
+   * переключатель групп. Если вкладок немного, групп нет.
+   */
+  const ownTabs = tabs.filter((name) => !BOARD_TABS.includes(name));
+  const boardTabs = tabs.filter((name) => BOARD_TABS.includes(name));
+  const grouped = ownTabs.length > 0 && tabs.length > 5;
+  const group: 'own' | 'board' = BOARD_TABS.includes(activeTab) ? 'board' : 'own';
+  lastInGroup.current[group] = activeTab;
+  const shownTabs = grouped ? (group === 'board' ? boardTabs : ownTabs) : tabs;
+  const pickGroup = (next: 'own' | 'board') => {
+    const pool = next === 'board' ? boardTabs : ownTabs;
+    const remembered = lastInGroup.current[next];
+    setTab(remembered && pool.includes(remembered) ? remembered : pool[0]);
+  };
+  const wideSide = activeTab === 'report' && reportWide;
+
   const extraFindings = role === 'interviewer' && board === 'answer' ? compareToReference(design, design.scenario.reference) : [];
   const warnings = [...extraFindings, ...findings].filter((finding) => finding.level === 'warn').length;
 
@@ -490,7 +516,7 @@ export default function Playground({ lang, repository }: Props) {
           <>
             <strong className="pg-toolbar__title">{design.title || t('pg.untitled')}</strong>
             {/* Кандидат знает, что пишется: сбор без предупреждения — это уже слежка. */}
-            {role === 'candidate' && (
+            {role === 'candidate' && !frozen && (
               <span className="pg-recording" title={t('sig.notice')}>
                 <i className="codicon codicon-circle-filled" aria-hidden="true" /> {t('sig.recording')}
               </span>
@@ -512,31 +538,50 @@ export default function Playground({ lang, repository }: Props) {
 
         {perms.manageProjects && (
           <>
-            <button type="button" className="pg-button" onClick={() => create({ ...emptyDesign(t('pg.untitled')), id: newId() })}>
-              <i className="codicon codicon-add" aria-hidden="true" /> {t('pg.new')}
-            </button>
-            <button
-              type="button"
-              className="pg-button"
-              onClick={() =>
-                create({
-                  ...structuredClone(design),
-                  id: newId(),
-                  title: `${design.title} (2)`,
-                  createdAt: new Date().toISOString(),
-                })
+            <ProjectMenu
+              t={t}
+              onNew={() => create({ ...emptyDesign(t('pg.untitled')), id: newId() })}
+              onDuplicate={() =>
+                create({ ...structuredClone(design), id: newId(), title: `${design.title} (2)`, createdAt: new Date().toISOString() })
               }
-            >
-              <i className="codicon codicon-copy" aria-hidden="true" /> {t('pg.duplicate')}
-            </button>
-            <button
-              type="button"
-              className="pg-button"
               // В браузере пример один и обновляется на месте; в пространстве — каждый раз новая копия.
-              onClick={() => create(inWorkspace ? { ...exampleDesign(lang), id: newId() } : exampleDesign(lang))}
-            >
-              <i className="codicon codicon-lightbulb" aria-hidden="true" /> {t('pg.example')}
-            </button>
+              onExample={() => create(inWorkspace ? { ...exampleDesign(lang), id: newId() } : exampleDesign(lang))}
+              onImport={() => fileInput.current?.click()}
+              onExport={() => exportFile(design)}
+              onCopyToWorkspace={
+                // Копия, а не перенос: браузерный проект остаётся, если с сервером что-то пойдёт не так.
+                inWorkspace && role === 'author' && !isCloudId(design.id)
+                  ? () => create({ ...structuredClone(design), id: newId(), createdAt: new Date().toISOString() })
+                  : undefined
+              }
+              onDelete={async () => {
+                if (!confirm(t('pg.deleteConfirm', { name: design.title }))) return;
+                await repo.remove(design.id);
+                const list = await repo.list();
+                setProjects(list);
+                const next = list[0] ? await repo.load(list[0].id) : null;
+                if (next) open(next);
+                else create(emptyDesign(t('pg.untitled')));
+              }}
+            />
+            <input
+              ref={fileInput}
+              type="file"
+              accept="application/json,.json"
+              hidden
+              onChange={async (event) => {
+                const file = event.currentTarget.files?.[0];
+                event.currentTarget.value = '';
+                if (!file) return;
+                try {
+                  // Импорт всегда новым проектом: чужой файл не должен затереть свой.
+                  const imported = await importFile(file);
+                  await create({ ...imported, id: newId() });
+                } catch {
+                  alert(t('pg.importFailed'));
+                }
+              }}
+            />
           </>
         )}
 
@@ -585,67 +630,21 @@ export default function Playground({ lang, repository }: Props) {
           }}
         />
 
-        {inWorkspace && (
+        {inWorkspace && isCloudId(design.id) && (
           <WorkspaceButtons
             t={t}
             role={role}
-            onServer={isCloudId(design.id)}
-            onTeam={() => setDialog('team')}
             onCompare={() => setDialog('calibration')}
             onInterviews={() => setDialog('interviews')}
-            onCopy={() => create({ ...structuredClone(design), id: newId(), createdAt: new Date().toISOString() })}
           />
         )}
 
         {role !== 'candidate' && !interview && (
-          <button type="button" className="pg-button" onClick={() => setDialog('share')}>
+          <button type="button" className={`pg-button ${role === 'author' ? 'pg-button--primary' : ''}`} onClick={() => setDialog('share')}>
             <i className="codicon codicon-link" aria-hidden="true" /> {t('share.button')}
           </button>
         )}
 
-        {perms.manageProjects && (
-          <>
-            <button type="button" className="pg-button" onClick={() => exportFile(design)}>
-              <i className="codicon codicon-cloud-download" aria-hidden="true" /> {t('pg.export')}
-            </button>
-            <button type="button" className="pg-button" onClick={() => fileInput.current?.click()}>
-              <i className="codicon codicon-cloud-upload" aria-hidden="true" /> {t('pg.import')}
-            </button>
-            <input
-              ref={fileInput}
-              type="file"
-              accept="application/json,.json"
-              hidden
-              onChange={async (event) => {
-                const file = event.currentTarget.files?.[0];
-                event.currentTarget.value = '';
-                if (!file) return;
-                try {
-                  // Импорт всегда новым проектом: чужой файл не должен затереть свой.
-                  const imported = await importFile(file);
-                  await create({ ...imported, id: newId() });
-                } catch {
-                  alert(t('pg.importFailed'));
-                }
-              }}
-            />
-            <button
-              type="button"
-              className="pg-button pg-button--danger"
-              onClick={async () => {
-                if (!confirm(t('pg.deleteConfirm', { name: design.title }))) return;
-                await repo.remove(design.id);
-                const list = await repo.list();
-                setProjects(list);
-                const next = list[0] ? await repo.load(list[0].id) : null;
-                if (next) open(next);
-                else create(emptyDesign(t('pg.untitled')));
-              }}
-            >
-              <i className="codicon codicon-trash" aria-hidden="true" /> {t('pg.delete')}
-            </button>
-          </>
-        )}
 
         {!readOnly && (
           <HistoryButtons t={t} canUndo={canUndo} canRedo={canRedo} onUndo={undo} onRedo={redo} />
@@ -660,6 +659,9 @@ export default function Playground({ lang, repository }: Props) {
             me={auth.me}
             ready={auth.ready}
             inRoom={Boolean(interview)}
+            finished={frozen}
+            workspaceName={cloud.mode === 'workspace' ? cloud.workspace.name : undefined}
+            onTeam={inWorkspace ? () => setDialog('team') : undefined}
             status={live.status}
             peers={live.peers}
             onSignIn={auth.signIn}
@@ -752,7 +754,7 @@ export default function Playground({ lang, repository }: Props) {
         />
       )}
 
-      <div className={`pg-body ${readOnly ? 'pg-body--no-palette' : ''}`}>
+      <div className={`pg-body ${readOnly ? 'pg-body--no-palette' : ''} ${wideSide ? 'pg-body--wide-side' : ''}`}>
         {!readOnly && <Palette t={t} onAdd={(kind) => adder.current(kind)} />}
 
         <ReactFlowProvider key={canvasKey}>
@@ -783,8 +785,25 @@ export default function Playground({ lang, repository }: Props) {
         </ReactFlowProvider>
 
         <section className="pg-side">
+          {grouped && (
+            <div className="pg-switch pg-tab-groups" role="group">
+              {(['own', 'board'] as const).map((name) => (
+                <button key={name} type="button" className={group === name ? 'is-on' : ''} aria-pressed={group === name} onClick={() => pickGroup(name)}>
+                  {t(
+                    name === 'board'
+                      ? role === 'author'
+                        ? 'group.reference'
+                        : 'group.board'
+                      : role === 'author'
+                        ? 'group.scenario'
+                        : 'group.interview',
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="pg-tabs" role="tablist">
-            {tabs.map((name) => (
+            {shownTabs.map((name) => (
               <button
                 key={name}
                 type="button"
@@ -826,6 +845,8 @@ export default function Playground({ lang, repository }: Props) {
                 createdAt={interview.createdAt}
                 loadReviews={loadReviews}
                 loadFeedback={loadFeedback}
+                wide={reportWide}
+                onToggleWide={() => setReportWide((value) => !value)}
                 now={now}
                 t={t}
                 lang={lang}
