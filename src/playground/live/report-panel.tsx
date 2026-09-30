@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { totalScore, type Design, type Signal } from '../model';
 import { duration, summarize } from '../integrity';
+import { RequirementsTable } from '../req-doc';
 import { interviewUrl } from './links';
 import { type Feedback, type Review } from './interviews';
 import type { Person } from './auth';
@@ -10,7 +11,8 @@ import type { T } from '../i18n';
 /**
  * Отчёт по собеседованию: всё, что нужно тому, кто решает о найме, на одной
  * странице — кто, когда и сколько, оценки по критериям, заметки, что
- * подсказали, сигналы и запись того, как росла доска.
+ * подсказали, требования кандидата и чем он их закрыл, сигналы и запись
+ * того, как росла доска.
  *
  * Ссылка на отчёт — ссылка на само собеседование: коллеги по пространству
  * откроют его с теми же правами. Для всех остальных — печать в PDF.
@@ -249,6 +251,14 @@ export function ReportPanel({
             <p className="pg-report__notes">{design.estimate}</p>
           </>
         )}
+      </section>
+
+      {/* Требования — как в документе: с блоками и маршрутами, которые их закрывают. Это и есть ответ, а не только схема. */}
+      <section className="pg-report__reqs">
+        <h4 className="pg-heading">
+          {t('report.requirements')} <span className="pg-count">{design.requirements.length}</span>
+        </h4>
+        {design.requirements.length ? <RequirementsTable design={design} t={t} /> : <p className="pg-hint">{t('req.empty')}</p>}
       </section>
 
       <section>

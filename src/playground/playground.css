@@ -4066,6 +4066,7 @@ td.pg-level--3 { color: #1f7a4d; font-weight: 600; }
 }
 
 .pg-report.is-wide > .pg-report__head,
+.pg-report.is-wide > .pg-report__reqs,
 .pg-report.is-wide > .pg-report__replay,
 .pg-report.is-wide > .pg-report__actions {
   grid-column: 1 / -1;

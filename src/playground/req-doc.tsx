@@ -55,7 +55,8 @@ function dragRow(id: string, enabled: boolean) {
   };
 }
 
-function Doc({ design, t, draggable }: { design: Design; t: T; draggable: boolean }) {
+/** Две таблицы — ФТ и НФТ — с тем, чем закрыто каждое требование. Без шапки: её ставит тот, кто вставляет. */
+export function RequirementsTable({ design, t, draggable = false }: { design: Design; t: T; draggable?: boolean }) {
   const fr = design.requirements.filter((item) => item.kind === 'fr');
   const nfr = design.requirements.filter((item) => item.kind === 'nfr');
 
@@ -217,14 +218,14 @@ export function RequirementsDoc({ design, t, draggable = false }: { design: Desi
     <>
       <div className="pg-doc">
         {bar}
-        <Doc design={design} t={t} draggable={draggable} />
+        <RequirementsTable design={design} t={t} draggable={draggable} />
       </div>
       {wide && (
         <div className="pg-dialog" role="dialog" aria-modal="true" aria-label={PATH} onClick={() => setWide(false)}>
           <div className="pg-dialog__box pg-doc pg-doc--wide" onClick={(event) => event.stopPropagation()}>
             {bar}
             <div className="pg-doc__scroll">
-              <Doc design={design} t={t} draggable={false} />
+              <RequirementsTable design={design} t={t} />
             </div>
           </div>
         </div>
