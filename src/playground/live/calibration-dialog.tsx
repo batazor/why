@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { calibration, type CalibrationRow } from './cloud';
+import { calibration, type CalibrationRow } from './calibration';
 import { duration, isNotable } from '../integrity';
 import type { Criterion } from '../model';
 import type { T } from '../i18n';

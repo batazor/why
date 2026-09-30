@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { totalScore, type Design, type Signal } from '../model';
 import { duration, summarize } from '../integrity';
-import { interviewUrl, type Feedback, type Review } from './cloud';
+import { interviewUrl } from './links';
+import { type Feedback, type Review } from './interviews';
 import type { Person } from './auth';
 import type { Snapshot } from './journal';
 import type { T } from '../i18n';

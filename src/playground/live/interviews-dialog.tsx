@@ -1,18 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import {
-  cancelInterview,
-  createInterview,
-  inviteUrl,
-  listInterviews,
-  mailtoUrl,
-  refreshSnapshot,
-  renewInvite,
-  reschedule,
-  scenarioUpdatedAt as fetchScenarioUpdatedAt,
-  type Interview,
-  type Schedule,
-  type Workspace,
-} from './cloud';
+import { cancelInterview, createInterview, listInterviews, refreshSnapshot, renewInvite, reschedule, type Interview, type Schedule } from './interviews';
+import { inviteUrl, mailtoUrl } from './links';
+import { scenarioUpdatedAt as fetchScenarioUpdatedAt } from './scenarios';
+import { type Workspace } from './workspaces';
 import { LinkBox, mailBody } from './cloud-share';
 import { CalendarButtons, ScheduleFields, formatSchedule } from './calendar';
 import type { T } from '../i18n';

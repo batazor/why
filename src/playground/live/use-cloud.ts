@@ -1,19 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Person } from './auth';
-import {
-  CloudRepository,
-  HybridRepository,
-  InterviewRepository,
-  acceptTeamInvite,
-  claimInvite,
-  ensureWorkspace,
-  invitePreview,
-  paramFromUrl,
-  preferredWorkspace,
-  setParams,
-  type InvitePreview,
-  type Workspace,
-} from './cloud';
+import { CloudRepository, HybridRepository } from './scenarios';
+import { InterviewRepository, claimInvite } from './interviews';
+import { acceptTeamInvite, ensureWorkspace, preferredWorkspace, type Workspace } from './workspaces';
+import { invitePreview, paramFromUrl, setParams, type InvitePreview } from './links';
 import type { DesignRepository } from '../storage';
 
 /**

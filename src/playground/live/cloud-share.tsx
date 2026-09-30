@@ -3,21 +3,9 @@ import { CalendarButtons, ScheduleFields, formatSchedule } from './calendar';
 import { shared } from '../share';
 import type { Design } from '../model';
 import type { T } from '../i18n';
-import {
-  createInterview,
-  createShare,
-  createTeamInvite,
-  inviteUrl,
-  listInterviews,
-  listShares,
-  listTeamInvites,
-  mailtoUrl,
-  revokeShare,
-  type Schedule,
-  type ShareLink,
-  type Workspace,
-  type WorkspaceRole,
-} from './cloud';
+import { createInterview, listInterviews, type Schedule } from './interviews';
+import { createShare, inviteUrl, listShares, mailtoUrl, revokeShare, type ShareLink } from './links';
+import { createTeamInvite, listTeamInvites, type Workspace, type WorkspaceRole } from './workspaces';
 
 /**
  * «Поделиться» для сценария из пространства: кому и зачем, а не «что

@@ -22,28 +22,29 @@ import {
   pickBoard,
   candidateEstimates,
   uid,
-  type Board,
   type Design,
   type DesignSummary,
 } from './model';
 import { LocalRepository, exportFile, importFile, lastOpened, type DesignRepository } from './storage';
 import { exampleDesign, isUntouched } from './example';
 import { ShareDialog } from './share-dialog';
+import { HistoryButtons, ProjectPicker, SaveStatus, SessionControls, WorkspaceButtons, type SaveState } from './toolbar';
 import { clearPayload, decodeDesign, payloadFromUrl } from './share';
 import { translator } from './i18n';
 import { PERMISSIONS, ROLES, initialRole, rememberRole, type Role, type Tab } from './roles';
 import { useAuth } from './live/auth';
-import { useRoom } from './live/room';
+import { useInterview } from './live/use-interview';
 import { Gate, LiveBar, RemoteCursors } from './live/live-ui';
 import { useCloud } from './live/use-cloud';
-import { InterviewRepository, isCloudId, openShare, paramFromUrl, setParams, type Course } from './live/cloud';
+import { InterviewRepository } from './live/interviews';
+import { isCloudId } from './live/db';
+import { openShare, paramFromUrl, setParams } from './live/links';
 import { InterviewsDialog } from './live/interviews-dialog';
 import { TeamDialog } from './live/team-dialog';
 import { CalibrationDialog } from './live/calibration-dialog';
 import { formatSchedule } from './live/calendar';
 import { CandidateEnd } from './live/candidate-end';
 import { ReportPanel } from './live/report-panel';
-import { merge, signalsFrom, snapshotsFrom, type JournalEntry } from './live/journal';
 
 /**
  * Песочница системного дизайна для собеседований.
@@ -85,24 +86,14 @@ export default function Playground({ lang, repository }: Props) {
   /** Интервьюер переключается между ответом кандидата и эталоном. */
   const [compareView, setCompareView] = useState<'answer' | 'reference'>('answer');
   const [selection, setSelection] = useState<Selection>({});
-  const [status, setStatus] = useState<'saved' | 'saving' | 'failed'>('saved');
+  const [status, setStatus] = useState<SaveState>('saved');
   const [canvasKey, setCanvasKey] = useState(0);
   const [now, setNow] = useState(() => Date.now());
-  const [sharing, setSharing] = useState(false);
-  const [interviewsOpen, setInterviewsOpen] = useState(false);
-  const [teamOpen, setTeamOpen] = useState(false);
+  /** Какое окно открыто поверх песочницы — одно за раз. */
+  const [dialog, setDialog] = useState<'share' | 'interviews' | 'team' | 'calibration' | null>(null);
+  const closeDialog = useCallback(() => setDialog(null), []);
   /** Кандидат закрыл экран конца собеседования — смотрит свою доску. */
   const [endSeen, setEndSeen] = useState(false);
-  /** Короткое сообщение, которое само пропадает: например, что кандидат зашёл. */
-  const [toast, setToast] = useState('');
-  const [calibrationOpen, setCalibrationOpen] = useState(false);
-  /**
-   * Журнал собеседования — у интервьюера. Из него сигналы честности (со
-   * временем сервера) и снимки доски для записи; `replay` — какой снимок
-   * сейчас на полотне, null — живая доска.
-   */
-  const [journal, setJournal] = useState<JournalEntry[]>([]);
-  const [replay, setReplay] = useState<number | null>(null);
   const [loadError, setLoadError] = useState('');
   /** Сообщение над полотном: например, что присланная ссылка отозвана. */
   const [notice, setNotice] = useState('');
@@ -132,65 +123,20 @@ export default function Playground({ lang, repository }: Props) {
   const refresh = useCallback(async () => setProjects(await repo.list()), [repo]);
 
   /**
-   * Комната собеседования: интервьюер видит курсор кандидата и его доску
-   * вживую, кандидат — ход собеседования. Комната — само собеседование.
+   * Открытое собеседование вживую: комната, ход, доска кандидата, журнал,
+   * запись, уведомления — всё в useInterview.
    */
+  const { live, setJournal, replay, setReplay, snapshots, withSignals, toast, loadReviews, loadFeedback } = useInterview({
+    interview,
+    me: auth.me,
+    role,
+    design,
+    update,
+    board,
+    t,
+  });
+  const { sendCursor } = live;
   const room = interview?.interviewId ?? null;
-  /**
-   * Ход собеседования от другого ведущего: время, калькулятор, открытые
-   * подсказки, заданные вопросы. Оценки не трогаются — они у каждого свои.
-   * Кандидат из хода берёт ещё и тексты подсказок: своих у него нет.
-   */
-  /** Задание у кандидата ещё закрыто — ждём старта. Ref: обработчик хода живёт дольше рендера. */
-  const taskLocked = useRef(false);
-  taskLocked.current = Boolean(design?.session.taskLocked);
-  const onCourse = useCallback(
-    (next: Course) => {
-      /*
-       * Началось — кандидату пора получить задание: сервер отдаёт его только
-       * теперь. Весть о старте приходит раньше, чем интервьюер успеет записать
-       * его в базу (автосохранение ждёт 400 мс), поэтому задание спрашиваем
-       * несколько раз с паузой, пока сервер не согласится его отдать.
-       */
-      if (next.startedAt && interview?.as === 'candidate' && taskLocked.current) {
-        const fetchTask = async (attempt: number) => {
-          const text = await interview.task().catch(() => null);
-          if (text !== null)
-            update((current) => ({ ...current, session: { ...current.session, taskLocked: false, openedTask: text } }));
-          else if (attempt < 8 && taskLocked.current) setTimeout(() => fetchTask(attempt + 1), 750);
-        };
-        fetchTask(0);
-      }
-      update((current) => ({
-        ...current,
-        session: {
-          ...current.session,
-          startedAt: next.startedAt,
-          finishedAt: next.finishedAt,
-          calcUnlockedAt: next.calcUnlockedAt,
-          revealed: next.revealed.map((hint) => hint.id),
-          revealedHints: next.revealed,
-          asked: next.asked,
-          estimateSnapshot: next.estimateSnapshot,
-        },
-      }));
-    },
-    [update, interview],
-  );
-
-  const onBoard = useCallback(
-    ({ designId, board: incoming }: { designId: string; board: Board }) =>
-      // Доска чужого проекта сюда не относится: интервьюер открыл другой сценарий.
-      update((current) => (current.id === designId ? { ...current, ...incoming } : current)),
-    [update],
-  );
-  // Журнал и запись — про открытое собеседование; вне его их нет.
-  useEffect(() => {
-    if (!interview) {
-      setJournal([]);
-      setReplay(null);
-    }
-  }, [interview]);
 
   // Интервьюеру пространства роль автора недоступна: сценарии ему писать нельзя.
   const workspaceRole = cloud.mode === 'workspace' ? cloud.workspace.role : null;
@@ -200,44 +146,6 @@ export default function Playground({ lang, repository }: Props) {
       setTab(PERMISSIONS.interviewer.tabs[0]);
     }
   }, [workspaceRole, role]);
-
-  const onJournal = useCallback((entry: JournalEntry) => setJournal((current) => merge(current, [entry])), []);
-  const live = useRoom({ room: auth.me ? room : null, me: auth.me, role, design, onBoard, onCourse, onJournal });
-
-  /**
-   * Кандидат зашёл в комнату — интервьюеру сообщение, а если вкладка в
-   * фоне, то и в заголовке: пока ждёшь, обычно смотришь в другое окно.
-   */
-  const seenPeers = useRef(new Set<string>());
-  useEffect(() => {
-    if (role !== 'interviewer' || !interview) return;
-    for (const peer of live.peers) {
-      if (seenPeers.current.has(peer.key)) continue;
-      seenPeers.current.add(peer.key);
-      if (peer.role !== 'candidate') continue;
-      setToast(t('join.candidate', { name: peer.person.name }));
-      if (document.hidden) {
-        const original = document.title;
-        document.title = `● ${t('join.title', { name: peer.person.name })}`;
-        const restore = () => {
-          document.title = original;
-          document.removeEventListener('visibilitychange', restore);
-        };
-        document.addEventListener('visibilitychange', restore);
-      }
-    }
-  }, [live.peers, role, interview, t]);
-  useEffect(() => {
-    if (!toast) return;
-    const timer = setTimeout(() => setToast(''), 6000);
-    return () => clearTimeout(timer);
-  }, [toast]);
-
-  const { sendCursor } = live;
-  // Эталон у интервьюера — другая схема: курсор над ним кандидату ни о чём не скажет.
-  useEffect(() => {
-    if (board !== 'answer') sendCursor(null);
-  }, [board, sendCursor]);
 
   /**
    * Хранилище, из которого открыт текущий проект. Когда хранилище меняется
@@ -360,10 +268,6 @@ export default function Playground({ lang, repository }: Props) {
    * проекта. Когда на экране эталон, доска подменяется эталоном, и правки
    * уходят в него: панелям не нужно знать, чью доску они правят.
    */
-  const snapshots = useMemo(() => snapshotsFrom(journal), [journal]);
-  // Стабильные ссылки: отчёт перечитывает чужие оценки при их смене, а не на каждый рендер.
-  const loadReviews = useCallback(() => (interview ? interview.reviews() : Promise.resolve([])), [interview]);
-  const loadFeedback = useCallback(() => (interview ? interview.feedback() : Promise.resolve(null)), [interview]);
   const view = useMemo(() => {
     if (!design) return design;
     if (board === 'reference') return { ...design, ...design.scenario.reference };
@@ -471,19 +375,6 @@ export default function Playground({ lang, repository }: Props) {
   // После конца собеседования писать нечего: журнал закрыт и на сервере.
   useIntegrity(role === 'candidate' && Boolean(design) && !frozen, update);
 
-  /**
-   * В собеседовании интервьюер смотрит сигналы из журнала на сервере, а не
-   * из своего документа: там они с серверным временем и их нельзя стереть.
-   */
-  const journalSignals = useMemo(() => signalsFrom(journal), [journal]);
-  const withSignals = useMemo(
-    () =>
-      design && interview && role === 'interviewer'
-        ? { ...design, session: { ...design.session, signals: journalSignals } }
-        : design,
-    [design, interview, role, journalSignals],
-  );
-
   const findings = useFindings(view ?? emptyDesign(''));
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -513,8 +404,6 @@ export default function Playground({ lang, repository }: Props) {
   const inWorkspace = cloud.mode === 'workspace';
   /** Интервьюеру пространства сценарии писать нельзя — и выбирать роль автора незачем. */
   const canAuthor = cloud.mode !== 'workspace' || cloud.workspace.role !== 'interviewer';
-  const localProjects = projects.filter((project) => !project.cloud);
-  const cloudProjects = projects.filter((project) => project.cloud);
 
   const create = async (next: Design) => {
     try {
@@ -609,38 +498,16 @@ export default function Playground({ lang, repository }: Props) {
             {frozen && <span className="pg-live__alone">{t('iv.finished')}</span>}
           </>
         ) : (
-          <label className="pg-toolbar__project">
-            <span className="visually-hidden">{t('pg.projects')}</span>
-            <select
-              className="pg-input pg-select"
-              value={design.id}
-              onChange={async (event) => {
-                const found = await repo.load(event.currentTarget.value);
-                if (found) open(found);
-              }}
-            >
-              {(cloudProjects.length
-                ? [
-                    [cloud.mode === 'workspace' ? cloud.workspace.name : '', cloudProjects],
-                    [t('ws.browser'), localProjects],
-                  ]
-                : [['', localProjects]]
-              ).map(([group, items]) => {
-                const options = (items as DesignSummary[]).map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.id === design.id ? design.title || t('pg.untitled') : project.title || t('pg.untitled')}
-                  </option>
-                ));
-                return group ? (
-                  <optgroup key={group as string} label={group as string}>
-                    {options}
-                  </optgroup>
-                ) : (
-                  options
-                );
-              })}
-            </select>
-          </label>
+          <ProjectPicker
+            t={t}
+            design={design}
+            projects={projects}
+            workspaceName={cloud.mode === 'workspace' ? cloud.workspace.name : null}
+            onPick={async (id) => {
+              const found = await repo.load(id);
+              if (found) open(found);
+            }}
+          />
         )}
 
         {perms.manageProjects && (
@@ -695,84 +562,43 @@ export default function Playground({ lang, repository }: Props) {
 
         <span className="pg-toolbar__spacer" />
 
-        {(role === 'interviewer' || timer) && (
-          <span className={`pg-timer ${running ? 'is-running' : ''}`}>
-            <i className="codicon codicon-clock" aria-hidden="true" /> {timer || '00:00'}
-          </span>
-        )}
-
-        {role === 'interviewer' && (
-          <>
-            {/* Законченное собеседование не перезапускается: оценка — про доску на момент «Стопа».
-                Что оно закончено, уже сказано у заголовка. */}
-            {!frozen && (
-              <button
-                type="button"
-                className="pg-button"
-                onClick={() => {
-                  if (running && interview && !confirm(t('iv.stopConfirm'))) return;
-                  update((current) => ({
-                    ...current,
-                    session: running
-                      ? { ...current.session, finishedAt: new Date().toISOString() }
-                      : { ...current.session, startedAt: new Date().toISOString(), finishedAt: undefined },
-                  }));
-                }}
-              >
-                <i className={`codicon codicon-${running ? 'debug-stop' : 'play'}`} aria-hidden="true" />{' '}
-                {t(running ? 'session.stop' : 'session.start')}
-              </button>
-            )}
-            {!interview && (
-            <button
-              type="button"
-              className="pg-button pg-button--danger"
-              onClick={() => {
-                if (!confirm(t('session.resetConfirm'))) return;
-                // Сценарий и эталон остаются: очищается только прохождение.
-                update((current) => ({ ...current, ...emptyBoard(), session: emptySession() }));
-                setSelection({});
-                setCanvasKey((key) => key + 1);
-              }}
-            >
-              <i className="codicon codicon-refresh" aria-hidden="true" /> {t('session.reset')}
-            </button>
-            )}
-          </>
-        )}
+        <SessionControls
+          t={t}
+          role={role}
+          timer={timer}
+          running={running}
+          frozen={frozen}
+          inInterview={Boolean(interview)}
+          onToggle={() =>
+            update((current) => ({
+              ...current,
+              session: running
+                ? { ...current.session, finishedAt: new Date().toISOString() }
+                : { ...current.session, startedAt: new Date().toISOString(), finishedAt: undefined },
+            }))
+          }
+          onReset={() => {
+            // Сценарий и эталон остаются: очищается только прохождение.
+            update((current) => ({ ...current, ...emptyBoard(), session: emptySession() }));
+            setSelection({});
+            setCanvasKey((key) => key + 1);
+          }}
+        />
 
         {inWorkspace && (
-          <button type="button" className="pg-button" onClick={() => setTeamOpen(true)} title={t('team.hint')}>
-            <i className="codicon codicon-organization" aria-hidden="true" /> {t('team.button')}
-          </button>
-        )}
-
-        {(role === 'interviewer' || role === 'author') && inWorkspace && isCloudId(design.id) && (
-          <button type="button" className="pg-button" onClick={() => setCalibrationOpen(true)} title={t('cal.hint')}>
-            <i className="codicon codicon-graph" aria-hidden="true" /> {t('cal.button')}
-          </button>
-        )}
-
-        {role === 'interviewer' && inWorkspace && isCloudId(design.id) && (
-          <button type="button" className="pg-button" onClick={() => setInterviewsOpen(true)}>
-            <i className="codicon codicon-broadcast" aria-hidden="true" /> {t('iv.button')}
-          </button>
-        )}
-
-        {role === 'author' && inWorkspace && !isCloudId(design.id) && (
-          <button
-            type="button"
-            className="pg-button"
-            title={t('ws.copyHint')}
-            // Копия, а не перенос: браузерный проект остаётся, если с сервером что-то пойдёт не так.
-            onClick={() => create({ ...structuredClone(design), id: newId(), createdAt: new Date().toISOString() })}
-          >
-            <i className="codicon codicon-cloud-upload" aria-hidden="true" /> {t('ws.copy')}
-          </button>
+          <WorkspaceButtons
+            t={t}
+            role={role}
+            onServer={isCloudId(design.id)}
+            onTeam={() => setDialog('team')}
+            onCompare={() => setDialog('calibration')}
+            onInterviews={() => setDialog('interviews')}
+            onCopy={() => create({ ...structuredClone(design), id: newId(), createdAt: new Date().toISOString() })}
+          />
         )}
 
         {role !== 'candidate' && !interview && (
-          <button type="button" className="pg-button" onClick={() => setSharing(true)}>
+          <button type="button" className="pg-button" onClick={() => setDialog('share')}>
             <i className="codicon codicon-link" aria-hidden="true" /> {t('share.button')}
           </button>
         )}
@@ -822,48 +648,10 @@ export default function Playground({ lang, repository }: Props) {
         )}
 
         {!readOnly && (
-          <span className="pg-history">
-            <button
-              type="button"
-              className="pg-icon-button"
-              disabled={!canUndo}
-              onClick={undo}
-              aria-label={t('pg.undo')}
-              title={t('pg.undo')}
-            >
-              <i className="codicon codicon-discard" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              className="pg-icon-button"
-              disabled={!canRedo}
-              onClick={redo}
-              aria-label={t('pg.redo')}
-              title={t('pg.redo')}
-            >
-              <i className="codicon codicon-redo" aria-hidden="true" />
-            </button>
-          </span>
+          <HistoryButtons t={t} canUndo={canUndo} canRedo={canRedo} onUndo={undo} onRedo={redo} />
         )}
 
-        <span
-          className={`pg-status ${status === 'failed' ? 'is-failed' : ''}`}
-          title={t(isCloudId(design.id) ? 'pg.cloudNote' : 'pg.localNote')}
-        >
-          <i
-            className={`codicon codicon-${status === 'saved' ? 'check' : status === 'failed' ? 'warning' : 'sync'}`}
-            aria-hidden="true"
-          />{' '}
-          {t(
-            status === 'failed'
-              ? 'pg.saveFailed'
-              : status === 'saving'
-                ? 'pg.saving'
-                : isCloudId(design.id)
-                  ? 'pg.savedCloud'
-                  : 'pg.saved',
-          )}
-        </span>
+        <SaveStatus t={t} status={status} onServer={isCloudId(design.id)} />
 
         {auth.enabled && (
           <LiveBar
@@ -906,7 +694,7 @@ export default function Playground({ lang, repository }: Props) {
         </p>
       )}
 
-      {sharing && (
+      {dialog === 'share' && (
         <ShareDialog
           design={design}
           t={t}
@@ -915,44 +703,41 @@ export default function Playground({ lang, repository }: Props) {
             cloud.mode === 'workspace' && isCloudId(design.id)
               ? {
                   workspace: cloud.workspace,
-                  onInterviews: () => {
-                    setSharing(false);
-                    setInterviewsOpen(true);
-                  },
+                  onInterviews: () => setDialog('interviews'),
                 }
               : undefined
           }
-          onClose={() => setSharing(false)}
+          onClose={closeDialog}
         />
       )}
-      {teamOpen && cloud.mode === 'workspace' && auth.me && (
+      {dialog === 'team' && cloud.mode === 'workspace' && auth.me && (
         <TeamDialog
           t={t}
           lang={lang}
           me={auth.me}
           workspace={cloud.workspace}
           onSwitch={(next) => {
-            setTeamOpen(false);
+            closeDialog();
             switchWorkspace(next);
           }}
           onChanged={reloadWorkspace}
-          onClose={() => setTeamOpen(false)}
+          onClose={closeDialog}
         />
       )}
-      {calibrationOpen && cloud.mode === 'workspace' && (
+      {dialog === 'calibration' && cloud.mode === 'workspace' && (
         <CalibrationDialog
           t={t}
           lang={lang}
           scenarioId={design.id}
           title={design.title}
           onOpen={(id) => {
-            setCalibrationOpen(false);
+            closeDialog();
             openInterview(id);
           }}
-          onClose={() => setCalibrationOpen(false)}
+          onClose={closeDialog}
         />
       )}
-      {interviewsOpen && cloud.mode === 'workspace' && (
+      {dialog === 'interviews' && cloud.mode === 'workspace' && (
         <InterviewsDialog
           t={t}
           lang={lang}
@@ -960,10 +745,10 @@ export default function Playground({ lang, repository }: Props) {
           scenarioId={design.id}
           title={design.title}
           onOpen={(id) => {
-            setInterviewsOpen(false);
+            closeDialog();
             openInterview(id);
           }}
-          onClose={() => setInterviewsOpen(false)}
+          onClose={closeDialog}
         />
       )}
 

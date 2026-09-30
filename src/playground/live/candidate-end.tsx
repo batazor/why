@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { Feedback } from './cloud';
+import type { Feedback } from './interviews';
 import type { T } from '../i18n';
 
 /**

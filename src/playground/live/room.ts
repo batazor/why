@@ -3,7 +3,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from './client';
 import type { Person } from './auth';
 import { pickBoard, type Board, type Design } from '../model';
-import { course, type Course } from './cloud';
+import { course, type Course } from './interviews';
 import { toEntry, type JournalEntry, type JournalRow } from './journal';
 import type { Role } from '../roles';
 

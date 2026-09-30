@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ViewportPortal, useViewport } from '@xyflow/react';
 import type { Person } from './auth';
 import type { Peer, Point, RoomStatus } from './room';
-import type { InvitePreview } from './cloud';
+import type { InvitePreview } from './links';
 import { formatSchedule } from './calendar';
 import type { Role } from '../roles';
 import type { T } from '../i18n';

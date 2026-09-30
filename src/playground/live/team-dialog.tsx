@@ -1,20 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import {
-  createTeamInvite,
-  inviteUrl,
-  listMembers,
-  listTeamInvites,
-  listWorkspaces,
-  mailtoUrl,
-  removeMember,
-  renameWorkspace,
-  revokeTeamInvite,
-  setMemberRole,
-  type Member,
-  type TeamInvite,
-  type Workspace,
-  type WorkspaceRole,
-} from './cloud';
+import { createTeamInvite, listMembers, listTeamInvites, listWorkspaces, removeMember, renameWorkspace, revokeTeamInvite, setMemberRole, type Member, type TeamInvite, type Workspace, type WorkspaceRole } from './workspaces';
+import { inviteUrl, mailtoUrl } from './links';
 import type { Person } from './auth';
 import { LinkBox } from './cloud-share';
 import type { T } from '../i18n';

@@ -1,4 +1,4 @@
-import type { Schedule } from './cloud';
+import type { Schedule } from './interviews';
 import type { T } from '../i18n';
 
 /**

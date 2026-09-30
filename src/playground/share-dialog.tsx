@@ -5,7 +5,7 @@ import { ROLES, type Role } from './roles';
 import type { Design } from './model';
 import type { T } from './i18n';
 import { CloudShare } from './live/cloud-share';
-import type { Workspace } from './live/cloud';
+import type { Workspace } from './live/workspaces';
 
 /**
  * Поделиться сценарием: роль, в которой откроется ссылка, и что в неё уедет.
