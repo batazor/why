@@ -3412,6 +3412,23 @@ body:has(.pg) .site-footer {
   color: var(--pg-accent);
 }
 
+/* Разделитель «или гостем» между входом через Google и полем имени. */
+.pg-gate__or {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  color: var(--pg-muted);
+  font-size: 0.8rem;
+}
+
+.pg-gate__or::before,
+.pg-gate__or::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--pg-border);
+}
+
 .pg-guest {
   display: inline-flex;
   flex-wrap: wrap;

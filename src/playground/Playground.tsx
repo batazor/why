@@ -34,7 +34,7 @@ import { translator } from './i18n';
 import { PERMISSIONS, ROLES, initialRole, rememberRole, type Role, type Tab } from './roles';
 import { useAuth } from './live/auth';
 import { useInterview } from './live/use-interview';
-import { Gate, LiveBar, RemoteCursors } from './live/live-ui';
+import { Gate, LiveBar, RemoteCursors, WelcomeGate } from './live/live-ui';
 import { useCloud } from './live/use-cloud';
 import { InterviewRepository } from './live/interviews';
 import { isCloudId } from './live/db';
@@ -416,6 +416,13 @@ export default function Playground({ lang, repository }: Props) {
       />
     );
 
+  /**
+   * Без учётки автор и интервьюер в песочницу не попадают: входят через
+   * Google или гостем. Кандидата ведёт приглашение, у тренировки учётка не нужна.
+   */
+  if (auth.enabled && auth.ready && !auth.me && cloud.mode === 'local' && (role === 'author' || role === 'interviewer'))
+    return <WelcomeGate t={t} onSignIn={auth.signIn} onGuest={auth.guestAllowed ? auth.signInAsGuest : undefined} />;
+
   if (!design || !view) return <div className="pg pg--loading" />;
 
   /** Новый проект — туда, где сейчас работаем: в пространство, если вошли. */
@@ -434,6 +441,18 @@ export default function Playground({ lang, repository }: Props) {
     }
     await refresh();
     open(next);
+  };
+
+  /**
+   * Проект из браузера переезжает в пространство: там у него появится адрес,
+   * которым можно делиться, — паковать сам проект в ссылку незачем.
+   */
+  const adopt = async () => {
+    const moved = { ...structuredClone(design), id: newId() };
+    await repo.save(moved);
+    await repo.remove(design.id);
+    await refresh();
+    open(moved);
   };
 
   // Кандидату калькулятор и проверки — только если автор разрешил.
@@ -657,7 +676,7 @@ export default function Playground({ lang, repository }: Props) {
           />
         )}
 
-        {role !== 'candidate' && !interview && (
+        {role !== 'candidate' && (
           <button type="button" className={`pg-button ${role === 'author' ? 'pg-button--primary' : ''}`} onClick={() => setDialog('share')}>
             <i className="codicon codicon-link" aria-hidden="true" /> {t('share.button')}
           </button>
@@ -719,13 +738,14 @@ export default function Playground({ lang, repository }: Props) {
           design={design}
           t={t}
           lang={lang}
-          cloud={
-            cloud.mode === 'workspace' && isCloudId(design.id)
-              ? {
-                  workspace: cloud.workspace,
-                  onInterviews: () => setDialog('interviews'),
-                }
-              : undefined
+          source={
+            interview
+              ? { kind: 'interview', id: interview.interviewId }
+              : cloud.mode === 'workspace'
+                ? isCloudId(design.id)
+                  ? { kind: 'workspace', workspace: cloud.workspace, onInterviews: () => setDialog('interviews') }
+                  : { kind: 'adopt', workspace: cloud.workspace, allowed: canAuthor, onAdopt: adopt }
+                : { kind: 'link' }
           }
           onClose={closeDialog}
         />

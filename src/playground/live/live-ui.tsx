@@ -57,8 +57,8 @@ function Avatar({ person, role }: { person: Person; role?: Role }) {
 }
 
 /**
- * Вход гостем: одно поле имени. Нужен, чтобы проверить собеседование в двух
- * окнах без двух Google-аккаунтов.
+ * Вход гостем: одно поле имени, без почты. Заодно позволяет проверить
+ * собеседование в двух окнах без двух Google-аккаунтов.
  */
 function GuestForm({ t, onSubmit }: { t: T; onSubmit: (name: string) => Promise<string | null> }) {
   const [name, setName] = useState('');
@@ -301,6 +301,44 @@ export function Gate({
               {t('gate.leave')}
             </button>
           </div>
+        )}
+        <p className="pg-hint">{t('gate.note')}</p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Заставка на входе: учётки нет — входим через Google или гостем.
+ *
+ * Пропустить нельзя: работа без учётки и есть гость, только безымянный.
+ * Гость — по одному имени, без почты; вход гостем показывается, только если
+ * сервер его разрешает.
+ */
+export function WelcomeGate({
+  t,
+  onSignIn,
+  onGuest,
+}: {
+  t: T;
+  onSignIn: () => void;
+  onGuest?: (name: string) => Promise<string | null>;
+}) {
+  return (
+    <div className="pg pg-gate">
+      <div className="pg-gate__box">
+        <i className="codicon codicon-account pg-gate__icon" aria-hidden="true" />
+        <h2>{t('welcome.title')}</h2>
+        <p>{t('welcome.body')}</p>
+        <button type="button" className="pg-button pg-button--primary" onClick={onSignIn}>
+          <i className="codicon codicon-account" aria-hidden="true" /> {t('live.signIn')}
+        </button>
+        {onGuest && (
+          <>
+            <span className="pg-gate__or">{t('welcome.or')}</span>
+            <GuestForm t={t} onSubmit={onGuest} />
+            <p className="pg-hint">{t('welcome.guestNote')}</p>
+          </>
         )}
         <p className="pg-hint">{t('gate.note')}</p>
       </div>
