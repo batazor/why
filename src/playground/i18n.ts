@@ -557,6 +557,9 @@ const en = {
   'cab.openScenario': 'Open',
   'cab.needServer': 'The dashboard needs the server: without Supabase there are no interviews, only the local playground.',
   'cab.offline': 'The server is unavailable: {message}',
+  'cab.live': 'updates live',
+  'cab.liveHint': 'Changes to interviews and scores arrive from the server as they happen',
+  'pg.scenarioMissing': 'This scenario is not in your workspace or does not exist.',
   'iv.overdue': 'start time has passed',
 
   'report.you': 'You',
@@ -1405,6 +1408,9 @@ const ru: Record<Key, string> = {
   'cab.openScenario': 'Открыть',
   'cab.needServer': 'Кабинету нужен сервер: без Supabase собеседований нет, только локальная песочница.',
   'cab.offline': 'Сервер недоступен: {message}',
+  'cab.live': 'обновляется сам',
+  'cab.liveHint': 'Изменения собеседований и оценок приходят с сервера сразу',
+  'pg.scenarioMissing': 'Этого сценария нет в вашем пространстве, или его не существует.',
   'iv.overdue': 'время начала прошло',
 
   'report.you': 'Вы',

@@ -150,7 +150,7 @@ export function useCloud(auth: Auth, local: DesignRepository, workspaceName: str
   }, [auth.enabled, auth.ready, meId, invite, interview, join, error, preview, workspace, repo, interviewRepo, offline]);
 
   const openInterview = useCallback((id: string) => {
-    setParams({ interview: id, role: null });
+    setParams({ interview: id, role: null, scenario: null });
     setInterview(id);
   }, []);
 

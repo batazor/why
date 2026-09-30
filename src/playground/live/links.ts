@@ -143,17 +143,18 @@ export async function invitePreview(kind: 'interview' | 'team', token: string): 
 }
 
 // ─── Адрес ──────────────────────────────────────────────────────────────────
-// ?invite=<token> — приглашение кандидату, ?interview=<id> — открытое собеседование.
+// ?invite=<token> — приглашение кандидату, ?interview=<id> — открытое собеседование,
+// ?scenario=<id> — сценарий пространства: песочница держит его в адресе, пока он открыт.
 
-export function paramFromUrl(name: 'invite' | 'interview' | 'join' | 'share'): string | null {
+export function paramFromUrl(name: 'invite' | 'interview' | 'join' | 'share' | 'scenario'): string | null {
   const value = new URL(location.href).searchParams.get(name);
   if (!value) return null;
-  if (name === 'interview') return isCloudId(value) ? value : null;
+  if (name === 'interview' || name === 'scenario') return isCloudId(value) ? value : null;
   if (name === 'share') return /^[0-9a-f]{32}$/.test(value) ? value : null;
   return /^[0-9a-f]{48}$/.test(value) ? value : null;
 }
 
-export function setParams(params: Partial<Record<'invite' | 'interview' | 'join' | 'share' | 'role', string | null>>) {
+export function setParams(params: Partial<Record<'invite' | 'interview' | 'join' | 'share' | 'scenario' | 'role', string | null>>) {
   const url = new URL(location.href);
   for (const [name, value] of Object.entries(params)) {
     if (value) url.searchParams.set(name, value);
@@ -196,6 +197,13 @@ export function inviteUrl(token: string, param: 'invite' | 'join' | 'share' = 'i
  */
 export function mailtoUrl(email: string, subject: string, body: string): string {
   return `mailto:${encodeURIComponent(email.trim())}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+/** Ссылка на сценарий пространства — коллегам: откроют его в песочнице с теми же правами. */
+export function scenarioUrl(id: string): string {
+  const url = playgroundUrl();
+  url.searchParams.set('scenario', id);
+  return url.toString();
 }
 
 /** Ссылка на само собеседование — коллегам по пространству: откроют отчёт и запись. */

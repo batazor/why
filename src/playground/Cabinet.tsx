@@ -1,12 +1,12 @@
 import './playground.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from './live/auth';
-import { liveEnabled } from './live/client';
+import { liveEnabled, supabase } from './live/client';
 import { ensureWorkspace, listWorkspaces, preferredWorkspace, type Workspace } from './live/workspaces';
 import { cabinet, type CalibrationRow } from './live/calibration';
 import { listScenarios, type ScenarioSummary } from './live/scenarios';
 import { createInterview, type Schedule } from './live/interviews';
-import { interviewUrl, playgroundUrl } from './live/links';
+import { interviewUrl, playgroundUrl, scenarioUrl } from './live/links';
 import { InterviewItem } from './live/interviews-dialog';
 import { ScheduleFields } from './live/calendar';
 import { Avatar, WelcomeGate } from './live/live-ui';
@@ -14,7 +14,6 @@ import { TeamDialog } from './live/team-dialog';
 import { CalibrationDialog } from './live/calibration-dialog';
 import { Menu, MenuItem, MenuNote, MenuSeparator } from './menu';
 import { duration, isNotable } from './integrity';
-import { lastOpened } from './storage';
 import { translator } from './i18n';
 
 /**
@@ -84,6 +83,40 @@ export default function Cabinet({ lang }: { lang: string }) {
     setError('');
     load();
   }, [load]);
+
+  /**
+   * Живой список: изменения собеседований и оценок приходят через Realtime,
+   * и список перечитывается. Перечитать целиком проще, чем сшивать строку
+   * из события: строк немного, а событие несёт только свою таблицу.
+   * Канал приватный, пускают в него людей пространства.
+   */
+  const [live, setLive] = useState(false);
+  useEffect(() => {
+    const client = supabase();
+    if (!client || !workspaceId || !meId) return;
+    let alive = true;
+    let timer: number | undefined;
+    // Сохранение пишет в две таблицы подряд — одно перечитывание на всплеск.
+    const bump = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => alive && load(), 400);
+    };
+    const ch = client
+      .channel(`cabinet:${workspaceId}`, { config: { private: true } })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'interviews', filter: `workspace_id=eq.${workspaceId}` }, bump)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'interview_reviews' }, bump);
+    (async () => {
+      await client.realtime.setAuth();
+      if (!alive) return;
+      ch.subscribe((state) => alive && setLive(state === 'SUBSCRIBED'));
+    })();
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+      setLive(false);
+      client.removeChannel(ch);
+    };
+  }, [workspaceId, meId, load]);
 
   // ─── Новое собеседование ──────────────────────────────────────────────────
   const [scenarioId, setScenarioId] = useState('');
@@ -168,10 +201,6 @@ export default function Cabinet({ lang }: { lang: string }) {
   const updatedAt = useMemo(() => new Map(scenarios.map((item) => [item.id, item.updatedAt])), [scenarios]);
 
   const openInterview = (id: string) => location.assign(interviewUrl(id));
-  const openScenario = (id: string) => {
-    lastOpened.set(id);
-    location.assign(playgroundUrl().toString());
-  };
 
   const now = Date.now();
   const date = new Intl.DateTimeFormat(lang, { dateStyle: 'medium', timeStyle: 'short' });
@@ -224,6 +253,11 @@ export default function Cabinet({ lang }: { lang: string }) {
           </select>
         ) : (
           <span className="pg-hint pg-cabinet__space">{workspace.name}</span>
+        )}
+        {live && (
+          <span className="pg-live__status is-live" title={t('cab.liveHint')}>
+            <i className="codicon codicon-circle-filled" aria-hidden="true" /> {t('cab.live')}
+          </span>
         )}
         <span className="pg-cabinet__spacer" />
         <a className="pg-button" href={playgroundUrl().toString()}>
@@ -442,9 +476,9 @@ export default function Cabinet({ lang }: { lang: string }) {
                           <i className="codicon codicon-graph" aria-hidden="true" /> {t('cal.button')}
                         </button>
                       )}
-                      <button type="button" className="pg-button pg-button--small" onClick={() => openScenario(item.id)}>
+                      <a className="pg-button pg-button--small" href={scenarioUrl(item.id)}>
                         <i className="codicon codicon-edit" aria-hidden="true" /> {t('cab.openScenario')}
-                      </button>
+                      </a>
                     </div>
                   </li>
                 );

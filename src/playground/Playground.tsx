@@ -180,7 +180,10 @@ export default function Playground({ lang, repository }: Props) {
     // Новый проект — новое полотно: React Flow заново подгоняет вид под схему.
     setCanvasKey((key) => key + 1);
     // Собеседование открывается адресом, а не «последним проектом».
-    if (!(repo instanceof InterviewRepository)) lastOpened.set(next.id);
+    if (repo instanceof InterviewRepository) return;
+    lastOpened.set(next.id);
+    // Сценарий пространства — в адресе, пока открыт: адресом можно поделиться с коллегой.
+    setParams({ scenario: isCloudId(next.id) ? next.id : null });
   }, [load, repo]);
 
   /**
@@ -272,7 +275,10 @@ export default function Playground({ lang, repository }: Props) {
 
       const list = await repo.list();
       setProjects(list);
-      const id = lastOpened.get() ?? list[0]?.id;
+      // Сценарий из адреса — сильнее последнего открытого; чужой или несуществующий — сказать и открыть своё.
+      const wanted = paramFromUrl('scenario');
+      if (wanted && !list.some((item) => item.id === wanted)) setNotice(t('pg.scenarioMissing'));
+      const id = (wanted && list.some((item) => item.id === wanted) ? wanted : null) ?? lastOpened.get() ?? list[0]?.id;
       const found = id ? await repo.load(id) : null;
       // Нетронутый проект терять нечего: если в нём не было ни одной правки
       // (например, это пример прошлой версии), открывается свежий пример.
