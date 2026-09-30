@@ -19,6 +19,7 @@ import {
   type Node,
   type NodeChange,
   type NodeProps,
+  type OnSelectionChangeParams,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { blockSpec } from './catalog';
@@ -360,6 +361,22 @@ export default function Canvas({
     add(kind, { x: point.x - 90, y: point.y - 28 });
   };
 
+  /**
+   * React Flow зовёт обработчик не только при смене выделения, но и когда
+   * меняется сама функция. Стрелка прямо в пропе — новая на каждый рендер,
+   * и вкладка «Выбранное» открывалась бы заново на каждый тик таймера
+   * собеседования: уйти с неё на «Требования», пока блок выделен, было
+   * нельзя — а без этого требование на блок не перетащить.
+   */
+  const onSelectionChange = useCallback(
+    ({ nodes, edges }: OnSelectionChangeParams) => {
+      if (nodes.length) onSelect({ node: nodes[0].id });
+      else if (edges.length) onSelect({ edge: edges[0].id });
+      else onSelect({});
+    },
+    [onSelect],
+  );
+
   return (
     <div
       className={`pg-canvas ${readOnly ? 'is-readonly' : ''}`}
@@ -383,11 +400,7 @@ export default function Canvas({
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         connectionMode={ConnectionMode.Loose}
-        onSelectionChange={({ nodes, edges }) => {
-          if (nodes.length) onSelect({ node: nodes[0].id });
-          else if (edges.length) onSelect({ edge: edges[0].id });
-          else onSelect({});
-        }}
+        onSelectionChange={onSelectionChange}
         nodesDraggable={!readOnly}
         nodesConnectable={!readOnly}
         deleteKeyCode={readOnly ? null : ['Backspace', 'Delete']}

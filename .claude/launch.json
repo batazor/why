@@ -21,6 +21,21 @@
         "4399"
       ],
       "port": 4399
+    },
+    {
+      "name": "why-dev-local",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "PUBLIC_SUPABASE_URL=",
+        "PUBLIC_SUPABASE_ANON_KEY=",
+        "npm",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "4322"
+      ],
+      "port": 4322
     }
   ]
 }
