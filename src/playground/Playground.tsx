@@ -38,6 +38,9 @@ import { Gate, LiveBar, RemoteCursors } from './live/live-ui';
 import { useCloud } from './live/use-cloud';
 import { InterviewRepository, isCloudId, type Timing } from './live/cloud';
 import { InterviewsDialog } from './live/interviews-dialog';
+import { TeamDialog } from './live/team-dialog';
+import { ReportPanel } from './live/report-panel';
+import { merge, signalsFrom, snapshotsFrom, type JournalEntry } from './live/journal';
 
 /**
  * Песочница системного дизайна для собеседований.
@@ -66,7 +69,7 @@ export default function Playground({ lang, repository }: Props) {
    * Хранилище подменяется целиком — панели песочницы разницы не замечают.
    */
   const auth = useAuth();
-  const { cloud, openInterview, leave } = useCloud(auth, local, t('ws.default'));
+  const { cloud, openInterview, leave, switchWorkspace, reloadWorkspace } = useCloud(auth, local, t('ws.default'));
   const repo: DesignRepository = cloud.mode === 'workspace' || cloud.mode === 'interview' ? cloud.repo : local;
   const interview = cloud.mode === 'interview' ? cloud.repo : null;
   /** Пока не ясно, где работаем, открывать нечего: иначе мелькнёт чужой проект. */
@@ -84,6 +87,14 @@ export default function Playground({ lang, repository }: Props) {
   const [now, setNow] = useState(() => Date.now());
   const [sharing, setSharing] = useState(false);
   const [interviewsOpen, setInterviewsOpen] = useState(false);
+  const [teamOpen, setTeamOpen] = useState(false);
+  /**
+   * Журнал собеседования — у интервьюера. Из него сигналы честности (со
+   * временем сервера) и снимки доски для записи; `replay` — какой снимок
+   * сейчас на полотне, null — живая доска.
+   */
+  const [journal, setJournal] = useState<JournalEntry[]>([]);
+  const [replay, setReplay] = useState<number | null>(null);
   const [loadError, setLoadError] = useState('');
   /** Требования таблицей или списком на правку. Выбор — удобство смотрящего, живёт в браузере. */
   const [reqView, setReqView] = useState<'table' | 'edit'>(() => {
@@ -125,7 +136,25 @@ export default function Playground({ lang, repository }: Props) {
       update((current) => (current.id === designId ? { ...current, ...incoming } : current)),
     [update],
   );
-  const live = useRoom({ room: auth.me ? room : null, me: auth.me, role, design, onBoard, onTiming });
+  // Журнал и запись — про открытое собеседование; вне его их нет.
+  useEffect(() => {
+    if (!interview) {
+      setJournal([]);
+      setReplay(null);
+    }
+  }, [interview]);
+
+  // Интервьюеру пространства роль автора недоступна: сценарии ему писать нельзя.
+  const workspaceRole = cloud.mode === 'workspace' ? cloud.workspace.role : null;
+  useEffect(() => {
+    if (workspaceRole === 'interviewer' && role === 'author') {
+      setRole('interviewer');
+      setTab(PERMISSIONS.interviewer.tabs[0]);
+    }
+  }, [workspaceRole, role]);
+
+  const onJournal = useCallback((entry: JournalEntry) => setJournal((current) => merge(current, [entry])), []);
+  const live = useRoom({ room: auth.me ? room : null, me: auth.me, role, design, onBoard, onTiming, onJournal });
   const { sendCursor } = live;
   // Эталон у интервьюера — другая схема: курсор над ним кандидату ни о чём не скажет.
   useEffect(() => {
@@ -175,6 +204,8 @@ export default function Playground({ lang, repository }: Props) {
           setRole(repo.as);
           setTab(PERMISSIONS[repo.as].tabs[0]);
           setCompareView('answer');
+          setReplay(null);
+          setJournal(repo.as === 'interviewer' ? await repo.journal() : []);
           setProjects(await repo.list());
           return show(found);
         } catch (reason) {
@@ -224,10 +255,14 @@ export default function Playground({ lang, repository }: Props) {
    * проекта. Когда на экране эталон, доска подменяется эталоном, и правки
    * уходят в него: панелям не нужно знать, чью доску они правят.
    */
-  const view = useMemo(
-    () => (design && board === 'reference' ? { ...design, ...design.scenario.reference } : design),
-    [design, board],
-  );
+  const snapshots = useMemo(() => snapshotsFrom(journal), [journal]);
+  const view = useMemo(() => {
+    if (!design) return design;
+    if (board === 'reference') return { ...design, ...design.scenario.reference };
+    // Запись: на полотне снимок доски из журнала, а не живая доска.
+    const frame = replay !== null ? snapshots[replay] : undefined;
+    return frame ? { ...design, ...frame.board } : design;
+  }, [design, board, replay, snapshots]);
   const updateView = useCallback(
     (fn: (design: Design) => Design) => {
       if (board !== 'reference') return update(fn);
@@ -325,7 +360,21 @@ export default function Playground({ lang, repository }: Props) {
   }, [readOnly, undo, redo]);
 
   // Сигналы пишутся только пока на экране кандидат, и всегда в сам проект, а не в эталон.
-  useIntegrity(role === 'candidate' && Boolean(design), update);
+  // После конца собеседования писать нечего: журнал закрыт и на сервере.
+  useIntegrity(role === 'candidate' && Boolean(design) && !frozen, update);
+
+  /**
+   * В собеседовании интервьюер смотрит сигналы из журнала на сервере, а не
+   * из своего документа: там они с серверным временем и их нельзя стереть.
+   */
+  const journalSignals = useMemo(() => signalsFrom(journal), [journal]);
+  const withSignals = useMemo(
+    () =>
+      design && interview && role === 'interviewer'
+        ? { ...design, session: { ...design.session, signals: journalSignals } }
+        : design,
+    [design, interview, role, journalSignals],
+  );
 
   const findings = useFindings(view ?? emptyDesign(''));
   const fileInput = useRef<HTMLInputElement>(null);
@@ -334,6 +383,7 @@ export default function Playground({ lang, repository }: Props) {
     return (
       <Gate
         t={t}
+        kind={cloud.mode === 'gate' ? cloud.kind : 'interview'}
         me={auth.me}
         error={cloud.mode === 'gate' ? cloud.error : loadError}
         onSignIn={auth.signIn}
@@ -351,6 +401,8 @@ export default function Playground({ lang, repository }: Props) {
   /** Новый проект — туда, где сейчас работаем: в пространство, если вошли. */
   const newId = () => repo.newId?.() ?? uid('d');
   const inWorkspace = cloud.mode === 'workspace';
+  /** Интервьюеру пространства сценарии писать нельзя — и выбирать роль автора незачем. */
+  const canAuthor = cloud.mode !== 'workspace' || cloud.workspace.role !== 'interviewer';
   const localProjects = projects.filter((project) => !project.cloud);
   const cloudProjects = projects.filter((project) => project.cloud);
 
@@ -371,6 +423,8 @@ export default function Playground({ lang, repository }: Props) {
     if (role === 'author') return true;
     if (name === 'calc') return candidateEstimates(design) !== 'off';
     if (name === 'check') return role === 'interviewer' || design.scenario.allowChecks;
+    // Отчёт — про собеседование на сервере: в локальной репетиции в нём нет ни журнала, ни людей.
+    if (name === 'report') return Boolean(interview);
     return true;
   });
   const activeTab = tabs.includes(tab) ? tab : tabs[0];
@@ -390,7 +444,7 @@ export default function Playground({ lang, repository }: Props) {
           : undefined;
 
   const timer = elapsed(design.session, now);
-  const notableSignals = design.session.signals.filter((signal) => isNotable(signal, now)).length;
+  const notableSignals = (withSignals ?? design).session.signals.filter((signal) => isNotable(signal, now)).length;
   const panelProps = { design: view, update: updateView, t, lang };
 
   return (
@@ -406,7 +460,7 @@ export default function Playground({ lang, repository }: Props) {
             <i className="codicon codicon-account" aria-hidden="true" />
             <span className="visually-hidden">{t('role.label')}</span>
             <select className="pg-input pg-select" value={role} onChange={(event) => switchRole(event.currentTarget.value as Role)}>
-              {ROLES.map((name) => (
+              {ROLES.filter((name) => name !== 'author' || canAuthor).map((name) => (
                 <option key={name} value={name}>
                   {t(`role.${name}`)}
                 </option>
@@ -559,6 +613,12 @@ export default function Playground({ lang, repository }: Props) {
           </>
         )}
 
+        {inWorkspace && (
+          <button type="button" className="pg-button" onClick={() => setTeamOpen(true)} title={t('team.hint')}>
+            <i className="codicon codicon-organization" aria-hidden="true" /> {t('team.button')}
+          </button>
+        )}
+
         {role === 'interviewer' && inWorkspace && isCloudId(design.id) && (
           <button type="button" className="pg-button" onClick={() => setInterviewsOpen(true)}>
             <i className="codicon codicon-broadcast" aria-hidden="true" /> {t('iv.button')}
@@ -698,6 +758,20 @@ export default function Playground({ lang, repository }: Props) {
       </div>
 
       {sharing && <ShareDialog design={design} t={t} lang={lang} onClose={() => setSharing(false)} />}
+      {teamOpen && cloud.mode === 'workspace' && auth.me && (
+        <TeamDialog
+          t={t}
+          lang={lang}
+          me={auth.me}
+          workspace={cloud.workspace}
+          onSwitch={(next) => {
+            setTeamOpen(false);
+            switchWorkspace(next);
+          }}
+          onChanged={reloadWorkspace}
+          onClose={() => setTeamOpen(false)}
+        />
+      )}
       {interviewsOpen && cloud.mode === 'workspace' && (
         <InterviewsDialog
           t={t}
@@ -756,7 +830,27 @@ export default function Playground({ lang, repository }: Props) {
             {activeTab === 'scenario' && <ScenarioPanel design={design} update={update} t={t} />}
             {activeTab === 'conduct' && <ConductPanel design={design} update={update} t={t} />}
             {activeTab === 'score' && <ScorePanel design={design} update={update} t={t} />}
-            {activeTab === 'signals' && <IntegrityPanel design={design} t={t} lang={lang} />}
+            {activeTab === 'signals' && <IntegrityPanel design={withSignals ?? design} t={t} lang={lang} />}
+            {activeTab === 'report' && interview && (
+              <ReportPanel
+                design={design}
+                signals={(withSignals ?? design).session.signals}
+                snapshots={snapshots}
+                replay={replay}
+                onReplay={(next) => {
+                  setReplay(next);
+                  // Запись — про доску кандидата: эталон на полотне сейчас ни к чему.
+                  setCompareView('answer');
+                }}
+                interviewId={interview.interviewId}
+                candidate={interview.candidate}
+                interviewer={interview.interviewer}
+                createdAt={interview.createdAt}
+                now={now}
+                t={t}
+                lang={lang}
+              />
+            )}
             {activeTab === 'train' && (
               <TrainPanel
                 design={design}

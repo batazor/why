@@ -172,6 +172,7 @@ export function LiveBar({ t, role, me, ready, inRoom, status, peers, onSignIn, o
  */
 export function Gate({
   t,
+  kind = 'interview',
   me,
   error,
   onSignIn,
@@ -180,6 +181,8 @@ export function Gate({
   onLeave,
 }: {
   t: T;
+  /** Куда звали: на собеседование или в команду. */
+  kind?: 'interview' | 'team';
   me: Person | null;
   error?: string;
   onSignIn: () => void;
@@ -192,8 +195,8 @@ export function Gate({
     <div className="pg pg-gate">
       <div className="pg-gate__box">
         <i className="codicon codicon-organization pg-gate__icon" aria-hidden="true" />
-        <h2>{t(error ? 'gate.failed' : 'gate.title')}</h2>
-        <p>{error ? t(`gate.error.${reason}`, { name: me?.name ?? '' }) : t('gate.body')}</p>
+        <h2>{t(error ? (kind === 'team' ? 'gate.team.failed' : 'gate.failed') : kind === 'team' ? 'gate.team.title' : 'gate.title')}</h2>
+        <p>{error ? t(`gate.error.${reason}`, { name: me?.name ?? '' }) : t(kind === 'team' ? 'gate.team.body' : 'gate.body')}</p>
         {!me && (
           <button type="button" className="pg-button pg-button--primary" onClick={onSignIn}>
             <i className="codicon codicon-account" aria-hidden="true" /> {t('live.signIn')}

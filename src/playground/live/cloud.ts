@@ -14,6 +14,10 @@ import {
   type Session,
 } from '../model';
 import type { DesignRepository } from '../storage';
+import { toEntry, type JournalEntry, type JournalRow } from './journal';
+
+/** Снимок доски в журнал — не чаще раза в 15 секунд, пока доска меняется. */
+const SNAPSHOT_MS = 15_000;
 
 /**
  * Песочница поверх схемы из supabase/migrations.
@@ -68,19 +72,134 @@ function must<T>({ data, error }: { data: T; error: { message: string } | null }
  * Пространство вошедшего человека. Первого у нового пользователя нет — оно
  * создаётся сразу: без него автору некуда сохранить сценарий.
  */
-export async function ensureWorkspace(me: string, defaultName: string): Promise<Workspace> {
+export async function listWorkspaces(me: string): Promise<Workspace[]> {
   // Политика отдаёт всех участников моих пространств — роль нужна именно моя.
   const rows = must(
     await db()
       .from('workspace_members')
       .select('role, workspaces(id, name)')
       .eq('user_id', me)
-      .order('created_at', { ascending: true })
-      .limit(1),
+      .order('created_at', { ascending: true }),
   ) as unknown as { role: WorkspaceRole; workspaces: { id: string; name: string } }[];
-  if (rows[0]) return { id: rows[0].workspaces.id, name: rows[0].workspaces.name, role: rows[0].role };
+  return rows.map((row) => ({ id: row.workspaces.id, name: row.workspaces.name, role: row.role }));
+}
+
+/**
+ * Пространство, в котором работать. Их может быть несколько — своё и
+ * команды, куда позвали; открывается последнее выбранное.
+ */
+export async function ensureWorkspace(me: string, defaultName: string): Promise<Workspace> {
+  const all = await listWorkspaces(me);
+  const preferred = preferredWorkspace.get();
+  if (all.length) return all.find((item) => item.id === preferred) ?? all[0];
   const id = must(await db().rpc('create_workspace', { name: defaultName })) as string;
   return { id, name: defaultName, role: 'owner' };
+}
+
+/** Выбранное пространство — удобство, а не данные: потеряется — откроется первое. */
+export const preferredWorkspace = {
+  get(): string | null {
+    try {
+      return localStorage.getItem('why:playground:workspace');
+    } catch {
+      return null;
+    }
+  },
+  set(id: string) {
+    try {
+      localStorage.setItem('why:playground:workspace', id);
+    } catch {
+      /* не критично */
+    }
+  },
+};
+
+// ─── Команда ────────────────────────────────────────────────────────────────
+
+export interface Member {
+  person: Person;
+  email: string;
+  role: WorkspaceRole;
+}
+
+export interface TeamInvite {
+  id: string;
+  role: WorkspaceRole;
+  email: string | null;
+  token: string;
+  createdAt: string;
+  accepted: boolean;
+}
+
+export async function listMembers(workspace: string): Promise<Member[]> {
+  const rows = must(
+    await db().from('workspace_members').select('user_id, role').eq('workspace_id', workspace).order('created_at'),
+  ) as { user_id: string; role: WorkspaceRole }[];
+  const people = rows.length
+    ? (must(
+        await db()
+          .from('profiles')
+          .select('id, name, email, avatar_url')
+          .in(
+            'id',
+            rows.map((row) => row.user_id),
+          ),
+      ) as ProfileRow[])
+    : [];
+  const byId = new Map(people.map((row) => [row.id, row]));
+  return rows.map((row) => {
+    const profile = byId.get(row.user_id);
+    return {
+      person: profile ? toPerson(profile) : { id: row.user_id, name: '—' },
+      email: profile?.email ?? '',
+      role: row.role,
+    };
+  });
+}
+
+export async function setMemberRole(workspace: string, user: string, role: WorkspaceRole): Promise<void> {
+  must(await db().from('workspace_members').update({ role }).eq('workspace_id', workspace).eq('user_id', user));
+}
+
+export async function removeMember(workspace: string, user: string): Promise<void> {
+  must(await db().from('workspace_members').delete().eq('workspace_id', workspace).eq('user_id', user));
+}
+
+export async function renameWorkspace(workspace: string, name: string): Promise<void> {
+  must(await db().from('workspaces').update({ name }).eq('id', workspace));
+}
+
+/** Приглашения видит только владелец; остальным список просто пуст. */
+export async function listTeamInvites(workspace: string): Promise<TeamInvite[]> {
+  const rows = must(
+    await db()
+      .from('workspace_invites')
+      .select('id, role, email, token, created_at, accepted_by')
+      .eq('workspace_id', workspace)
+      .order('created_at', { ascending: false }),
+  ) as { id: string; role: WorkspaceRole; email: string | null; token: string; created_at: string; accepted_by: string | null }[];
+  return rows.map((row) => ({
+    id: row.id,
+    role: row.role,
+    email: row.email,
+    token: row.token,
+    createdAt: row.created_at,
+    accepted: Boolean(row.accepted_by),
+  }));
+}
+
+export async function createTeamInvite(workspace: string, role: WorkspaceRole, email: string): Promise<string> {
+  const id = crypto.randomUUID();
+  must(await db().from('workspace_invites').insert({ id, workspace_id: workspace, role, email: email.trim() || null }));
+  return id;
+}
+
+export async function revokeTeamInvite(id: string): Promise<void> {
+  must(await db().from('workspace_invites').delete().eq('id', id));
+}
+
+export async function acceptTeamInvite(token: string): Promise<string> {
+  return must(await db().rpc('accept_workspace_invite', { token })) as string;
 }
 
 // ─── Сценарии ───────────────────────────────────────────────────────────────
@@ -328,8 +447,13 @@ export const timing = (session: Session): Timing => ({
 export class InterviewRepository implements DesignRepository {
   as: 'candidate' | 'interviewer' = 'interviewer';
   interviewer: Person | null = null;
+  candidate: Person | null = null;
+  createdAt = '';
   private title = '';
   private saved = { board: '', review: '', timing: '' };
+  /** Что из сигналов уже в журнале: сигнал «ушёл» дописывается ещё раз, когда человек вернулся. */
+  private sent = new Map<string, string>();
+  private snapshot = { board: '', at: 0 };
 
   constructor(
     readonly interviewId: string,
@@ -354,6 +478,14 @@ export class InterviewRepository implements DesignRepository {
       staff ? db().from('interview_reviews').select('session').eq('interview_id', id).maybeSingle() : null,
       db().from('profiles').select('id, name, email, avatar_url').eq('id', row.interviewer_id).maybeSingle(),
     ]);
+    const candidate =
+      staff && row.candidate_id
+        ? (must(
+            await db().from('profiles').select('id, name, email, avatar_url').eq('id', row.candidate_id).maybeSingle(),
+          ) as ProfileRow | null)
+        : null;
+    this.candidate = candidate ? toPerson(candidate) : null;
+    this.createdAt = row.created_at;
     const base = fromScenario(
       must(scenario) as ScenarioRow,
       secret ? ((must(secret) as { content: Partial<Scenario> } | null)?.content ?? null) : null,
@@ -376,6 +508,8 @@ export class InterviewRepository implements DesignRepository {
         calcUnlockedAt: row.calc_unlocked_at ?? undefined,
       },
     });
+    // Снимки в журнал — только изменения: доска, с которой пришли, уже известна.
+    this.snapshot = { board: JSON.stringify(pickBoard(design)), at: 0 };
     this.saved = {
       board: JSON.stringify(pickBoard(design)),
       review: JSON.stringify(reviewPart(design.session)),
@@ -388,9 +522,11 @@ export class InterviewRepository implements DesignRepository {
     if (design.id !== this.interviewId) return;
     if (this.as === 'candidate') {
       const board = JSON.stringify(pickBoard(design));
-      if (board === this.saved.board) return;
-      must(await db().from('interview_boards').update({ board: pickBoard(design) }).eq('interview_id', this.interviewId));
-      this.saved.board = board;
+      if (board !== this.saved.board) {
+        must(await db().from('interview_boards').update({ board: pickBoard(design) }).eq('interview_id', this.interviewId));
+        this.saved.board = board;
+      }
+      await this.append(design, board);
       return;
     }
 
@@ -425,19 +561,53 @@ export class InterviewRepository implements DesignRepository {
   async remove(): Promise<void> {
     /* собеседование удаляется из списка собеседований, а не отсюда */
   }
+
+  /**
+   * Дописать в журнал новое: сигналы, которых там нет или которые изменились,
+   * и снимок доски — не чаще SNAPSHOT_MS. Последняя доска и так лежит в
+   * interview_boards, снимки нужны, чтобы потом прокрутить, как она росла.
+   */
+  private async append(design: Design, board: string) {
+    const rows: { interview_id: string; kind: 'signal' | 'board'; payload: unknown; client_at: string }[] = [];
+    for (const signal of design.session.signals) {
+      const json = JSON.stringify(signal);
+      if (this.sent.get(signal.id) !== json)
+        rows.push({ interview_id: this.interviewId, kind: 'signal', payload: signal, client_at: signal.back ?? signal.at });
+    }
+    const now = Date.now();
+    const snap = board !== this.snapshot.board && now - this.snapshot.at >= SNAPSHOT_MS;
+    if (snap)
+      rows.push({ interview_id: this.interviewId, kind: 'board', payload: pickBoard(design), client_at: new Date(now).toISOString() });
+    if (!rows.length) return;
+    must(await db().from('interview_events').insert(rows));
+    for (const signal of design.session.signals) this.sent.set(signal.id, JSON.stringify(signal));
+    if (snap) this.snapshot = { board, at: now };
+  }
+
+  /** Журнал целиком — интервьюеру, по порядку записи на сервере. */
+  async journal(): Promise<JournalEntry[]> {
+    const rows = must(
+      await db()
+        .from('interview_events')
+        .select('id, kind, payload, created_at')
+        .eq('interview_id', this.interviewId)
+        .order('id'),
+    ) as JournalRow[];
+    return rows.map(toEntry);
+  }
 }
 
 // ─── Адрес ──────────────────────────────────────────────────────────────────
 // ?invite=<token> — приглашение кандидату, ?interview=<id> — открытое собеседование.
 
-export function paramFromUrl(name: 'invite' | 'interview'): string | null {
+export function paramFromUrl(name: 'invite' | 'interview' | 'join'): string | null {
   const value = new URL(location.href).searchParams.get(name);
   if (!value) return null;
   if (name === 'interview') return isCloudId(value) ? value : null;
   return /^[0-9a-f]{48}$/.test(value) ? value : null;
 }
 
-export function setParams(params: Partial<Record<'invite' | 'interview' | 'role', string | null>>) {
+export function setParams(params: Partial<Record<'invite' | 'interview' | 'join' | 'role', string | null>>) {
   const url = new URL(location.href);
   for (const [name, value] of Object.entries(params)) {
     if (value) url.searchParams.set(name, value);
@@ -446,10 +616,19 @@ export function setParams(params: Partial<Record<'invite' | 'interview' | 'role'
   history.replaceState(null, '', url);
 }
 
-export function inviteUrl(token: string): string {
+export function inviteUrl(token: string, param: 'invite' | 'join' = 'invite'): string {
   const url = new URL(location.href);
   url.search = '';
   url.hash = '';
-  url.searchParams.set('invite', token);
+  url.searchParams.set(param, token);
+  return url.toString();
+}
+
+/** Ссылка на само собеседование — коллегам по пространству: откроют отчёт и запись. */
+export function interviewUrl(id: string): string {
+  const url = new URL(location.href);
+  url.search = '';
+  url.hash = '';
+  url.searchParams.set('interview', id);
   return url.toString();
 }

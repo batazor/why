@@ -3428,3 +3428,125 @@ body:has(.pg) .site-footer {
   color: var(--pg-bad);
   font-size: 0.8rem;
 }
+
+/* ── Отчёт по собеседованию ─────────────────────────────────────────────── */
+
+.pg-report section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.pg-report__head h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+}
+
+.pg-report__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.4rem 0.75rem;
+  margin: 0;
+}
+
+.pg-report__facts dt {
+  color: var(--pg-muted);
+  font-size: 0.75rem;
+}
+
+.pg-report__facts dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.pg-report__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.pg-report__table td {
+  padding: 0.3rem 0.2rem;
+  border-bottom: 1px solid var(--pg-border);
+  vertical-align: top;
+}
+
+.pg-report__table td:last-child {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.pg-report__table td.is-empty {
+  color: var(--pg-muted);
+}
+
+.pg-report__notes {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.pg-report__list {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.85rem;
+}
+
+.pg-report__list .is-warn {
+  color: var(--pg-bad);
+}
+
+.pg-report__replay input[type='range'] {
+  width: 100%;
+}
+
+.pg-report__replay-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+
+/*
+ * Печать отчёта: полотно с доской и сам отчёт, без инструментов вокруг.
+ * Полотно печатается таким, какое на экране, — в том числе снимком записи.
+ */
+@media print {
+  .site-header,
+  .site-footer,
+  .pg-toolbar,
+  .pg-palette,
+  .pg-tabs,
+  .pg-report__replay,
+  .pg-report__actions,
+  .pg-canvas__banner,
+  .pg-canvas .react-flow__controls,
+  .pg-canvas .react-flow__minimap,
+  .pg-canvas .react-flow__panel,
+  .pg-brief {
+    display: none !important;
+  }
+
+  .pg {
+    height: auto;
+    min-height: 0;
+  }
+
+  .pg-body {
+    display: block;
+  }
+
+  .pg-canvas {
+    height: 12cm;
+    border: 1px solid #ccc;
+    break-inside: avoid;
+  }
+
+  .pg-side {
+    border: 0;
+  }
+
+  .pg-side__body {
+    overflow: visible;
+  }
+}

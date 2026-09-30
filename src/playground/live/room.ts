@@ -4,6 +4,7 @@ import { supabase } from './client';
 import type { Person } from './auth';
 import { pickBoard, type Board, type Design } from '../model';
 import { timing, type Timing } from './cloud';
+import { toEntry, type JournalEntry, type JournalRow } from './journal';
 import type { Role } from '../roles';
 
 /**
@@ -19,7 +20,10 @@ import type { Role } from '../roles';
  *   поэтому сливать правки двух сторон не нужно — последняя доска и есть правда.
  *
  * - broadcast `timing` — ход собеседования от интервьюера: начал, закончил,
- *   открыл калькулятор. Кандидат по нему ведёт таймер и разблокирует оценки.
+ *   открыл калькулятор. Кандидат по нему ведёт таймер и разблокирует оценки;
+ * - postgres_changes по interview_events — новые записи журнала. Их шлёт
+ *   сама база после записи, а не кандидат, и только тем, кому журнал читать
+ *   можно (RLS): кандидату они не приходят.
  *
  * Комната — это собеседование: канал `room:<id собеседования>` приватный, и
  * сервер пускает в него только участников (политики RLS на realtime.messages,
@@ -63,9 +67,11 @@ interface Options {
   onBoard: (message: BoardMessage) => void;
   /** Кандидату пришёл ход собеседования. */
   onTiming: (timing: Timing) => void;
+  /** Интервьюеру пришла новая запись журнала. */
+  onJournal?: (entry: JournalEntry) => void;
 }
 
-export function useRoom({ room, me, role, design, onBoard, onTiming }: Options) {
+export function useRoom({ room, me, role, design, onBoard, onTiming, onJournal }: Options) {
   const [status, setStatus] = useState<RoomStatus>('connecting');
   const [peers, setPeers] = useState<Peer[]>([]);
   const [cursors, setCursors] = useState<Record<string, Point>>({});
@@ -83,6 +89,8 @@ export function useRoom({ room, me, role, design, onBoard, onTiming }: Options) 
   onBoardRef.current = onBoard;
   const onTimingRef = useRef(onTiming);
   onTimingRef.current = onTiming;
+  const onJournalRef = useRef(onJournal);
+  onJournalRef.current = onJournal;
 
   /** Каждая сторона отдаёт своё: кандидат — доску, интервьюер — ход собеседования. */
   const sendOwn = useCallback(() => {
@@ -131,7 +139,12 @@ export function useRoom({ room, me, role, design, onBoard, onTiming }: Options) 
       })
       .on('broadcast', { event: 'timing' }, ({ payload }) => {
         if (roleRef.current === 'candidate') onTimingRef.current(payload as Timing);
-      });
+      })
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'interview_events', filter: `interview_id=eq.${room}` },
+        ({ new: row }) => onJournalRef.current?.(toEntry(row as JournalRow)),
+      );
 
     (async () => {
       // Приватному каналу нужен токен пользователя: без него сервер откажет в подписке.

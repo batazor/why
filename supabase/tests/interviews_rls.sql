@@ -114,6 +114,17 @@ do $$ begin
   update public.interview_boards set board = '{"nodes": [{"id": "n1"}], "edges": [], "requirements": [], "api": [], "estimate": ""}';
   assert (select jsonb_array_length(board -> 'nodes') from public.interview_boards) = 1, 'candidate draws on her board';
 
+  insert into public.interview_events (interview_id, kind, payload, client_at) values
+    (current_setting('test.interview')::uuid, 'signal', '{"id": "s1", "type": "away", "at": "2000-01-01T00:00:00Z"}', '2000-01-01T00:00:00Z'),
+    (current_setting('test.interview')::uuid, 'board', '{"nodes": [{"id": "n1"}], "edges": []}', now());
+  assert (select count(*) from public.interview_events) = 0, 'candidate does not read the journal back';
+  begin
+    insert into public.interview_events (interview_id, kind, payload, created_at)
+    values (current_setting('test.interview')::uuid, 'signal', '{}', '2000-01-01T00:00:00Z');
+    raise exception 'FAIL: candidate backdated a journal entry';
+  exception when insufficient_privilege then null;
+  end;
+
   -- Политики на правку у кандидата нет: запрос проходит, но строк под ним ноль.
   update public.interviews set status = 'finished';
   assert (select status from public.interviews) = 'scheduled', 'candidate cannot change the interview';
@@ -180,6 +191,18 @@ set role authenticated;
 
 do $$ begin
   assert private.is_participant(private.room_interview()), 'interviewer enters the room';
+  assert (select count(*) from public.interview_events) = 2, 'interviewer reads the journal';
+  assert (select bool_and(created_at > '2020-01-01') from public.interview_events), 'journal time is the server time, not the client claim';
+  begin
+    update public.interview_events set payload = '{}';
+    raise exception 'FAIL: the journal was edited';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    delete from public.interview_events;
+    raise exception 'FAIL: the journal was erased';
+  exception when insufficient_privilege then null;
+  end;
   assert (select jsonb_array_length(board -> 'nodes') from public.interview_boards) = 1, 'interviewer sees the candidate board';
 
   update public.interview_boards set board = '{"nodes": [], "edges": [], "requirements": [], "api": [], "estimate": ""}';
@@ -204,6 +227,12 @@ do $$ begin
   exception when insufficient_privilege then null;
   end;
   assert (select count(*) from public.interview_reviews) = 0, 'candidate still cannot read the review';
+  begin
+    insert into public.interview_events (interview_id, kind, payload)
+    values (current_setting('test.interview')::uuid, 'signal', '{"id": "late"}');
+    raise exception 'FAIL: the journal grew after the interview ended';
+  exception when insufficient_privilege then null;
+  end;
 end $$;
 
 -- ─── bob: законченное собеседование не перезапустить ───────────────────────
@@ -223,6 +252,84 @@ do $$ begin
   exception when check_violation then null;
   end;
   assert (select status from public.interviews) = 'finished', 'the interview stays finished';
+end $$;
+
+-- ─── Команда: приглашение ссылкой, владелец остаётся всегда ────────────────
+reset role;
+select set_config('request.jwt.claims', '{"sub": "00000000-0000-4000-8000-00000000000a", "email": "alice@corp.test", "role": "authenticated"}', false);
+set role authenticated;
+
+do $$
+declare
+  tok text;
+begin
+  insert into public.workspace_invites (workspace_id, role)
+  values (current_setting('test.ws')::uuid, 'author')
+  returning token into tok;
+  perform set_config('test.team', tok, false);
+
+  begin
+    update public.workspace_members set role = 'interviewer' where user_id = auth.uid();
+    raise exception 'FAIL: the only owner demoted herself';
+  exception when check_violation then null;
+  end;
+  begin
+    delete from public.workspace_members where user_id = auth.uid();
+    raise exception 'FAIL: the only owner left the workspace';
+  exception when check_violation then null;
+  end;
+end $$;
+
+-- bob — интервьюер: приглашать в команду не может.
+reset role;
+select set_config('request.jwt.claims', '{"sub": "00000000-0000-4000-8000-00000000000b", "email": "bob@corp.test", "role": "authenticated"}', false);
+set role authenticated;
+do $$ begin
+  assert (select count(*) from public.workspace_invites) = 0, 'a non-owner does not see team invitations';
+  begin
+    insert into public.workspace_invites (workspace_id, role) values (current_setting('test.ws')::uuid, 'owner');
+    raise exception 'FAIL: an interviewer invited an owner';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+
+-- eve принимает приглашение и становится автором; второй раз ссылка не сработает.
+reset role;
+select set_config('request.jwt.claims', '{"sub": "00000000-0000-4000-8000-00000000000e", "email": "eve@mail.test", "role": "authenticated"}', false);
+set role authenticated;
+do $$ begin
+  assert public.accept_workspace_invite(current_setting('test.team')) = current_setting('test.ws')::uuid, 'eve joins the workspace';
+  assert (select role from public.workspace_members where user_id = auth.uid()) = 'author', 'with the role from the invitation';
+  assert (select count(*) from public.scenarios) = 1, 'and now sees the scenarios';
+end $$;
+
+reset role;
+select set_config('request.jwt.claims', '{"sub": "00000000-0000-4000-8000-00000000000d", "email": "dana@mail.test", "role": "authenticated"}', false);
+set role authenticated;
+do $$ begin
+  begin
+    perform public.accept_workspace_invite(current_setting('test.team'));
+    raise exception 'FAIL: a team invitation was accepted twice';
+  exception when unique_violation then null;
+  end;
+end $$;
+
+-- alice делает eve владельцем — теперь можно уйти; удаление пространства не упирается в правило.
+reset role;
+select set_config('request.jwt.claims', '{"sub": "00000000-0000-4000-8000-00000000000a", "email": "alice@corp.test", "role": "authenticated"}', false);
+set role authenticated;
+do $$ begin
+  update public.workspace_members set role = 'owner' where user_id = '00000000-0000-4000-8000-00000000000e';
+  update public.workspace_members set role = 'author' where user_id = auth.uid();
+  assert (select role from public.workspace_members where user_id = auth.uid()) = 'author', 'with a second owner the first can step down';
+end $$;
+
+reset role;
+select set_config('request.jwt.claims', '{"sub": "00000000-0000-4000-8000-00000000000e", "email": "eve@mail.test", "role": "authenticated"}', false);
+set role authenticated;
+do $$ begin
+  delete from public.workspaces where id = current_setting('test.ws')::uuid;
+  assert (select count(*) from public.workspaces) = 0, 'the owner deletes the workspace with everything in it';
 end $$;
 
 -- ─── anon: никуда ──────────────────────────────────────────────────────────

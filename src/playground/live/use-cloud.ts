@@ -4,9 +4,11 @@ import {
   CloudRepository,
   HybridRepository,
   InterviewRepository,
+  acceptTeamInvite,
   claimInvite,
   ensureWorkspace,
   paramFromUrl,
+  preferredWorkspace,
   setParams,
   type Workspace,
 } from './cloud';
@@ -17,15 +19,15 @@ import type { DesignRepository } from '../storage';
  *
  * - local — как до сервера: не настроено или человек не вошёл;
  * - loading — ждём сессию, пространство или приём приглашения;
- * - gate — пришли по приглашению или в собеседование, а войти ещё не вошли
- *   (или приглашение не принялось);
+ * - gate — пришли по приглашению (на собеседование или в команду) или в
+ *   собеседование, а войти ещё не вошли — или приглашение не принялось;
  * - workspace — вошёл: сценарии пространства рядом с проектами браузера;
  * - interview — открыто собеседование, роль выводится из него.
  */
 export type Cloud =
   | { mode: 'local' }
   | { mode: 'loading' }
-  | { mode: 'gate'; error?: string }
+  | { mode: 'gate'; kind: 'interview' | 'team'; error?: string }
   | { mode: 'workspace'; workspace: Workspace; repo: HybridRepository }
   | { mode: 'interview'; repo: InterviewRepository };
 
@@ -37,8 +39,11 @@ interface Auth {
 
 export function useCloud(auth: Auth, local: DesignRepository, workspaceName: string) {
   const [invite, setInvite] = useState(() => (auth.enabled ? paramFromUrl('invite') : null));
+  const [join, setJoin] = useState(() => (auth.enabled ? paramFromUrl('join') : null));
   const [interview, setInterview] = useState(() => (auth.enabled ? paramFromUrl('interview') : null));
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
+  /** Счётчик перечитываний пространства: сменил роль, ушёл из команды, переименовал. */
+  const [generation, setGeneration] = useState(0);
   const [offline, setOffline] = useState(false);
   const [error, setError] = useState<string>();
 
@@ -61,13 +66,37 @@ export function useCloud(auth: Auth, local: DesignRepository, workspaceName: str
     };
   }, [invite, meId]);
 
-  const needWorkspace = Boolean(meId) && !invite && !interview;
+  // Приглашение в команду: принял — и сразу в этом пространстве.
+  useEffect(() => {
+    if (!join || !meId) return;
+    let alive = true;
+    acceptTeamInvite(join)
+      .then((id) => {
+        if (!alive) return;
+        preferredWorkspace.set(id);
+        setParams({ join: null });
+        setJoin(null);
+        setGeneration((value) => value + 1);
+      })
+      .catch((reason: Error) => alive && setError(reason.message));
+    return () => {
+      alive = false;
+    };
+  }, [join, meId]);
+
+  const needWorkspace = Boolean(meId) && !invite && !join && !interview;
   useEffect(() => {
     if (!needWorkspace || !meId) return;
     let alive = true;
     setOffline(false);
     ensureWorkspace(meId, workspaceName)
-      .then((found) => alive && setWorkspace(found))
+      .then((found) => {
+        if (!alive) return;
+        // Тот же объект, если ничего не поменялось: иначе хранилище пересоздалось бы зря.
+        setWorkspace((current) =>
+          current && current.id === found.id && current.name === found.name && current.role === found.role ? current : found,
+        );
+      })
       // Сервер недоступен — работаем локально, а не держим человека на заставке.
       .catch((reason: Error) => {
         console.warn('workspace unavailable:', reason.message);
@@ -76,25 +105,40 @@ export function useCloud(auth: Auth, local: DesignRepository, workspaceName: str
     return () => {
       alive = false;
     };
-  }, [needWorkspace, workspaceName, meId]);
+  }, [needWorkspace, workspaceName, meId, generation]);
 
   // Вышел из учётки — пространство чужое.
   useEffect(() => {
     if (!meId) setWorkspace(null);
   }, [meId]);
 
+  // Хранилище зависит только от id пространства: переименование не должно перезагружать проекты.
+  const workspaceId = workspace?.id;
+  const repo = useMemo(
+    () => (workspace ? new HybridRepository(local, new CloudRepository(workspace)) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [workspaceId, local],
+  );
+
+  // Одно собеседование — одно хранилище: пересоздавать его — значит заново грузить собеседование.
+  const interviewRepo = useMemo(
+    () => (interview && meId ? new InterviewRepository(interview, meId) : null),
+    [interview, meId],
+  );
+
   const cloud: Cloud = useMemo(() => {
     if (!auth.enabled) return { mode: 'local' };
     if (!auth.ready) return { mode: 'loading' };
-    if (invite || interview) {
-      if (!meId || error) return { mode: 'gate', error };
-      if (invite) return { mode: 'loading' };
-      return { mode: 'interview', repo: new InterviewRepository(interview!, meId) };
+    if (invite || interview || join) {
+      const kind = join ? 'team' : 'interview';
+      if (!meId || error) return { mode: 'gate', kind, error };
+      if (invite || join) return { mode: 'loading' };
+      return { mode: 'interview', repo: interviewRepo! };
     }
     if (!meId) return { mode: 'local' };
-    if (!workspace) return offline ? { mode: 'local' } : { mode: 'loading' };
-    return { mode: 'workspace', workspace, repo: new HybridRepository(local, new CloudRepository(workspace)) };
-  }, [auth.enabled, auth.ready, meId, invite, interview, error, workspace, offline, local]);
+    if (!workspace || !repo) return offline ? { mode: 'local' } : { mode: 'loading' };
+    return { mode: 'workspace', workspace, repo };
+  }, [auth.enabled, auth.ready, meId, invite, interview, join, error, workspace, repo, interviewRepo, offline]);
 
   const openInterview = useCallback((id: string) => {
     setParams({ interview: id, role: null });
@@ -102,11 +146,20 @@ export function useCloud(auth: Auth, local: DesignRepository, workspaceName: str
   }, []);
 
   const leave = useCallback(() => {
-    setParams({ interview: null, invite: null });
+    setParams({ interview: null, invite: null, join: null });
     setInterview(null);
     setInvite(null);
+    setJoin(null);
     setError(undefined);
   }, []);
 
-  return { cloud, openInterview, leave };
+  const switchWorkspace = useCallback((next: Workspace) => {
+    preferredWorkspace.set(next.id);
+    setWorkspace(next);
+  }, []);
+
+  /** Перечитать своё место в пространстве: роль, имя — или что из него ушёл. */
+  const reloadWorkspace = useCallback(() => setGeneration((value) => value + 1), []);
+
+  return { cloud, openInterview, leave, switchWorkspace, reloadWorkspace };
 }
