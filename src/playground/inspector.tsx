@@ -4,6 +4,7 @@ import { competencyFor, localized, type CompetencyGroup } from './competency';
 import { patchRequirement } from './panels';
 import { BlockRoutes } from './api-panel';
 import { SchemaSummary } from './schema-editor';
+import { ReqChip } from './req-chip';
 import type { Design, DesignNode, MatrixCell, MatrixScore, Requirement, TechMatrix } from './model';
 import type { T } from './i18n';
 
@@ -57,15 +58,13 @@ function BlockRequirements({ design, node, update, t, readOnly }: Pick<Props, 'd
       {!readOnly && rest.length > 0 && (
         <div className="pg-chips">
           {rest.map((item) => (
-            <button
+            <ReqChip
               key={item.id}
-              type="button"
-              className="pg-chip"
-              title={item.text}
+              item={item}
+              t={t}
+              label={`+ ${item.id}`}
               onClick={() => patchRequirement(update, item.id, { covers: [...item.covers, node.id] })}
-            >
-              + {item.id}
-            </button>
+            />
           ))}
         </div>
       )}

@@ -242,6 +242,40 @@ body:has(.pg) .site-footer {
   border: 1px solid var(--pg-accent);
 }
 
+/* Подсказка к чипу требования: поверх всего, чтобы её не резал край прокручиваемой панели. */
+.pg-tip {
+  position: fixed;
+  z-index: 50;
+  transform: translate(-50%, -100%);
+  max-width: 18rem;
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  background: var(--pg-fg);
+  color: var(--pg-bg);
+  font-size: 0.8rem;
+  line-height: 1.35;
+  text-align: left;
+  box-shadow: 0 4px 14px var(--shadow, rgba(16, 18, 22, 0.18));
+  pointer-events: none;
+}
+
+.pg-tip--below {
+  transform: translate(-50%, 0);
+}
+
+.pg-tip__id {
+  font-size: 0.7rem;
+  letter-spacing: 0.02em;
+  opacity: 0.7;
+}
+
+.pg-tip__target {
+  opacity: 0.85;
+  font-variant-numeric: tabular-nums;
+}
+
 .pg-actions {
   display: flex;
   flex-wrap: wrap;

@@ -1,4 +1,5 @@
 import { useState, type DragEvent } from 'react';
+import { ReqChip } from './req-chip';
 import {
   API_TEMPLATES,
   OUTBOUND,
@@ -250,18 +251,15 @@ function Editor({ item, design, update, t, onClose }: { item: Endpoint; design: 
             {frs.map((req) => {
               const on = item.covers.includes(req.id);
               return (
-                <button
+                <ReqChip
                   key={req.id}
-                  type="button"
-                  className={`pg-chip ${on ? 'is-on' : ''}`}
-                  aria-pressed={on}
-                  title={req.text}
+                  item={req}
+                  t={t}
+                  on={on}
                   onClick={() =>
                     patch({ covers: on ? item.covers.filter((id) => id !== req.id) : [...item.covers, req.id] })
                   }
-                >
-                  {req.id}
-                </button>
+                />
               );
             })}
           </div>
