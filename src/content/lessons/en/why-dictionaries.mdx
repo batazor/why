@@ -1,0 +1,292 @@
+---
+title: Why dictionaries
+description: >-
+  Reference data in code changes with a release; in an admin dictionary it
+  changes with a row. What that asks of the service reading it: a key, an
+  in-memory copy, validating the whole batch and an answer for an unknown value.
+problem: >-
+  The table "country → shipping zone" lives as a constant in code, and the list
+  of countries with cash on delivery lives in the next one. Every new country
+  is a ticket, a review and a release, and the second list gets forgotten. The
+  data changes on the business's schedule and ships on the release schedule.
+tags: [system-design, reference-data, reliability]
+order: 16
+deck: why-dictionaries
+comments:
+  thirtyMore: 'thirty more countries'
+  codWasSmall: 'cash on delivery once worked in two countries'
+  isoIsKey: 'the key is the ISO code from the address, not the country name'
+  zoneClosedSet: 'in the admin the zone is a string, in code a closed set of values'
+  firstLoad: 'first load, then refresh in the background'
+  replaceAllOrNothing: 'the whole batch or nothing: on error the dictionary is not changed'
+  oneSwap: 'one pointer write: readers see the old map or the new one, never half'
+  noZoneNoPrice: 'no zone, no shipping price: the country is not offered'
+  codDefaultsOff: 'not marked means no cash on delivery'
+  onlyTransportShared: 'the shared part is delivery only: fetch the batch by slug and decode it into T'
+labels:
+  kindClient: client
+  kindService: service
+  kindOutput: output
+  kindCode: code
+  kindState: memory
+  kindPeople: people
+  kindProcess: process
+  orderForm: Order form
+  sendsCountry: country from the address
+  buildsOptions: builds delivery options
+  options: Delivery options
+  zoneAndCod: zone, cash on delivery
+  mapInCode: constant in code
+  memCopy: Dictionary copy
+  logistics: Logistics
+  knowsCountries: know where we ship
+  release: Release
+  adminPanel: Admin panel
+  sharedTransport: shared delivery
+  notShippable: not shippable
+  ticket: ticket
+  days: days
+  addsRow: a row
+  every5min: every 5 minutes
+  keepCopy: copy stays
+  duplicate: duplicate
+  rejected: batch rejected
+terms:
+  dictionary: >-
+    A named set of records with declared fields, edited in the admin panel by
+    the people responsible for that data. Services only read it. Also called
+    reference data or a lookup table.
+  slug: >-
+    The permanent machine name of a dictionary that a service requests it by:
+    `shipping_countries`. The human title may change, the slug may not.
+  in-memory copy: >-
+    The last loaded and validated version of the dictionary inside the
+    process. Requests read only it and never go to the admin panel.
+  zero value: >-
+    What Go returns for a missing map key: an empty string, false, an empty
+    struct.
+steps:
+  - id: hardcode
+    title: Data that changes with a release
+    narration: |-
+      A customer checks out, and the form sends the country from the address:
+      `country: CZ`. Checkout needs two facts from it: which shipping zone the
+      country falls into and whether cash on delivery is available there.
+
+      Both facts lived in code. Zones in a forty-line map, cash on delivery in
+      a separate list, because once it worked in two countries. The file's
+      history is nothing but "ship to …": every new country logistics signed
+      up meant a ticket, a review and a release.
+
+      Worse than the slow path are two places for one decision. Cash on
+      delivery launched in Czechia, logistics sent the announcement, the
+      country had been in the zones for months, and nobody touched the list:
+      `CODAllowed("CZ")` answers false.
+    note: >-
+      A new country waits for a release. The second list got forgotten.
+  - id: dictionary
+    title: A dictionary is data with an owner
+    narration: |-
+      A [[dictionary]] is a table in the admin panel with declared fields: each
+      has a type, whether it is required and, for enums, the allowed values. A
+      dictionary is named by its [[slug]], and the service requests it by that.
+
+      Countries are added by those who arrange the shipping — logistics. They
+      do it with a row in the admin panel, without a developer. Both facts
+      about a country now sit in one row: the `codCountries` list became the
+      `cod` field, and it is hard to forget when adding a country — the whole
+      row is in front of you.
+
+      Candidates for a dictionary share three signs: there is little data, it
+      changes rarely and by a business decision, and it is read all the time.
+      Shipping countries, order cancellation reasons, product categories,
+      mappings from one set of codes to another.
+    note: >-
+      A new country is a row in the admin. Both facts in one row.
+  - id: key
+    title: The key is what arrives in the request
+    narration: |-
+      The first decision about a dictionary is its key. For people the country
+      name is natural, and it looks better in the admin. But the form sends
+      the ISO code, and that is what the service will look up by.
+
+      And names change. In 2016 the Czech Republic got the short name Czechia;
+      in 2022 the UN started writing Turkey as Türkiye. A key by name turns a
+      text edit in the admin into a country vanishing from checkout. Let the
+      name be a field for people and the code the key.
+
+      The second decision is how strictly to read the fields. In the admin the
+      zone is a string, in code it is a closed set of three values. A typo
+      `"europe"` is not a new zone but a mistake, and it should be rejected on
+      load, not discovered by a customer.
+    note: >-
+      The key is the ISO code from the address. Country names change.
+  - id: offpath
+    title: The admin panel is off the request path
+    narration: |-
+      The most important decision: a request never goes to the admin panel. The
+      service keeps an [[in-memory copy]] of the dictionary, loads it on start
+      and refreshes it in the background every few minutes. Checkout reads only
+      the copy.
+
+      Otherwise the admin panel — an internal tool nobody designed for checkout
+      traffic — becomes a dependency of checkout. Its outage, a slow answer or
+      a deploy would turn into abandoned carts.
+
+      With a copy the admin panel can be down for an hour: the refresh logs a
+      warning, the service answers from the last good version. The price is
+      delay: a new row arrives not at once but within the refresh interval.
+      Five minutes against days for a release is a good trade, but it is worth
+      saying out loud to logistics.
+
+      Start-up is a separate question. If the admin panel is unavailable at
+      start, the service can come up with an empty dictionary and load it later
+      — shipping nowhere until then. Or it can refuse to start without it. The
+      choice depends on what is worse for this data.
+    note: >-
+      The admin panel is down — orders go through on the last copy.
+  - id: swap
+    title: The whole batch or nothing
+    narration: |-
+      A dictionary is edited by hand, and sooner or later it will contain a
+      mistake: a country twice, an empty zone, a typo. The service should not
+      take it at its word.
+
+      The new version is built aside, in a separate map. Every row is
+      validated, duplicate keys are caught. If even one row fails, the whole
+      batch is rejected and the previous copy stays in service. A partly applied
+      dictionary is worse than the old one: nobody knows which of it is right.
+
+      If everything passes, the new map replaces the old one with a single
+      pointer write. Requests reading the dictionary at that moment see either
+      the old map whole or the new one — and without locks on reads.
+
+      The failed-refresh counter is worth an alert. The in-memory copy protects
+      customers, but it will not tell logistics their edit did not apply.
+    note: >-
+      One broken row rejects the whole batch. The previous copy keeps working.
+  - id: unknown
+    title: An unknown value
+    narration: |-
+      A customer picks Kosovo — `XK`. The code is not in the ISO standard, but
+      many systems use it, and the dictionary does not have it yet. What does
+      checkout do?
+
+      The answer depends on the field, and here two fields get different
+      answers. Without a zone there is no shipping price — nothing to show, and
+      it is more honest not to offer the country than to guess. Cash on
+      delivery for an unmarked row is simply off: the [[zero value]] false is
+      the safe option here.
+
+      That is why `Lookup` returns a second result — found or not — instead of
+      silently handing back an empty struct: the decision about an unknown key
+      belongs to whoever knows what it costs. Unknown codes are worth counting
+      as a metric — that is exactly the list of rows the dictionary is missing.
+
+      Note that the delivery options for each zone stayed in code,
+      `zoneOptions`. A new zone is new logic, and a row in the admin cannot add
+      it.
+    note: >-
+      No zone — country not offered. Not marked — COD is off.
+  - id: owner
+    title: What is shared and what is each one's own
+    narration: |-
+      When a service gets its first dictionary, it is tempting to build a
+      shared cache for all future ones right away: key and validation as
+      parameters, a "give me everything" method, a timestamp, its own set of
+      errors. Hundreds of lines — for one dictionary.
+
+      Only delivery is worth sharing: fetch the batch by slug and decode it
+      into the right type. The rest — what the key is, how to validate, what to
+      answer for an unknown value — belongs to each dictionary. Countries
+      refuse an unknown code; a cancellation-reasons dictionary may show
+      "other" for an unknown reason. That meaning lives next to whoever reads
+      the dictionary: in the checkout package.
+
+      Generalising the cache is worth it when a second dictionary appears and
+      shows what they really share.
+    note: >-
+      Only delivery by slug is shared. Meaning lives with the consumer.
+quiz:
+  - question: >-
+      Which sign says the data should move from code to a dictionary?
+    options:
+      - It has more than a thousand rows
+      - The business changes it more often than releases ship
+      - More than one service reads it
+      - It has to be stored in a database
+    answer: 1
+    explanation: >-
+      A dictionary is needed when the schedule of data changes parts from the
+      release schedule. Size and the number of readers are secondary.
+  - question: >-
+      The admin panel is unavailable for ten minutes. What happens to checkout
+      if the dictionary is built as in the lesson?
+    options:
+      - Orders fail until the admin panel is back
+      - Orders go through without a delivery choice
+      - Orders go through as usual, on the last loaded copy
+    answer: 2
+    explanation: >-
+      A request reads the in-memory copy; the admin panel is not on its path. A
+      failed refresh logs a warning and keeps the previous copy.
+  - question: >-
+      In a forty-country dictionary one row has a zone that does not exist.
+      What does the service do on refresh?
+    options:
+      - Applies thirty-nine rows and skips one
+      - Rejects the whole batch and keeps the previous copy
+      - Applies every row and replaces the zone with an empty one
+    answer: 1
+    explanation: >-
+      A partly applied dictionary is worse than the previous one: nobody knows
+      which rows are right. The error goes to the log; the last validated
+      version keeps working.
+  - question: >-
+      Why is the dictionary keyed by the country code rather than its name?
+    options:
+      - Two-letter strings compare faster
+      - The code arrives in the request, and names change
+      - The admin panel requires it
+    answer: 1
+    explanation: >-
+      Lookups use what the form sent — the code. The name is text for people:
+      it will be renamed, and a key by it would lose the country.
+---
+
+Reference data often starts as a constant: a dozen lines someone typed into
+the code at launch. A constant is convenient until the data starts to change.
+Then every change goes through a developer and a release, although the
+decision is not a developer's to make.
+
+A dictionary in the admin panel separates the two schedules: the data changes
+when the business needs it, the code when the code needs it. But the move to
+the admin panel guarantees nothing by itself. How reliable a dictionary is
+depends on how the service reads it.
+
+## Dictionary, config and feature flag
+
+All three take something out of code, but they answer different questions.
+
+- **Config** is how the environment is set up: addresses, timeouts, pool
+  sizes. It differs between staging and production and changes with a deploy.
+- **A feature flag** is whether a behaviour is on. It lives briefly: turned on,
+  verified, removed together with the old code branch.
+- **A dictionary** is facts about the domain: codes, mappings, categories. It
+  is the same in every environment, lives for years and belongs to whoever is
+  responsible for those facts.
+
+If behaviour switches start going into a dictionary, that is a feature flag
+without an end date. If addresses and timeouts do, that is config without a
+deploy.
+
+## When a dictionary does not help
+
+If the data changes together with the code that reads it, a dictionary gives
+nothing. A new shipping zone can be added in the admin as a row, but without
+code that prices it, it means nothing. What is worth moving out is what the
+code uses as is, without a branch of its own for every value.
+
+And a dictionary is not the domain's database. Thousands of records the
+service writes itself, relations between them and transactions are the
+service's tables, not a lookup in the admin panel.

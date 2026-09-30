@@ -374,6 +374,38 @@ def p2p_network():
     )
 
 
+def dictionaries():
+    """Строку словаря дописывают в админке; сервис читает свою копию, релиз стоит в стороне."""
+    rows = []
+    for i in range(5):
+        fresh = i == 4
+        rows += [rect(76, 86 + i * 30, 164, 20, SAGE if fresh else BUTTER, r=4, op=0.95 if fresh else 0.6)]
+    copy = [rect(404, 112 + i * 20, 104, 12, BUTTER, r=3, op=0.55) for i in range(4)]
+    return (
+        bloom((158, 150, 120, 110, '#f3e8cc'), (456, 150, 100, 90, '#d3e3ee'), (560, 250, 60, 36, '#f3d6d6'))
+        # Админка: лист-таблица, нижняя строка только что дописана.
+        + wash(rect(58, 64, 200, 190, CREAM, op=0.85))
+        + wash(*rows)
+        + brush('M90 96 h30 M136 96 h60', 'M90 126 h30 M136 126 h72', 'M90 156 h30 M136 156 h52',
+                'M90 186 h30 M136 186 h66', color=INK_WARM, width=1.8, opacity=0.5)
+        + brush('M90 216 h30 M136 216 h58', color=INK_SAGE, width=2.2, opacity=0.8)
+        # Карандаш у свежей строки.
+        + wash(path('M226 236 L284 178 L296 190 L238 248 Z', PEACH, 0.9), path('M226 236 L238 248 L218 256 Z', INK_WARM, 0.8))
+        # Раз в несколько минут копия уезжает в сервис.
+        + brush(*arrow(270, 150, 372, 150), color=INK_SAGE, width=2.2, opacity=0.55, dash='5 8')
+        # Сервис и копия внутри него.
+        + wash(rect(384, 84, 144, 132, SKY, op=0.8), rect(396, 104, 120, 92, CREAM, op=0.9))
+        + wash(*copy)
+        # Запрос читает копию и уходит дальше.
+        + brush(*arrow(540, 150, 610, 150), color=INK, width=2.2, opacity=0.5)
+        # Релиз стоит в стороне без дела.
+        + brush(*gear_marks(560, 250, 16), color=INK_ROSE, width=1.8, opacity=0.4)
+        + wash(circle(560, 250, 14, ROSE, 0.55))
+        + brush('M588 226 h9 l-9 9 h9', color=INK_ROSE, width=1.8, opacity=0.55)
+        + splashes((330, 250, 3, PEACH), (612, 60, 3, SKY), (40, 40, 3, SAGE))
+    )
+
+
 COVERS = {
     'circuit-breaker': (circuit_breaker, 'Ретраи долбят упавший сервис, рубильник между ними разомкнут.'),
     'discount-floor': (discount_floor, 'Две акции тянут цену ниже пола, доказательство держит её.'),
@@ -389,6 +421,7 @@ COVERS = {
     'system-design-interview': (interview, 'Задание, доска кандидата и рубрика интервьюера.'),
     'p2p-network': (p2p_network, 'Слева все тянут с одного сервера, справа узлы раздают куски друг другу.'),
     'littles-law': (littles_law, 'Интенсивность и время пребывания измерены, число заявок в системе — оценено.'),
+    'why-dictionaries': (dictionaries, 'Строку словаря дописывают в админке, сервис читает свою копию.'),
 }
 
 if __name__ == '__main__':
