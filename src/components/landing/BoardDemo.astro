@@ -291,9 +291,11 @@ const H = 50;
     fill: var(--interviewer);
   }
 
+  /* Цвет интервьюера — акцент сайта: в тёмной теме он светлый, и белое на
+     нём теряется. Подписи и значок на нём — цветом фона карточки. */
   .board__badge-icon {
     fill: none;
-    stroke: #fff;
+    stroke: var(--panel);
     stroke-width: 1.4;
     stroke-linecap: round;
   }
@@ -323,6 +325,10 @@ const H = 50;
   .board__cursor--interviewer path,
   .board__cursor--interviewer rect {
     fill: var(--interviewer);
+  }
+
+  .board__cursor--interviewer text {
+    fill: var(--panel);
   }
 
   /* Конечный кадр — он же кадр без анимации: кэш на месте, курсоры у своих блоков. */
