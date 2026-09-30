@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { LINK_LIMIT, encodeDesign, shareUrl, shared, type ShareOptions } from './share';
 import { exportFile } from './storage';
 import { ROLES, type Role } from './roles';
-import { roomFromUrl } from './live/room';
 import type { Design } from './model';
 import type { T } from './i18n';
 
@@ -64,7 +63,6 @@ export function ShareDialog({ design, t, lang, onClose }: { design: Design; t: T
   const tooLong = link.length > LINK_LIMIT;
   const size = new Intl.NumberFormat(lang).format(Math.round(link.length / 102.4) / 10);
   const leaks = (role === 'candidate' || role === 'trainee') && options.scenario;
-  const joinsRoom = Boolean(roomFromUrl()) && (role === 'candidate' || role === 'interviewer');
 
   return (
     <div className="pg-dialog" role="dialog" aria-modal="true" aria-label={t('share.title')} onClick={onClose}>
@@ -123,7 +121,6 @@ export function ShareDialog({ design, t, lang, onClose }: { design: Design; t: T
             <textarea className="pg-input pg-textarea pg-share__link" rows={3} readOnly value={link} onFocus={(event) => event.currentTarget.select()} />
           </label>
           <p className="pg-hint">{t(tooLong ? 'share.tooLong' : 'share.fits')}</p>
-          {joinsRoom && <p className="pg-note">{t('share.room')}</p>}
 
           <div className="pg-actions">
             <button type="button" className="pg-button" disabled={!link} onClick={copy}>

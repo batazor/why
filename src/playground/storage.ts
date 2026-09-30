@@ -13,6 +13,8 @@ export interface DesignRepository {
   load(id: string): Promise<Design | null>;
   save(design: Design): Promise<void>;
   remove(id: string): Promise<void>;
+  /** id нового проекта, если хранилищу нужен свой формат (у сервера — uuid). */
+  newId?(): string;
 }
 
 const PREFIX = 'why:playground:';

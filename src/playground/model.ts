@@ -303,6 +303,8 @@ export interface DesignSummary {
   id: string;
   title: string;
   updatedAt: string;
+  /** Лежит в пространстве на сервере, а не в этом браузере. */
+  cloud?: boolean;
 }
 
 export function uid(prefix: string): string {

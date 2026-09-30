@@ -3298,3 +3298,104 @@ body:has(.pg) .site-footer {
     animation: none;
   }
 }
+
+/* ── Пространство и собеседования ──────────────────────────────────────── */
+
+.pg-role--fixed {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  background: var(--pg-accent-soft);
+  color: var(--pg-accent);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.pg-status.is-failed {
+  color: var(--pg-bad);
+}
+
+.pg-iv-new {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.pg-iv-new .pg-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.pg-iv-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pg-iv {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--pg-border);
+  border-radius: var(--pg-radius);
+}
+
+.pg-iv.is-cancelled {
+  opacity: 0.6;
+}
+
+.pg-iv__who {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.pg-iv__who strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pg-iv__who .pg-hint {
+  margin: 0;
+}
+
+.pg-gate {
+  display: grid;
+  place-items: center;
+  min-height: 60vh;
+  padding: 2rem 1rem;
+}
+
+.pg-gate__box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: 28rem;
+  padding: 2rem 1.5rem;
+  border: 1px solid var(--pg-border);
+  border-radius: var(--pg-radius);
+  background: var(--pg-panel);
+  text-align: center;
+}
+
+.pg-gate__box h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.pg-gate__box p {
+  margin: 0;
+}
+
+.pg-gate__icon {
+  font-size: 28px !important;
+  color: var(--pg-accent);
+}

@@ -33,8 +33,11 @@ import { clearPayload, decodeDesign, payloadFromUrl } from './share';
 import { translator } from './i18n';
 import { PERMISSIONS, ROLES, initialRole, rememberRole, type Role, type Tab } from './roles';
 import { useAuth } from './live/auth';
-import { closeRoom, openRoom, roomFromUrl, useRoom } from './live/room';
-import { LiveBar, RemoteCursors } from './live/live-ui';
+import { useRoom } from './live/room';
+import { Gate, LiveBar, RemoteCursors } from './live/live-ui';
+import { useCloud } from './live/use-cloud';
+import { InterviewRepository, isCloudId, type Timing } from './live/cloud';
+import { InterviewsDialog } from './live/interviews-dialog';
 
 /**
  * Песочница системного дизайна для собеседований.
@@ -55,8 +58,19 @@ interface Props {
 type Selection = { node?: string; edge?: string };
 
 export default function Playground({ lang, repository }: Props) {
-  const repo = useMemo(() => repository ?? new LocalRepository(), [repository]);
+  const local = useMemo(() => repository ?? new LocalRepository(), [repository]);
   const t = useMemo(() => translator(lang), [lang]);
+
+  /**
+   * Где работаем: в браузере, в пространстве на сервере или в собеседовании.
+   * Хранилище подменяется целиком — панели песочницы разницы не замечают.
+   */
+  const auth = useAuth();
+  const { cloud, openInterview, leave } = useCloud(auth, local, t('ws.default'));
+  const repo: DesignRepository = cloud.mode === 'workspace' || cloud.mode === 'interview' ? cloud.repo : local;
+  const interview = cloud.mode === 'interview' ? cloud.repo : null;
+  /** Пока не ясно, где работаем, открывать нечего: иначе мелькнёт чужой проект. */
+  const settled = cloud.mode === 'local' || cloud.mode === 'workspace' || cloud.mode === 'interview';
 
   const { design, load, update, undo, redo, forget, canUndo, canRedo } = useDesignHistory();
   const [projects, setProjects] = useState<DesignSummary[]>([]);
@@ -65,10 +79,12 @@ export default function Playground({ lang, repository }: Props) {
   /** Интервьюер переключается между ответом кандидата и эталоном. */
   const [compareView, setCompareView] = useState<'answer' | 'reference'>('answer');
   const [selection, setSelection] = useState<Selection>({});
-  const [status, setStatus] = useState<'saved' | 'saving'>('saved');
+  const [status, setStatus] = useState<'saved' | 'saving' | 'failed'>('saved');
   const [canvasKey, setCanvasKey] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   const [sharing, setSharing] = useState(false);
+  const [interviewsOpen, setInterviewsOpen] = useState(false);
+  const [loadError, setLoadError] = useState('');
   /** Требования таблицей или списком на правку. Выбор — удобство смотрящего, живёт в браузере. */
   const [reqView, setReqView] = useState<'table' | 'edit'>(() => {
     try {
@@ -88,36 +104,50 @@ export default function Playground({ lang, repository }: Props) {
 
   const perms = PERMISSIONS[role];
   const board = role === 'interviewer' ? compareView : perms.board;
-  const readOnly = !perms.editBoard;
+  /** Собеседование закончено — доска кандидата заморожена и на сервере, и здесь. */
+  const frozen = Boolean(interview && design?.session.finishedAt);
+  const readOnly = !perms.editBoard || frozen;
 
   const refresh = useCallback(async () => setProjects(await repo.list()), [repo]);
 
   /**
    * Комната собеседования: интервьюер видит курсор кандидата и его доску
-   * вживую. Без входа комнаты нет — канал приватный.
+   * вживую, кандидат — ход собеседования. Комната — само собеседование.
    */
-  const auth = useAuth();
-  const [room, setRoom] = useState(roomFromUrl);
+  const room = interview?.interviewId ?? null;
+  const onTiming = useCallback(
+    (next: Timing) => update((current) => ({ ...current, session: { ...current.session, ...next } })),
+    [update],
+  );
   const onBoard = useCallback(
     ({ designId, board: incoming }: { designId: string; board: Board }) =>
       // Доска чужого проекта сюда не относится: интервьюер открыл другой сценарий.
       update((current) => (current.id === designId ? { ...current, ...incoming } : current)),
     [update],
   );
-  const live = useRoom({ room: auth.me ? room : null, me: auth.me, role, design, onBoard });
+  const live = useRoom({ room: auth.me ? room : null, me: auth.me, role, design, onBoard, onTiming });
   const { sendCursor } = live;
   // Эталон у интервьюера — другая схема: курсор над ним кандидату ни о чём не скажет.
   useEffect(() => {
     if (board !== 'answer') sendCursor(null);
   }, [board, sendCursor]);
 
+  /**
+   * Хранилище, из которого открыт текущий проект. Когда хранилище меняется
+   * (вошёл, вышел из собеседования), на экране ещё старый проект — и сохранять
+   * его в новое место нельзя: собеседование стало бы сценарием пространства.
+   */
+  const owner = useRef<DesignRepository | null>(null);
+
   const open = useCallback((next: Design) => {
+    owner.current = repo;
     load(next);
     setSelection({});
     // Новый проект — новое полотно: React Flow заново подгоняет вид под схему.
     setCanvasKey((key) => key + 1);
-    lastOpened.set(next.id);
-  }, [load]);
+    // Собеседование открывается адресом, а не «последним проектом».
+    if (!(repo instanceof InterviewRepository)) lastOpened.set(next.id);
+  }, [load, repo]);
 
   /**
    * Первый заход: последний открытый проект, иначе пример — пустое полотно
@@ -128,7 +158,31 @@ export default function Playground({ lang, repository }: Props) {
    * и человек считал бы, что ничего не изменилось.
    */
   useEffect(() => {
+    if (!settled) return;
+    let alive = true;
+    const show = (next: Design) => alive && open(next);
     (async () => {
+      /**
+       * Собеседование — один проект, и роль в нём не выбирают: кто принял
+       * приглашение, тот кандидат, остальные — интервьюеры.
+       */
+      if (repo instanceof InterviewRepository) {
+        try {
+          const found = await repo.load(repo.interviewId);
+          if (!alive) return;
+          if (!found) return setLoadError(t('iv.notFound'));
+          setLoadError('');
+          setRole(repo.as);
+          setTab(PERMISSIONS[repo.as].tabs[0]);
+          setCompareView('answer');
+          setProjects(await repo.list());
+          return show(found);
+        } catch (reason) {
+          if (alive) setLoadError((reason as Error).message);
+          return;
+        }
+      }
+
       /**
        * Присланная ссылка сильнее всего: её открыли, чтобы посмотреть именно
        * этот сценарий. Но если по нему уже есть работа, она важнее ссылки.
@@ -141,7 +195,7 @@ export default function Playground({ lang, repository }: Props) {
           const mine = await repo.load(incoming.id);
           if (!mine || isUntouched(mine)) await repo.save(incoming);
           setProjects(await repo.list());
-          return open(mine && !isUntouched(mine) ? mine : incoming);
+          return show(mine && !isUntouched(mine) ? mine : incoming);
         } catch {
           // Ссылка битая или обрезанная — открываем песочницу как обычно.
           clearPayload();
@@ -158,9 +212,12 @@ export default function Playground({ lang, repository }: Props) {
       const found = id ? await repo.load(id) : null;
       // Нетронутый проект терять нечего: если в нём не было ни одной правки
       // (например, это пример прошлой версии), открывается свежий пример.
-      open(found && !isUntouched(found) ? found : fresh);
-    })();
-  }, [repo, lang, open]);
+      show(found && !isUntouched(found) ? found : fresh);
+    })().catch((reason: Error) => alive && setLoadError(reason.message));
+    return () => {
+      alive = false;
+    };
+  }, [repo, settled, lang, open, t]);
 
   /**
    * Полотно, требования и калькулятор работают с «доской» — верхними полями
@@ -192,16 +249,22 @@ export default function Playground({ lang, repository }: Props) {
    */
   const first = useRef(true);
   useEffect(() => {
-    if (!design) return;
+    if (!design || owner.current !== repo) return;
     if (first.current) {
       first.current = false;
       return;
     }
     setStatus('saving');
     const timer = setTimeout(async () => {
-      await repo.save(design);
-      await refresh();
-      setStatus('saved');
+      try {
+        await repo.save(design);
+        await refresh();
+        setStatus('saved');
+      } catch (reason) {
+        // Сервер не принял правку: работа остаётся на экране, следующая правка попробует снова.
+        console.warn('save failed:', (reason as Error).message);
+        setStatus('failed');
+      }
     }, 400);
     return () => clearTimeout(timer);
   }, [design, repo, refresh]);
@@ -267,10 +330,37 @@ export default function Playground({ lang, repository }: Props) {
   const findings = useFindings(view ?? emptyDesign(''));
   const fileInput = useRef<HTMLInputElement>(null);
 
+  if (cloud.mode === 'gate' || (loadError && !design))
+    return (
+      <Gate
+        t={t}
+        me={auth.me}
+        error={cloud.mode === 'gate' ? cloud.error : loadError}
+        onSignIn={auth.signIn}
+        onSignOut={auth.signOut}
+        onLeave={() => {
+          setLoadError('');
+          leave();
+        }}
+      />
+    );
+
   if (!design || !view) return <div className="pg pg--loading" />;
 
+  /** Новый проект — туда, где сейчас работаем: в пространство, если вошли. */
+  const newId = () => repo.newId?.() ?? uid('d');
+  const inWorkspace = cloud.mode === 'workspace';
+  const localProjects = projects.filter((project) => !project.cloud);
+  const cloudProjects = projects.filter((project) => project.cloud);
+
   const create = async (next: Design) => {
-    await repo.save(next);
+    try {
+      await repo.save(next);
+    } catch (reason) {
+      console.warn('create failed:', (reason as Error).message);
+      setStatus('failed');
+      return;
+    }
     await refresh();
     open(next);
   };
@@ -305,25 +395,35 @@ export default function Playground({ lang, repository }: Props) {
   return (
     <div className={`pg pg--${role}`}>
       <div className="pg-toolbar">
-        <label className="pg-role">
-          <i className="codicon codicon-account" aria-hidden="true" />
-          <span className="visually-hidden">{t('role.label')}</span>
-          <select className="pg-input pg-select" value={role} onChange={(event) => switchRole(event.currentTarget.value as Role)}>
-            {ROLES.map((name) => (
-              <option key={name} value={name}>
-                {t(`role.${name}`)}
-              </option>
-            ))}
-          </select>
-        </label>
+        {interview ? (
+          // В собеседовании роль задана приглашением, а не выбором.
+          <span className="pg-role pg-role--fixed">
+            <i className="codicon codicon-account" aria-hidden="true" /> {t(`role.${role}`)}
+          </span>
+        ) : (
+          <label className="pg-role">
+            <i className="codicon codicon-account" aria-hidden="true" />
+            <span className="visually-hidden">{t('role.label')}</span>
+            <select className="pg-input pg-select" value={role} onChange={(event) => switchRole(event.currentTarget.value as Role)}>
+              {ROLES.map((name) => (
+                <option key={name} value={name}>
+                  {t(`role.${name}`)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
-        {role === 'candidate' ? (
+        {role === 'candidate' || interview ? (
           <>
             <strong className="pg-toolbar__title">{design.title || t('pg.untitled')}</strong>
             {/* Кандидат знает, что пишется: сбор без предупреждения — это уже слежка. */}
-            <span className="pg-recording" title={t('sig.notice')}>
-              <i className="codicon codicon-circle-filled" aria-hidden="true" /> {t('sig.recording')}
-            </span>
+            {role === 'candidate' && (
+              <span className="pg-recording" title={t('sig.notice')}>
+                <i className="codicon codicon-circle-filled" aria-hidden="true" /> {t('sig.recording')}
+              </span>
+            )}
+            {frozen && <span className="pg-live__alone">{t('iv.finished')}</span>}
           </>
         ) : (
           <label className="pg-toolbar__project">
@@ -336,18 +436,33 @@ export default function Playground({ lang, repository }: Props) {
                 if (found) open(found);
               }}
             >
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.id === design.id ? design.title || t('pg.untitled') : project.title || t('pg.untitled')}
-                </option>
-              ))}
+              {(cloudProjects.length
+                ? [
+                    [cloud.mode === 'workspace' ? cloud.workspace.name : '', cloudProjects],
+                    [t('ws.browser'), localProjects],
+                  ]
+                : [['', localProjects]]
+              ).map(([group, items]) => {
+                const options = (items as DesignSummary[]).map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.id === design.id ? design.title || t('pg.untitled') : project.title || t('pg.untitled')}
+                  </option>
+                ));
+                return group ? (
+                  <optgroup key={group as string} label={group as string}>
+                    {options}
+                  </optgroup>
+                ) : (
+                  options
+                );
+              })}
             </select>
           </label>
         )}
 
         {perms.manageProjects && (
           <>
-            <button type="button" className="pg-button" onClick={() => create(emptyDesign(t('pg.untitled')))}>
+            <button type="button" className="pg-button" onClick={() => create({ ...emptyDesign(t('pg.untitled')), id: newId() })}>
               <i className="codicon codicon-add" aria-hidden="true" /> {t('pg.new')}
             </button>
             <button
@@ -356,7 +471,7 @@ export default function Playground({ lang, repository }: Props) {
               onClick={() =>
                 create({
                   ...structuredClone(design),
-                  id: uid('d'),
+                  id: newId(),
                   title: `${design.title} (2)`,
                   createdAt: new Date().toISOString(),
                 })
@@ -364,7 +479,12 @@ export default function Playground({ lang, repository }: Props) {
             >
               <i className="codicon codicon-copy" aria-hidden="true" /> {t('pg.duplicate')}
             </button>
-            <button type="button" className="pg-button" onClick={() => create(exampleDesign(lang))}>
+            <button
+              type="button"
+              className="pg-button"
+              // В браузере пример один и обновляется на месте; в пространстве — каждый раз новая копия.
+              onClick={() => create(inWorkspace ? { ...exampleDesign(lang), id: newId() } : exampleDesign(lang))}
+            >
               <i className="codicon codicon-lightbulb" aria-hidden="true" /> {t('pg.example')}
             </button>
           </>
@@ -415,6 +535,7 @@ export default function Playground({ lang, repository }: Props) {
               <i className={`codicon codicon-${running ? 'debug-stop' : 'play'}`} aria-hidden="true" />{' '}
               {t(running ? 'session.stop' : 'session.start')}
             </button>
+            {!interview && (
             <button
               type="button"
               className="pg-button pg-button--danger"
@@ -428,31 +549,29 @@ export default function Playground({ lang, repository }: Props) {
             >
               <i className="codicon codicon-refresh" aria-hidden="true" /> {t('session.reset')}
             </button>
+            )}
           </>
         )}
 
-        {auth.enabled && (
-          <LiveBar
-            t={t}
-            role={role}
-            me={auth.me}
-            ready={auth.ready}
-            room={room}
-            status={live.status}
-            peers={live.peers}
-            onSignIn={auth.signIn}
-            onSignOut={() => {
-              if (confirm(t('live.signOutConfirm'))) auth.signOut();
-            }}
-            onStart={() => setRoom(openRoom())}
-            onLeave={() => {
-              closeRoom();
-              setRoom(null);
-            }}
-          />
+        {role === 'interviewer' && inWorkspace && isCloudId(design.id) && (
+          <button type="button" className="pg-button" onClick={() => setInterviewsOpen(true)}>
+            <i className="codicon codicon-broadcast" aria-hidden="true" /> {t('iv.button')}
+          </button>
         )}
 
-        {role !== 'candidate' && (
+        {role === 'author' && inWorkspace && !isCloudId(design.id) && (
+          <button
+            type="button"
+            className="pg-button"
+            title={t('ws.copyHint')}
+            // Копия, а не перенос: браузерный проект остаётся, если с сервером что-то пойдёт не так.
+            onClick={() => create({ ...structuredClone(design), id: newId(), createdAt: new Date().toISOString() })}
+          >
+            <i className="codicon codicon-cloud-upload" aria-hidden="true" /> {t('ws.copy')}
+          </button>
+        )}
+
+        {role !== 'candidate' && !interview && (
           <button type="button" className="pg-button" onClick={() => setSharing(true)}>
             <i className="codicon codicon-link" aria-hidden="true" /> {t('share.button')}
           </button>
@@ -478,7 +597,7 @@ export default function Playground({ lang, repository }: Props) {
                 try {
                   // Импорт всегда новым проектом: чужой файл не должен затереть свой.
                   const imported = await importFile(file);
-                  await create({ ...imported, id: uid('d') });
+                  await create({ ...imported, id: newId() });
                 } catch {
                   alert(t('pg.importFailed'));
                 }
@@ -527,13 +646,64 @@ export default function Playground({ lang, repository }: Props) {
           </span>
         )}
 
-        <span className="pg-status" title={t('pg.localNote')}>
-          <i className={`codicon codicon-${status === 'saved' ? 'check' : 'sync'}`} aria-hidden="true" />{' '}
-          {t(status === 'saved' ? 'pg.saved' : 'pg.saving')}
+        <span
+          className={`pg-status ${status === 'failed' ? 'is-failed' : ''}`}
+          title={t(isCloudId(design.id) ? 'pg.cloudNote' : 'pg.localNote')}
+        >
+          <i
+            className={`codicon codicon-${status === 'saved' ? 'check' : status === 'failed' ? 'warning' : 'sync'}`}
+            aria-hidden="true"
+          />{' '}
+          {t(
+            status === 'failed'
+              ? 'pg.saveFailed'
+              : status === 'saving'
+                ? 'pg.saving'
+                : isCloudId(design.id)
+                  ? 'pg.savedCloud'
+                  : 'pg.saved',
+          )}
         </span>
+
+        {auth.enabled && (
+          <LiveBar
+            t={t}
+            role={role}
+            me={auth.me}
+            ready={auth.ready}
+            inRoom={Boolean(interview)}
+            status={live.status}
+            peers={live.peers}
+            onSignIn={auth.signIn}
+            onSignOut={() => {
+              if (confirm(t('live.signOutConfirm'))) auth.signOut();
+            }}
+            onLeave={
+              role === 'interviewer'
+                ? () => {
+                    leave();
+                    switchRole(initialRole());
+                  }
+                : undefined
+            }
+          />
+        )}
       </div>
 
       {sharing && <ShareDialog design={design} t={t} lang={lang} onClose={() => setSharing(false)} />}
+      {interviewsOpen && cloud.mode === 'workspace' && (
+        <InterviewsDialog
+          t={t}
+          lang={lang}
+          workspace={cloud.workspace}
+          scenarioId={design.id}
+          onOpen={(id) => {
+            setInterviewsOpen(false);
+            openInterview(id);
+          }}
+          onClose={() => setInterviewsOpen(false)}
+        />
+      )}
 
       <div className={`pg-body ${readOnly ? 'pg-body--no-palette' : ''}`}>
         {!readOnly && <Palette t={t} onAdd={(kind) => adder.current(kind)} />}

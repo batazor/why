@@ -57,36 +57,38 @@ interface BarProps {
   role: Role;
   me: Person | null;
   ready: boolean;
-  room: string | null;
+  /** Открыто собеседование: показываем комнату. */
+  inRoom: boolean;
   status: RoomStatus;
   peers: Peer[];
   onSignIn: () => void;
   onSignOut: () => void;
-  onStart: () => void;
-  onLeave: () => void;
+  /** Выйти из собеседования к сценариям пространства. Кандидату некуда — ему не передаётся. */
+  onLeave?: () => void;
 }
 
 /**
  * Вход и комната в строке инструментов.
  *
- * Совместная работа нужна только собеседованию: автору и тренировке кнопка
- * входа ни к чему, пока их не позвали в комнату.
+ * Вход нужен автору (сценарии в пространстве) и интервьюеру (собеседования).
+ * Тренировка остаётся локальной, а кандидат входит по приглашению — у него
+ * своя заставка.
  */
-export function LiveBar({ t, role, me, ready, room, status, peers, onSignIn, onSignOut, onStart, onLeave }: BarProps) {
-  const interview = role === 'interviewer' || role === 'candidate';
-  if (!ready || (!interview && !room)) return null;
+export function LiveBar({ t, role, me, ready, inRoom, status, peers, onSignIn, onSignOut, onLeave }: BarProps) {
+  if (!ready) return null;
 
   if (!me) {
+    if (role !== 'author' && role !== 'interviewer') return null;
     return (
-      <button type="button" className={`pg-button ${room ? 'pg-button--primary' : ''}`} onClick={onSignIn}>
-        <i className="codicon codicon-account" aria-hidden="true" /> {t(room ? 'live.signInToJoin' : 'live.signIn')}
+      <button type="button" className="pg-button" onClick={onSignIn} title={t('live.signInHint')}>
+        <i className="codicon codicon-account" aria-hidden="true" /> {t('live.signIn')}
       </button>
     );
   }
 
   return (
     <span className="pg-live">
-      {room ? (
+      {inRoom && (
         <>
           <span className={`pg-live__status is-${status}`} title={t(`live.status.${status}`)}>
             <i className="codicon codicon-circle-filled" aria-hidden="true" /> {t('live.room')}
@@ -102,20 +104,75 @@ export function LiveBar({ t, role, me, ready, room, status, peers, onSignIn, onS
           ) : (
             <span className="pg-live__alone">{t(role === 'interviewer' ? 'live.waitCandidate' : 'live.waitInterviewer')}</span>
           )}
-          <button type="button" className="pg-icon-button" onClick={onLeave} title={t('live.leave')} aria-label={t('live.leave')}>
-            <i className="codicon codicon-debug-disconnect" aria-hidden="true" />
-          </button>
+          {onLeave && (
+            <button type="button" className="pg-button" onClick={onLeave}>
+              <i className="codicon codicon-arrow-left" aria-hidden="true" /> {t('live.leave')}
+            </button>
+          )}
         </>
-      ) : (
-        role === 'interviewer' && (
-          <button type="button" className="pg-button" onClick={onStart} title={t('live.startHint')}>
-            <i className="codicon codicon-broadcast" aria-hidden="true" /> {t('live.start')}
-          </button>
-        )
       )}
       <button type="button" className="pg-live__me" onClick={onSignOut} title={t('live.signOut', { name: me.name })}>
         <Avatar person={me} />
       </button>
     </span>
   );
+}
+
+/**
+ * Заставка вместо песочницы: пришли по приглашению или в собеседование, а
+ * войти ещё не вошли — или сервер приглашение не принял.
+ */
+export function Gate({
+  t,
+  me,
+  error,
+  onSignIn,
+  onSignOut,
+  onLeave,
+}: {
+  t: T;
+  me: Person | null;
+  error?: string;
+  onSignIn: () => void;
+  onSignOut: () => void;
+  onLeave: () => void;
+}) {
+  const reason = error ? explain(error) : null;
+  return (
+    <div className="pg pg-gate">
+      <div className="pg-gate__box">
+        <i className="codicon codicon-organization pg-gate__icon" aria-hidden="true" />
+        <h2>{t(error ? 'gate.failed' : 'gate.title')}</h2>
+        <p>{error ? t(`gate.error.${reason}`, { name: me?.name ?? '' }) : t('gate.body')}</p>
+        {!me && (
+          <button type="button" className="pg-button pg-button--primary" onClick={onSignIn}>
+            <i className="codicon codicon-account" aria-hidden="true" /> {t('live.signIn')}
+          </button>
+        )}
+        {me && error && (
+          <div className="pg-actions">
+            {reason === 'email' && (
+              <button type="button" className="pg-button" onClick={onSignOut}>
+                <i className="codicon codicon-account" aria-hidden="true" /> {t('gate.switch')}
+              </button>
+            )}
+            <button type="button" className="pg-button" onClick={onLeave}>
+              {t('gate.leave')}
+            </button>
+          </div>
+        )}
+        <p className="pg-hint">{t('gate.note')}</p>
+      </div>
+    </div>
+  );
+}
+
+/** Сообщение сервера из claim_interview — в понятную причину. */
+function explain(message: string): 'email' | 'taken' | 'over' | 'staff' | 'missing' | 'other' {
+  if (message.includes('another email')) return 'email';
+  if (message.includes('already accepted')) return 'taken';
+  if (message.includes('is over')) return 'over';
+  if (message.includes('staff')) return 'staff';
+  if (message.includes('not found')) return 'missing';
+  return 'other';
 }
