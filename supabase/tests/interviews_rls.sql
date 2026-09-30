@@ -138,36 +138,38 @@ do $$ begin
 end $$;
 
 -- ─── Realtime: в комнату пускают только участников ─────────────────────────
+-- Проверяется условие политик, а не вставка в realtime.messages: у свежего
+-- проекта у таблицы нет партиций, пока сервис Realtime ни разу не запускался.
 reset role;
-select set_config('realtime.topic', 'room:' || current_setting('test.interview'), false);
+do $$ begin
+  assert (
+    select count(*) from pg_policies
+    where schemaname = 'realtime' and tablename = 'messages' and policyname like 'interview rooms: participants %'
+  ) = 2, 'room policies are attached to realtime.messages';
+  assert not exists (
+    select 1 from pg_policies where schemaname = 'realtime' and policyname like 'interview rooms: signed-in %'
+  ), 'the open room policies of the first version are gone';
+end $$;
 
+select set_config('realtime.topic', 'room:' || current_setting('test.interview'), false);
 set role authenticated;  -- всё ещё eve
 do $$ begin
-  begin
-    insert into realtime.messages (topic, extension, payload) values (realtime.topic(), 'broadcast', '{}');
-    raise exception 'FAIL: stranger sent to the interview room';
-  exception when insufficient_privilege then null;
-  end;
-  assert (select count(*) from realtime.messages) = 0, 'stranger hears nothing in the room';
+  assert not private.is_participant(private.room_interview()), 'stranger is kept out of the room';
 end $$;
 
 reset role;
 select set_config('request.jwt.claims', '{"sub": "00000000-0000-4000-8000-00000000000d", "email": "dana@mail.test", "role": "authenticated"}', false);
 set role authenticated;
-insert into realtime.messages (topic, extension, payload) values (realtime.topic(), 'broadcast', '{"event": "cursor"}');
 do $$ begin
-  assert (select count(*) from realtime.messages) = 1, 'candidate hears the room';
+  assert private.is_participant(private.room_interview()), 'candidate enters the room';
 end $$;
 
 reset role;
 select set_config('realtime.topic', 'room:not-a-uuid', false);
 set role authenticated;
 do $$ begin
-  begin
-    insert into realtime.messages (topic, extension, payload) values (realtime.topic(), 'broadcast', '{}');
-    raise exception 'FAIL: malformed room name let a message through';
-  exception when insufficient_privilege then null;
-  end;
+  assert private.room_interview() is null, 'malformed room name maps to no interview';
+  assert not coalesce(private.is_participant(private.room_interview()), false), 'malformed room name lets nobody in';
 end $$;
 
 -- ─── bob: видит доску, но не рисует; пишет отзыв; заканчивает ──────────────
@@ -177,7 +179,7 @@ select set_config('request.jwt.claims', '{"sub": "00000000-0000-4000-8000-000000
 set role authenticated;
 
 do $$ begin
-  assert (select count(*) from realtime.messages) = 1, 'interviewer hears the room';
+  assert private.is_participant(private.room_interview()), 'interviewer enters the room';
   assert (select jsonb_array_length(board -> 'nodes') from public.interview_boards) = 1, 'interviewer sees the candidate board';
 
   update public.interview_boards set board = '{"nodes": [], "edges": [], "requirements": [], "api": [], "estimate": ""}';
