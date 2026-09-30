@@ -9,6 +9,26 @@ problem: >-
   of countries with cash on delivery lives in the next one. Every new country
   is a ticket, a review and a release, and the second list gets forgotten. The
   data changes on the business's schedule and ships on the release schedule.
+incidents:
+  - title: 'Cloudflare, November 2025: a file with duplicates every five minutes'
+    text: >-
+      The bot-protection feature file was rebuilt from a database every five
+      minutes and pushed across the network. After a permissions change in the
+      database the query started returning every row twice, the file grew past
+      a hard limit, and the proxy that read it crashed. For about three hours a
+      large share of traffic did not get through. The fix was to stop the
+      distribution and manually insert the last good file — the very previous
+      copy the service could have kept for itself by rejecting the batch.
+    url: https://blog.cloudflare.com/18-november-2025-outage/
+  - title: 'Google Cloud, June 2025: blank fields in policy data'
+    text: >-
+      A record with blank fields got into the quota policy tables and
+      replicated to every region within seconds. The code reading the policies
+      did not check for blank fields and crashed on a null pointer — everywhere
+      at once. API authorization was down across dozens of products for about
+      three hours. Validating rows on load and rejecting the whole batch would
+      have stopped it at the first read.
+    url: https://www.thousandeyes.com/blog/google-cloud-outage-analysis-june-12-2025
 tags: [system-design, reference-data, reliability]
 order: 16
 deck: why-dictionaries
@@ -16,12 +36,15 @@ comments:
   thirtyMore: 'thirty more countries'
   codWasSmall: 'cash on delivery once worked in two countries'
   isoIsKey: 'the key is the ISO code from the address, not the country name'
-  zoneClosedSet: 'in the admin the zone is a string, in code a closed set of values'
+  zoneClosedSet: 'the admin schema can grow before the code does, so the zone is checked again'
   firstLoad: 'first load, then refresh in the background'
   replaceAllOrNothing: 'the whole batch or nothing: on error the dictionary is not changed'
   oneSwap: 'one pointer write: readers see the old map or the new one, never half'
   noZoneNoPrice: 'no zone, no shipping price: the country is not offered'
   codDefaultsOff: 'not marked means no cash on delivery'
+  fieldsAreSchema: 'the dictionary schema is rows, not a table: a new dictionary needs no migration'
+  oneKeyField: 'a dictionary has exactly one key field'
+  closedKeepsKey: 'a closed row stays and keeps its key: a duplicate or a reused code will not pass'
   onlyTransportShared: 'the shared part is delivery only: fetch the batch by slug and decode it into T'
 labels:
   kindClient: client
@@ -43,13 +66,15 @@ labels:
   release: Release
   adminPanel: Admin panel
   sharedTransport: shared delivery
-  notShippable: not shippable
+  notShippable: no shipping
   ticket: ticket
   days: days
   addsRow: a row
   every5min: every 5 minutes
   keepCopy: copy stays
-  duplicate: duplicate
+  er.table.dictionaries: 'the dictionary: slug, title, version'
+  er.table.dictionary_fields: 'the schema: a row per field'
+  er.table.dictionary_items: 'the data: row in data, key apart'
   rejected: batch rejected
 terms:
   dictionary: >-
@@ -103,6 +128,29 @@ steps:
       mappings from one set of codes to another.
     note: >-
       A new country is a row in the admin. Both facts in one row.
+  - id: storage
+    title: How the dictionary is stored in the admin
+    narration: |-
+      Three tables sit under the dictionaries in the admin. `dictionaries` is
+      the dictionaries themselves: slug, title and version.
+      `dictionary_fields` is the schema: one row per field, with its type,
+      whether it is required and the allowed values. `dictionary_items` is the
+      data: the whole dictionary row sits in `data`, and the admin checks it
+      against the schema on every write.
+
+      The schema is stored as rows rather than as a table per dictionary,
+      because dictionaries are created in the admin, not by a migration. A new
+      dictionary is a few rows in `dictionary_fields`, with no deploy.
+
+      The key is pulled out of `data` into its own column and, together with
+      `dictionary_id`, forms the primary key. A duplicate country will not get
+      past the database. A closed row stays in the table with
+      `active = false` and keeps holding its key — no other country can appear
+      under it.
+
+      `version` grows with every edit of the dictionary. From it the service
+      can tell that nothing has changed since last time and skip fetching the
+      batch.
   - id: key
     title: The key is what arrives in the request
     narration: |-
@@ -115,10 +163,17 @@ steps:
       text edit in the admin into a country vanishing from checkout. Let the
       name be a field for people and the code the key.
 
-      The second decision is how strictly to read the fields. In the admin the
-      zone is a string, in code it is a closed set of three values. A typo
-      `"europe"` is not a new zone but a mistake, and it should be rejected on
-      load, not discovered by a customer.
+      Codes are not eternal either, they just change less often. `CS` in ISO
+      3166 was the code of Czechoslovakia and, from 2003 to 2006, of Serbia
+      and Montenegro. So the key of a row once issued is never deleted or
+      handed to another row: the section after the walkthrough covers that.
+
+      The second decision is whether to check a row again when the admin has
+      already checked it against the schema. It should: the dictionary schema
+      in the admin and the `Zone` type in code are two descriptions of the same
+      thing, and they change separately. Someone adds `islands` to the zone
+      enum in the admin before the code can price shipping to islands. The
+      service should reject that row on load, not show it to a customer.
     note: >-
       The key is the ISO code from the address. Country names change.
   - id: offpath
@@ -148,12 +203,14 @@ steps:
   - id: swap
     title: The whole batch or nothing
     narration: |-
-      A dictionary is edited by hand, and sooner or later it will contain a
-      mistake: a country twice, an empty zone, a typo. The service should not
-      take it at its word.
+      The schema and the primary key in the admin check every row, but not
+      what the code expects. Someone added `islands` to the zone enum for the
+      Faroe Islands, and the code does not know that zone yet. The service
+      should not take the dictionary at its word.
 
       The new version is built aside, in a separate map. Every row is
-      validated, duplicate keys are caught. If even one row fails, the whole
+      validated, and duplicate keys are caught too: the admin database will
+      not let them in, but the service need not know how it is built. If even one row fails, the whole
       batch is rejected and the previous copy stays in service. A partly applied
       dictionary is worse than the old one: nobody knows which of it is right.
 
@@ -231,7 +288,7 @@ quiz:
       A request reads the in-memory copy; the admin panel is not on its path. A
       failed refresh logs a warning and keeps the previous copy.
   - question: >-
-      In a forty-country dictionary one row has a zone that does not exist.
+      In a forty-country dictionary one row has a zone the code does not know.
       What does the service do on refresh?
     options:
       - Applies thirty-nine rows and skips one
@@ -279,6 +336,23 @@ All three take something out of code, but they answer different questions.
 If behaviour switches start going into a dictionary, that is a feature flag
 without an end date. If addresses and timeouts do, that is config without a
 deploy.
+
+## Rows are not deleted
+
+A country you no longer ship to is tempting to just delete from the
+dictionary. But old orders refer to its code: purchase history, returns, last
+year's reports. A deleted row makes their code unknown, and everything said in
+the step about an unknown value starts firing on the past.
+
+A row is closed instead: with an `active` field or a validity period
+`valid_from`/`valid_to`. Checkout takes only active rows; history and reports
+take all of them, closed ones included. As a bonus a closed code stays taken,
+and no other country can appear under it.
+
+If it matters what a row meant at the time of the order — which zone, which
+price — a flag is not enough: the values in the row get rewritten. Then either
+keep versions of the row with validity periods, or copy the fields you need
+into the order itself at checkout.
 
 ## When a dictionary does not help
 

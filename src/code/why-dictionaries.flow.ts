@@ -5,67 +5,73 @@ import type { FlowSpec } from './flow';
  * страну из адреса, оформление заказа превращает её в варианты доставки. Он не
  * меняется от шага к шагу — и в этом смысл: словарь живёт под ним, в стороне.
  *
- * Нижние ряды — откуда сервис берёт знание о странах. На первом шаге это
- * константа в коде и релиз, дальше — копия в памяти и админка на тех же местах:
- * читатель видит, что заменилось, а что осталось.
+ * Нижние ряды — откуда сервис берёт знание о странах. Логистика стоит
+ * посередине и не двигается: на первом шаге её путь уходит влево, в релиз и
+ * константу, дальше — вправо, в админку и копию в памяти. Старое и новое не
+ * делят одно место: иначе при смене шага гаснущая карточка и появляющаяся
+ * на время перехода лежат друг на друге.
  */
 const HARDCODE = ['hardcode'];
-const DICTIONARY = ['dictionary', 'key', 'offpath', 'swap', 'unknown', 'owner'];
-const KNOWN = ['hardcode', 'dictionary', 'key', 'offpath', 'swap', 'owner'];
+const DICTIONARY = ['dictionary', 'storage', 'key', 'offpath', 'swap', 'unknown', 'owner'];
+const KNOWN = ['hardcode', 'dictionary', 'storage', 'key', 'offpath', 'swap', 'owner'];
 
 const flow: FlowSpec = {
   height: 430,
   nodes: [
     { id: 'form', kind: '{{kindClient}}', title: '{{orderForm}}', sub: '{{sendsCountry}}', position: { x: 0, y: 0 } },
-    { id: 'service', kind: '{{kindService}}', title: 'Checkout', sub: '{{buildsOptions}}', position: { x: 235, y: 0 } },
-    { id: 'response', kind: '{{kindOutput}}', title: '{{options}}', sub: '{{zoneAndCod}}', position: { x: 470, y: 0 } },
+    { id: 'service', kind: '{{kindService}}', title: 'Checkout', sub: '{{buildsOptions}}', position: { x: 290, y: 0 } },
+    { id: 'response', kind: '{{kindOutput}}', title: '{{options}}', sub: '{{zoneAndCod}}', position: { x: 580, y: 0 } },
 
+    // Слева — как было: константа в коде и релиз.
     {
       id: 'constmap',
       kind: '{{kindCode}}',
       title: 'shippingZones',
       sub: '{{mapInCode}}',
-      position: { x: 235, y: 170 },
+      position: { x: 0, y: 170 },
       only: HARDCODE,
     },
-    {
-      id: 'memory',
-      kind: '{{kindState}}',
-      title: '{{memCopy}}',
-      sub: 'map[string]Country',
-      position: { x: 235, y: 170 },
-      only: DICTIONARY,
-      focus: ['key', 'swap', 'unknown'],
-    },
-
-    { id: 'ops', kind: '{{kindPeople}}', title: '{{logistics}}', sub: '{{knowsCountries}}', position: { x: 0, y: 320 } },
     {
       id: 'release',
       kind: '{{kindProcess}}',
       title: '{{release}}',
       sub: 'code → review → deploy',
-      position: { x: 235, y: 320 },
+      position: { x: 0, y: 320 },
       only: HARDCODE,
       bad: HARDCODE,
+    },
+
+    // Посередине — люди, которые знают, куда возим, и общая доставка словарей.
+    { id: 'ops', kind: '{{kindPeople}}', title: '{{logistics}}', sub: '{{knowsCountries}}', position: { x: 290, y: 320 } },
+    {
+      id: 'loader',
+      kind: '{{kindCode}}',
+      title: 'Fetch[T]',
+      sub: '{{sharedTransport}}',
+      position: { x: 290, y: 170 },
+      only: ['owner'],
+      focus: ['owner'],
+    },
+
+    // Справа — как стало: админка и копия в памяти.
+    {
+      id: 'memory',
+      kind: '{{kindState}}',
+      title: '{{memCopy}}',
+      sub: 'map[string]Country',
+      position: { x: 580, y: 170 },
+      only: DICTIONARY,
+      focus: ['key', 'swap', 'unknown'],
     },
     {
       id: 'admin',
       kind: '{{kindService}}',
       title: '{{adminPanel}}',
       sub: 'shipping_countries',
-      position: { x: 235, y: 320 },
+      position: { x: 580, y: 320 },
       only: DICTIONARY,
-      focus: ['dictionary'],
+      focus: ['dictionary', 'storage'],
       bad: ['offpath'],
-    },
-    {
-      id: 'loader',
-      kind: '{{kindCode}}',
-      title: 'Fetch[T]',
-      sub: '{{sharedTransport}}',
-      position: { x: 470, y: 320 },
-      only: ['owner'],
-      focus: ['owner'],
     },
   ],
   edges: [
@@ -96,7 +102,7 @@ const flow: FlowSpec = {
     { id: 'lookup', source: 'service', target: 'memory', sourceHandle: 'b', targetHandle: 't', label: 'Lookup("CZ")', only: KNOWN.filter((s) => s !== 'hardcode') },
     { id: 'lookup-unknown', source: 'service', target: 'memory', sourceHandle: 'b', targetHandle: 't', label: 'Lookup("XK") → false', only: ['unknown'] },
 
-    { id: 'ticket', source: 'ops', target: 'release', sourceHandle: 'r', targetHandle: 'l', label: '{{ticket}}', only: HARDCODE },
+    { id: 'ticket', source: 'ops', target: 'release', sourceHandle: 'l', targetHandle: 'r', label: '{{ticket}}', only: HARDCODE },
     { id: 'deploy', source: 'release', target: 'constmap', sourceHandle: 't', targetHandle: 'b', label: '{{days}}', tone: 'bad', only: HARDCODE },
 
     { id: 'row', source: 'ops', target: 'admin', sourceHandle: 'r', targetHandle: 'l', label: '{{addsRow}}', only: DICTIONARY },
@@ -108,7 +114,7 @@ const flow: FlowSpec = {
       targetHandle: 'b',
       label: '{{every5min}}',
       tone: 'ok',
-      only: ['dictionary', 'key', 'unknown'],
+      only: ['dictionary', 'storage', 'key', 'unknown'],
     },
     {
       id: 'poll-down',
@@ -127,23 +133,24 @@ const flow: FlowSpec = {
       target: 'memory',
       sourceHandle: 't',
       targetHandle: 'b',
-      label: '{{duplicate}} CZ — {{rejected}}',
+      label: 'zone "islands" — {{rejected}}',
       tone: 'bad',
       dashed: true,
       only: ['swap'],
     },
-    { id: 'slug', source: 'admin', target: 'loader', sourceHandle: 'r', targetHandle: 'l', label: 'slug', only: ['owner'] },
-    { id: 'decode', source: 'loader', target: 'memory', sourceHandle: 't', targetHandle: 'r', label: '[]Country', only: ['owner'] },
+    // Общая доставка: админка → Fetch[T] → копия. Прямая стрелка на этом шаге скрыта.
+    { id: 'slug', source: 'admin', target: 'loader', sourceHandle: 't', targetHandle: 'b', label: 'slug', only: ['owner'] },
+    { id: 'decode', source: 'loader', target: 'memory', sourceHandle: 'r', targetHandle: 'l', label: '[]Country', only: ['owner'] },
   ],
   // Только геометрия: текст пометки переводится и лежит в steps[].note урока.
   annotations: [
-    { step: 'hardcode', position: { x: 470, y: 300 }, arrow: 'left', width: 190 },
-    { step: 'dictionary', position: { x: 470, y: 300 }, arrow: 'left', width: 190 },
-    { step: 'key', position: { x: 470, y: 170 }, arrow: 'left', width: 190 },
-    { step: 'offpath', position: { x: 470, y: 300 }, arrow: 'left', width: 190 },
-    { step: 'swap', position: { x: 470, y: 170 }, arrow: 'left', width: 190 },
-    { step: 'unknown', position: { x: 470, y: 150 }, arrow: 'up', width: 190 },
-    { step: 'owner', position: { x: 680, y: 320 }, arrow: 'left', width: 170 },
+    { step: 'hardcode', position: { x: 215, y: 185 }, arrow: 'left', width: 190 },
+    { step: 'dictionary', position: { x: 790, y: 320 }, arrow: 'left', width: 190 },
+    { step: 'key', position: { x: 790, y: 170 }, arrow: 'left', width: 190 },
+    { step: 'offpath', position: { x: 790, y: 320 }, arrow: 'left', width: 190 },
+    { step: 'swap', position: { x: 790, y: 170 }, arrow: 'left', width: 190 },
+    { step: 'unknown', position: { x: 790, y: 0 }, arrow: 'left', width: 190 },
+    { step: 'owner', position: { x: 60, y: 170 }, arrow: 'right', width: 200 },
   ],
 };
 

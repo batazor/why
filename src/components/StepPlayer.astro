@@ -25,6 +25,7 @@ import JobLifecycle from './widgets/JobLifecycle';
 import RequirementMatch from './widgets/RequirementMatch';
 import BrokerMatrix from './widgets/BrokerMatrix';
 import ApiCards from './widgets/ApiCards';
+import ErDiagram from './widgets/ErDiagram';
 import P2PCalculator from './widgets/P2PCalculator';
 import SwarmSim from './widgets/SwarmSim';
 import { likec4model } from '../likec4/generated';
@@ -76,9 +77,11 @@ interface Props {
   widgets?: WidgetSpec;
   /** Врезки внутри текста шага (колонка рядом занята своим кадром). */
   inlineWidgets?: WidgetSpec;
+  /** Кадры сцены: на своём шаге врезка закрывает прилипшую схему разбора. */
+  stageWidgets?: WidgetSpec;
 }
 
-const { lang, steps, deck, flow, likec4, tree, docs = [], notes = [], comments = {}, drags = [], labels = {}, widgets, inlineWidgets } = Astro.props;
+const { lang, steps, deck, flow, likec4, tree, docs = [], notes = [], comments = {}, drags = [], labels = {}, widgets, inlineWidgets, stageWidgets } = Astro.props;
 
 if (flow && likec4) {
   throw new Error('StepPlayer: flow и likec4 вместе — схему рисует что-то одно');
@@ -323,6 +326,13 @@ const shikiOptions = {
               drags={drags}
               labels={labels}
             />
+            {/* Кадры сцены лежат поверх схемы и открываются на своём шаге:
+                скрипт плеера снимает `hidden`, когда шаг становится активным. */}
+            {Object.entries(stageWidgets ?? {}).map(([stepId, frame]) => (
+              <div class="player__frame" data-frame-for={stepId} hidden={stepId !== merged[0].id}>
+                {frame.widget === 'er-diagram' && <ErDiagram client:visible data={frame.data} labels={labels} />}
+              </div>
+            ))}
           </figure>
         )
       }
@@ -819,6 +829,9 @@ const shikiOptions = {
       // монтируется лениво и к своему появлению может опоздать на пять шагов.
       const stepId = steps[index].dataset.stepId ?? '';
       player.dataset.stepId = stepId;
+      player.querySelectorAll<HTMLElement>('[data-frame-for]').forEach((frame) => {
+        frame.hidden = frame.dataset.frameFor !== stepId;
+      });
       syncHash();
       player.dispatchEvent(new CustomEvent('why:step', { detail: { id: stepId, index } }));
 

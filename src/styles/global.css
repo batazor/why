@@ -4612,6 +4612,140 @@ vscode-tree-item.is-new {
   font-size: 0.64rem;
 }
 
+/* ---------- ER-схема ---------- */
+
+/* Кадр сцены лежит поверх схемы разбора и закрывает её целиком: фон
+   непрозрачный, иначе сквозь таблицы просвечивают карточки сервисов. */
+.player__stage {
+  position: relative;
+}
+
+.player__frame {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: var(--bg);
+}
+
+.player__frame[hidden] {
+  display: none;
+}
+
+.er-flow {
+  width: 100%;
+  height: 100%;
+  min-height: 16rem;
+}
+
+/* Как у схемы разбора: колесо листает страницу, а не полотно. Карточки
+   ловят мышь только ради подсветки связей. */
+.player--scroll .er-flow {
+  pointer-events: none;
+}
+
+.player--scroll .er-node {
+  pointer-events: auto;
+}
+
+/* Карточка таблицы в духе dbdiagram: шапка с именем, под ней колонки
+   моноширинным, тип прижат вправо. */
+.er-node {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 1px 2px var(--shadow);
+  font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  transition: opacity 120ms ease-out;
+}
+
+.er-node--dim {
+  opacity: 0.35;
+}
+
+.er-node__head {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  padding: 0 0.6rem;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+}
+
+.er-node__name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.er-node__role {
+  overflow: hidden;
+  font-family: system-ui, sans-serif;
+  font-size: 10px;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.er-node__row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0 0.6rem;
+  cursor: default;
+}
+
+.er-node__row + .er-node__row {
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+
+.er-node__row--lit {
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+}
+
+.er-node__key {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  fill: none;
+  stroke: #c28a1e;
+  stroke-width: 1.4;
+}
+
+.er-node__col {
+  overflow: hidden;
+  color: var(--fg);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.er-node__col--pk {
+  font-weight: 700;
+}
+
+.er-node__type {
+  flex: none;
+  margin-left: auto;
+  color: var(--muted);
+}
+
+.er-edge .react-flow__edge-path {
+  stroke: var(--muted);
+  stroke-width: 1.3;
+}
+
+.er-edge--lit .react-flow__edge-path {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.er-edge--dim {
+  opacity: 0.35;
+}
+
 /* ---------- матрица брокеров ---------- */
 
 .bm {

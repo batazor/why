@@ -1,4 +1,5 @@
 import type { CodeDeck } from './types';
+import type { WidgetSpec } from './widgets';
 import flowSpec from './why-dictionaries.flow.ts'; // расширение обязательно: колоду импортирует ещё и node-скрипт проверки
 
 /**
@@ -20,6 +21,63 @@ export const flow = flowSpec;
 
 /** Обложка в каталоге: акварель, public/covers/why-dictionaries.svg (scripts/covers/build.py). */
 export const cover = 'covers/why-dictionaries.svg';
+
+/**
+ * ER-схема хранения словарей в админке. Стоит кадром сцены: на своём шаге
+ * закрывает схему разбора, потому что таблицам нужна вся ширина, а колонка
+ * текста для них узкая. Словарь слева, его поля и строки справа — внешние
+ * ключи идут справа налево, к `dictionaries.id`.
+ */
+export const stageWidgets: WidgetSpec = {
+  storage: {
+    widget: 'er-diagram',
+    data: {
+      tables: [
+        {
+          name: 'dictionaries',
+          position: { x: 0, y: 120 },
+          columns: [
+            { name: 'id', type: 'bigint', keys: ['pk'] },
+            { name: 'slug', type: 'text' },
+            { name: 'title', type: 'text' },
+            { name: 'version', type: 'bigint' },
+            { name: 'updated_at', type: 'timestamptz' },
+          ],
+        },
+        {
+          name: 'dictionary_fields',
+          position: { x: 380, y: 0 },
+          columns: [
+            { name: 'dictionary_id', type: 'bigint', keys: ['pk', 'fk'] },
+            { name: 'key', type: 'text', keys: ['pk'] },
+            { name: 'type', type: 'text' },
+            { name: 'required', type: 'boolean' },
+            { name: 'enum_values', type: 'text[]' },
+            { name: 'default_value', type: 'jsonb' },
+            { name: 'is_key', type: 'boolean' },
+            { name: 'position', type: 'int' },
+          ],
+        },
+        {
+          name: 'dictionary_items',
+          position: { x: 380, y: 270 },
+          columns: [
+            { name: 'dictionary_id', type: 'bigint', keys: ['pk', 'fk'] },
+            { name: 'key', type: 'text', keys: ['pk'] },
+            { name: 'data', type: 'jsonb' },
+            { name: 'active', type: 'boolean' },
+            { name: 'updated_at', type: 'timestamptz' },
+            { name: 'updated_by', type: 'text' },
+          ],
+        },
+      ],
+      relations: [
+        { parent: 'dictionaries', parentColumn: 'id', child: 'dictionary_fields', childColumn: 'dictionary_id' },
+        { parent: 'dictionaries', parentColumn: 'id', child: 'dictionary_items', childColumn: 'dictionary_id' },
+      ],
+    },
+  },
+};
 
 const deck: CodeDeck = [
   {
@@ -72,6 +130,46 @@ cash on delivery launched in Czechia: CODAllowed("CZ") == false`,
     { "country": "GE", "zone": "remote", "cod": false }
   ]
 }`,
+  },
+  {
+    id: 'storage',
+    lang: 'sql',
+    caption: 'admin/migrations/001_dictionaries.sql',
+    code: `CREATE TABLE dictionaries (
+  id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  slug        text NOT NULL UNIQUE,
+  title       text NOT NULL,
+  version     bigint NOT NULL DEFAULT 1,
+  updated_at  timestamptz NOT NULL DEFAULT now()
+);
+
+-- {{fieldsAreSchema}}
+CREATE TABLE dictionary_fields (
+  dictionary_id  bigint NOT NULL REFERENCES dictionaries (id),
+  key            text NOT NULL,
+  type           text NOT NULL CHECK (type IN ('int', 'string', 'bool', 'enum')),
+  required       boolean NOT NULL DEFAULT false,
+  enum_values    text[],
+  default_value  jsonb,
+  is_key         boolean NOT NULL DEFAULT false,
+  position       int NOT NULL,
+  PRIMARY KEY (dictionary_id, key)
+);
+
+-- {{oneKeyField}}
+CREATE UNIQUE INDEX ON dictionary_fields (dictionary_id) WHERE is_key;
+
+CREATE TABLE dictionary_items (
+  dictionary_id  bigint NOT NULL REFERENCES dictionaries (id),
+  key            text NOT NULL,
+  data           jsonb NOT NULL,
+  active         boolean NOT NULL DEFAULT true,
+  updated_at     timestamptz NOT NULL DEFAULT now(),
+  updated_by     text NOT NULL,
+  -- {{closedKeepsKey}}
+  -- [!code highlight]
+  PRIMARY KEY (dictionary_id, key)
+);`,
   },
   {
     id: 'key',
@@ -162,7 +260,7 @@ func (s *Store) replace(items []Country) error {
 	s.current.Store(&next)
 	return nil
 }`,
-    output: `level=WARN msg="shipping_countries: keeping previous copy" err="duplicate country: CZ"`,
+    output: `level=WARN msg="shipping_countries: keeping previous copy" err="FO: unknown zone: \\"islands\\""`,
     outputTone: 'bad',
   },
   {

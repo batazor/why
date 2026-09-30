@@ -24,7 +24,8 @@ export type WidgetName =
   | 'broker-matrix'
   | 'api-cards'
   | 'p2p-calculator'
-  | 'swarm-sim';
+  | 'swarm-sim'
+  | 'er-diagram';
 
 /** Один ползунок калькулятора. Диапазон и шаг — часть конструкции, не перевод. */
 export type LoadInput = {
@@ -210,6 +211,35 @@ export type ApiEndpoint = {
 export type ApiCardsData = { endpoints: ApiEndpoint[] };
 
 /**
+ * ER-схема в духе dbdiagram: таблицы с колонками и внешние ключи между ними.
+ *
+ * Раскладка авторская, как у схемы разбора: координаты таблиц заданы руками.
+ * Имена таблиц, колонок и типов — идентификаторы, они не
+ * переводятся; проза — одна строка о роли таблицы — в `labels` урока под
+ * ключом `er.table.<имя>`.
+ */
+export type ErColumn = {
+  name: string;
+  type: string;
+  /** pk — часть первичного ключа, fk — ссылка на родителя. Бывает и то и другое. */
+  keys?: ('pk' | 'fk')[];
+};
+
+export type ErTable = {
+  name: string;
+  columns: ErColumn[];
+  position: { x: number; y: number };
+};
+
+/** Внешний ключ: колонка `child.childColumn` ссылается на `parent.parentColumn`. */
+export type ErRelation = { parent: string; parentColumn: string; child: string; childColumn: string };
+
+export type ErDiagramData = {
+  tables: ErTable[];
+  relations: ErRelation[];
+};
+
+/**
  * Калькуляторы разбора P2P-сети. Модель — какая формула считается: время
  * раздачи роем против одного сервера, цена трекера против DHT, доживёт ли файл
  * до следующего качающего. Сами формулы — в `p2p-calc.ts`, рядом с
@@ -299,7 +329,8 @@ export type WidgetStep =
   | { widget: 'broker-matrix'; wide?: boolean; data: BrokerMatrixData }
   | { widget: 'api-cards'; wide?: boolean; data: ApiCardsData }
   | { widget: 'p2p-calculator'; wide?: boolean; data: P2PCalculatorData }
-  | { widget: 'swarm-sim'; wide?: boolean; data: SwarmSimData };
+  | { widget: 'swarm-sim'; wide?: boolean; data: SwarmSimData }
+  | { widget: 'er-diagram'; wide?: boolean; data: ErDiagramData };
 
 /** Шаг разбора → врезка, которая на нём стоит. */
 export type WidgetSpec = Record<string, WidgetStep>;
@@ -487,6 +518,8 @@ export function widgetLabelKeys(step: WidgetStep): string[] {
         'swarm.stuck',
         ...step.data.strategies.map((key) => `swarm.strategy.${key}`),
       ];
+    case 'er-diagram':
+      return step.data.tables.map((table) => `er.table.${table.name}`);
     case 'requirement-match':
       return [
         'match.cards',

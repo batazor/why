@@ -398,14 +398,15 @@ for (const [slug, perLocale] of bySlug) {
     for (const group of groups) neededLabels.add(group.label);
   }
 
-  if (deckModule.widgets || deckModule.inlineWidgets) {
+  if (deckModule.widgets || deckModule.inlineWidgets || deckModule.stageWidgets) {
     const { widgetLabelKeys } = await import(path.join(codeDir, 'widgets.ts'));
 
-    // Врезки в колонке и внутри текста проверяются одинаково: шаг есть,
-    // подписи есть в каждой локали.
+    // Врезки в колонке, внутри текста и на сцене проверяются одинаково: шаг
+    // есть, подписи есть в каждой локали.
     const all = [
       ...Object.entries(deckModule.widgets ?? {}),
       ...Object.entries(deckModule.inlineWidgets ?? {}),
+      ...Object.entries(deckModule.stageWidgets ?? {}),
     ];
     for (const [step, widget] of all) {
       if (!deckIds.includes(step)) {

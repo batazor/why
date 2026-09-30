@@ -192,6 +192,7 @@ const siblingHref = (entry: CollectionEntry<'lessons'>) =>
       labels={lesson.data.labels}
       widgets={deck.widgets}
       inlineWidgets={deck.inlineWidgets}
+      stageWidgets={deck.stageWidgets}
     />
 
     <Quiz lang={lang} slug={slug!} items={lesson.data.quiz} />
