@@ -117,9 +117,9 @@ interface BarProps {
 /**
  * Вход и комната в строке инструментов.
  *
- * Вход нужен автору (сценарии в пространстве) и интервьюеру (собеседования).
- * Тренировка остаётся локальной, а кандидат входит по приглашению — у него
- * своя заставка.
+ * Вход нужен автору (сценарии в пространстве), интервьюеру (собеседования)
+ * и тренировке (свои прохождения в пространстве). Кандидат входит по
+ * приглашению — у него своя заставка.
  */
 export function LiveBar({
   t,
@@ -141,7 +141,7 @@ export function LiveBar({
   if (!ready) return null;
 
   if (!me) {
-    if (role !== 'author' && role !== 'interviewer') return null;
+    if (role === 'candidate') return null;
     if (asGuest && onGuest) return <GuestForm t={t} onSubmit={onGuest} />;
     return (
       <span className="pg-live">

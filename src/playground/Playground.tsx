@@ -417,10 +417,10 @@ export default function Playground({ lang, repository }: Props) {
     );
 
   /**
-   * Без учётки автор и интервьюер в песочницу не попадают: входят через
-   * Google или гостем. Кандидата ведёт приглашение, у тренировки учётка не нужна.
+   * Без учётки в песочницу не попадают: входят через Google или гостем.
+   * Исключение — кандидат: его ведёт приглашение или присланная ссылка.
    */
-  if (auth.enabled && auth.ready && !auth.me && cloud.mode === 'local' && (role === 'author' || role === 'interviewer'))
+  if (auth.enabled && auth.ready && !auth.me && cloud.mode === 'local' && role !== 'candidate')
     return <WelcomeGate t={t} onSignIn={auth.signIn} onGuest={auth.guestAllowed ? auth.signInAsGuest : undefined} />;
 
   if (!design || !view) return <div className="pg pg--loading" />;
