@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { deriveChecks, evaluate } from './checks';
 import {
   TRAIN_STEPS,
@@ -7,6 +7,7 @@ import {
   emptySession,
   emptyTraining,
   type Design,
+  type TrainStep,
 } from './model';
 import {
   applyTwist,
@@ -20,27 +21,76 @@ import {
   trainingScore,
 } from './train';
 import { elapsed } from './scenario-panels';
+import type { Tab } from './roles';
 import type { T } from './i18n';
 
 /**
- * Вкладка «Тренировка»: собеседование без интервьюера.
+ * Тренировка: собеседование без интервьюера.
  *
- * Человек видит только то, что происходит на его шаге: весь список проверок
- * сразу превратил бы прохождение в чек-лист, где задачу решают не думая, а
- * сверяясь. Эталон не показывается вовсе — до отчёта.
+ * Ход прохождения — полоса над вкладками боковой панели, а не своя вкладка.
+ * Вкладкой оно не работало: посмотреть, что проверяется на шаге, — уйти в
+ * требования — вернуться посмотреть, зазеленело ли, — и так на каждом шаге.
+ * Теперь шаги, проверки текущего шага и кнопка «дальше» видны всегда, а
+ * вкладка под ними открывается сама на инструмент шага.
+ *
+ * Человек по-прежнему видит только проверки своего шага: весь список сразу
+ * превратил бы прохождение в чек-лист. Эталон не показывается вовсе — до
+ * отчёта, который после финиша занимает вкладку «Итог».
  */
+
+/** Инструмент шага: вкладка, которая открывается сама при переходе на шаг. */
+export const TOOL_OF_STEP: Record<TrainStep, Tab> = {
+  req: 'req',
+  api: 'api',
+  /** Схему рисуют на полотне, а связывают с требованиями и описывают данные — в «Выбранном». */
+  design: 'inspect',
+  estimate: 'calc',
+  /** Вводная дописала требование — его и надо увидеть первым. */
+  harden: 'req',
+};
+
+const KEY = 'why:playground:train-folded';
+
+function readFolded(): boolean {
+  try {
+    return localStorage.getItem(KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+type Update = (fn: (design: Design) => Design) => void;
+
 interface Props {
   design: Design;
-  update: (fn: (design: Design) => Design) => void;
+  update: Update;
   t: T;
   now: number;
+  /** Прохождение перешло на шаг: открыть его инструмент. */
+  onStep: (step: TrainStep) => void;
+  /** Прохождение закончено: показать отчёт. */
+  onFinish: () => void;
+  /** Доска очищена и прохождение началось заново: сбросить выделение и полотно. */
   onReset: () => void;
 }
 
-export function TrainPanel({ design, update, t, now, onReset }: Props) {
+/** Заново: доска и прохождение очищаются, задача остаётся. */
+function restart(update: Update, t: T, onReset: () => void) {
+  if (!confirm(t('train.againConfirm'))) return;
+  update((current) => ({
+    ...current,
+    ...emptyBoard(),
+    session: { ...emptySession(), startedAt: new Date().toISOString() },
+    training: emptyTraining(),
+  }));
+  onReset();
+}
+
+export function TrainDock({ design, update, t, now, onStep, onFinish, onReset }: Props) {
   const { scenario, session, training } = design;
   const checks = runningChecks(design);
   const hasReference = scenario.reference.nodes.length > 0;
+  const [folded, setFolded] = useState(readFolded);
 
   /**
    * Сценарий мог быть написан до того, как тренировка появилась, — тогда
@@ -57,7 +107,7 @@ export function TrainPanel({ design, update, t, now, onReset }: Props) {
 
   if (!hasReference) {
     return (
-      <div className="pg-panel">
+      <div className="pg-dock pg-dock--idle">
         <p className="pg-hint pg-hint--empty">{t('train.noScenario')}</p>
       </div>
     );
@@ -67,25 +117,40 @@ export function TrainPanel({ design, update, t, now, onReset }: Props) {
   const step = training.step;
   const done = stepDone(step, checks, passed, design);
   const running = Boolean(session.startedAt && !session.finishedAt);
-  const finished = Boolean(session.finishedAt);
 
-  const start = () =>
+  const start = () => {
     update((current) => ({
       ...current,
       session: { ...emptySession(), startedAt: new Date().toISOString() },
       training: emptyTraining(),
     }));
-
-  const restart = () => {
-    if (!confirm(t('train.againConfirm'))) return;
-    update((current) => ({
-      ...current,
-      ...emptyBoard(),
-      session: { ...emptySession(), startedAt: new Date().toISOString() },
-      training: emptyTraining(),
-    }));
-    onReset();
+    onStep('req');
   };
+
+  if (!session.startedAt) {
+    return (
+      <div className="pg-dock pg-dock--idle">
+        <p className="pg-hint">{t('train.intro')}</p>
+        <button type="button" className="pg-button pg-button--primary" onClick={start}>
+          <i className="codicon codicon-play" aria-hidden="true" /> {t('train.start')}
+        </button>
+      </div>
+    );
+  }
+
+  if (session.finishedAt) {
+    return (
+      <div className="pg-dock pg-dock--done">
+        <span className="pg-dock__score">
+          <strong>{training.score ?? 0}%</strong> {t('train.score').toLowerCase()}
+        </span>
+        <span className="pg-hint">{t('train.took', { time: elapsed(session, now) || '—' })}</span>
+        <button type="button" className="pg-button" onClick={() => restart(update, t, onReset)}>
+          <i className="codicon codicon-refresh" aria-hidden="true" /> {t('train.again')}
+        </button>
+      </div>
+    );
+  }
 
   /**
    * Переход на «слабые места» — момент вводной: первая схема почти всегда
@@ -105,9 +170,10 @@ export function TrainPanel({ design, update, t, now, onReset }: Props) {
       };
       return next === 'harden' && !moved.training.twists.length ? applyTwist(moved, pickTwist(moved), t) : moved;
     });
+    onStep(next);
   };
 
-  const finish = () =>
+  const finish = () => {
     update((current) => ({
       ...current,
       session: { ...current.session, finishedAt: new Date().toISOString() },
@@ -117,6 +183,8 @@ export function TrainPanel({ design, update, t, now, onReset }: Props) {
         score: trainingScore(checks, passed, current.session.revealed.length),
       },
     }));
+    onFinish();
+  };
 
   const reveal = () => {
     const next = scenario.hints.find((hint) => !session.revealed.includes(hint.id));
@@ -127,92 +195,121 @@ export function TrainPanel({ design, update, t, now, onReset }: Props) {
     }));
   };
 
-  if (!session.startedAt) {
-    return (
-      <div className="pg-panel">
-        <p className="pg-hint">{t('train.intro')}</p>
-        <button type="button" className="pg-button pg-button--wide" onClick={start}>
-          <i className="codicon codicon-play" aria-hidden="true" /> {t('train.start')}
-        </button>
-      </div>
-    );
-  }
-
-  if (finished) return <Report design={design} t={t} now={now} onRestart={restart} />;
+  const toggle = () =>
+    setFolded((value) => {
+      try {
+        localStorage.setItem(KEY, value ? '0' : '1');
+      } catch {
+        /* свёрнутость — удобство, не данные */
+      }
+      return !value;
+    });
 
   const shown = step === 'harden' ? checks.filter((check) => !check.off) : checksOf(step, checks);
+  const taken = shown.filter((check) => passed[check.id]).length;
   const twist = training.twists[training.twists.length - 1];
-  const hintsLeft = scenario.hints.filter((hint) => !session.revealed.includes(hint.id)).length;
   const opened = scenario.hints.filter((hint) => session.revealed.includes(hint.id));
+  const hintsLeft = scenario.hints.length - opened.length;
+  /* Все открытые подсказки — в карточке задания над полотном; здесь только последняя. */
+  const lastHint = opened[opened.length - 1];
+  const index = TRAIN_STEPS.indexOf(step);
+  const stepOf = t('train.stepOf', { n: String(index + 1), m: String(TRAIN_STEPS.length) });
 
   return (
-    <div className="pg-panel pg-train">
-      <Steps training={training} t={t} />
+    <section className="pg-dock" aria-label={t('role.trainee')}>
+      <header className="pg-dock__head">
+        <ol className="pg-stepper" aria-label={stepOf}>
+          {TRAIN_STEPS.map((name, at) => {
+            const state = training.skipped.includes(name)
+              ? 'is-skipped'
+              : at < index
+                ? 'is-done'
+                : at === index
+                  ? 'is-on'
+                  : '';
+            return (
+              <li
+                key={name}
+                className={`pg-stepper__step ${state}`}
+                title={`${at + 1}. ${t(`train.step.${name}`)}`}
+                aria-current={at === index ? 'step' : undefined}
+              >
+                {state === 'is-done' ? <i className="codicon codicon-check" aria-hidden="true" /> : at + 1}
+              </li>
+            );
+          })}
+        </ol>
+        <span className="pg-dock__title" title={stepOf}>
+          {t(`train.step.${step}`)}{' '}
+          <span className={`pg-count ${done ? 'pg-count--good' : ''}`}>
+            {taken}/{shown.length}
+          </span>
+        </span>
+        <button
+          type="button"
+          className="pg-icon-button"
+          aria-expanded={!folded}
+          aria-label={t(folded ? 'train.unfold' : 'train.fold')}
+          title={t(folded ? 'train.unfold' : 'train.fold')}
+          onClick={toggle}
+        >
+          <i className={`codicon codicon-chevron-${folded ? 'down' : 'up'}`} aria-hidden="true" />
+        </button>
+      </header>
 
-      {twist && (
-        <section className="pg-twist">
-          <h3 className="pg-heading">
-            <i className="codicon codicon-flame" aria-hidden="true" /> {t('train.twist')}
-          </h3>
-          <p>{t(`twist.${twist}.note`)}</p>
-        </section>
+      {!folded && (
+        <div className="pg-dock__body">
+          {twist && (
+            <div className="pg-twist">
+              <strong>
+                <i className="codicon codicon-flame" aria-hidden="true" /> {t('train.twist')}
+              </strong>
+              <p>{t(`twist.${twist}.note`)}</p>
+            </div>
+          )}
+
+          <ul className="pg-checks pg-checks--dock">
+            {shown.map((check) => (
+              <li key={check.id} className={passed[check.id] ? 'is-done' : ''}>
+                <i
+                  className={`codicon codicon-${passed[check.id] ? 'pass-filled' : 'circle-large-outline'}`}
+                  aria-hidden="true"
+                />
+                <span>{check.text}</span>
+                {check.weight > 1 && <span className="pg-count">×{check.weight}</span>}
+              </li>
+            ))}
+          </ul>
+
+          {step === 'harden' && !recounted(design) && <p className="pg-hint pg-hint--warn">{t('train.recount')}</p>}
+          {!done && <p className="pg-hint">{t(step === 'harden' ? 'train.lockedLast' : 'train.locked')}</p>}
+          {lastHint && (
+            <p className="pg-dock__hint">
+              <i className="codicon codicon-lightbulb" aria-hidden="true" /> {lastHint.text}
+            </p>
+          )}
+        </div>
       )}
 
-      <section className="pg-req">
-        <h3 className="pg-heading">
-          {t(step === 'harden' ? 'train.checksAll' : 'train.checks')}{' '}
-          <span className="pg-count">
-            {shown.filter((check) => passed[check.id]).length}/{shown.length}
-          </span>
-        </h3>
-        <ul className="pg-checks">
-          {shown.map((check) => (
-            <li key={check.id} className={passed[check.id] ? 'is-done' : ''}>
-              <i
-                className={`codicon codicon-${passed[check.id] ? 'pass-filled' : 'circle-large-outline'}`}
-                aria-hidden="true"
-              />
-              <span>{check.text}</span>
-              {check.weight > 1 && <span className="pg-count">×{check.weight}</span>}
-            </li>
-          ))}
-        </ul>
-        {step === 'harden' && !recounted(design) && (
-          <p className="pg-hint pg-hint--warn">{t('train.recount')}</p>
-        )}
-      </section>
-
-      <section className="pg-req">
-        <h3 className="pg-heading">{t('scenario.hints')}</h3>
-        <p className="pg-hint">{t('train.hintCost')}</p>
-        <ol className="pg-checklist">
-          {opened.map((hint) => (
-            <li key={hint.id} className="is-done">
-              <span>{hint.text}</span>
-            </li>
-          ))}
-        </ol>
-        <button type="button" className="pg-button" disabled={!hintsLeft} onClick={reveal}>
-          <i className="codicon codicon-lightbulb" aria-hidden="true" /> {t('train.hint')}
-        </button>
-        {!hintsLeft && (
-          <p className="pg-hint pg-hint--empty">{t(scenario.hints.length ? 'train.hintsOut' : 'train.hintsNone')}</p>
-        )}
-      </section>
-
-      <div className="pg-train__actions">
+      <div className="pg-dock__actions">
         {step === 'harden' ? (
           /**
            * Завершить можно всегда: ворота последнего шага говорят, насколько
            * хорош ответ, а не разрешают ли выйти. Иначе пропущенный шаг
            * запирает человека в прохождении, которое нельзя закончить.
            */
-          <button type="button" className="pg-button pg-button--wide" disabled={!running} onClick={finish}>
+          <button type="button" className="pg-button pg-button--primary" disabled={!running} onClick={finish}>
             <i className="codicon codicon-check-all" aria-hidden="true" /> {t('train.finish')}
           </button>
         ) : (
           <>
-            <button type="button" className="pg-button pg-button--wide" disabled={!done} onClick={() => advance(false)}>
+            <button
+              type="button"
+              className="pg-button pg-button--primary"
+              disabled={!done}
+              title={done ? undefined : t('train.locked')}
+              onClick={() => advance(false)}
+            >
               <i className="codicon codicon-arrow-right" aria-hidden="true" /> {t('train.next')}
             </button>
             <button
@@ -226,42 +323,41 @@ export function TrainPanel({ design, update, t, now, onReset }: Props) {
             </button>
           </>
         )}
+        <button
+          type="button"
+          className="pg-button pg-dock__hint-button"
+          disabled={!hintsLeft}
+          title={t(hintsLeft ? 'train.hintCost' : scenario.hints.length ? 'train.hintsOut' : 'train.hintsNone')}
+          onClick={reveal}
+        >
+          <i className="codicon codicon-lightbulb" aria-hidden="true" /> {t('train.hint')}
+          {hintsLeft > 0 && <span className="pg-count">{hintsLeft}</span>}
+        </button>
       </div>
-      {!done && <p className="pg-hint">{t(step === 'harden' ? 'train.lockedLast' : 'train.locked')}</p>}
-    </div>
-  );
-}
-
-function Steps({ training, t }: { training: Design['training']; t: T }) {
-  const index = TRAIN_STEPS.indexOf(training.step);
-  return (
-    <ol className="pg-steps">
-      {TRAIN_STEPS.map((step, at) => {
-        const state = training.skipped.includes(step)
-          ? 'is-skipped'
-          : at < index
-            ? 'is-done'
-            : at === index
-              ? 'is-on'
-              : '';
-        return (
-          <li key={step} className={`pg-step ${state}`}>
-            <span className="pg-step__num">{at + 1}</span>
-            {t(`train.step.${step}`)}
-          </li>
-        );
-      })}
-    </ol>
+    </section>
   );
 }
 
 /**
- * Отчёт: что взято, что нет и куда смотреть дальше.
+ * Отчёт: что взято, что нет и куда смотреть дальше. После финиша живёт во
+ * вкладке «Итог» рядом с обычными вкладками доски.
  *
  * Счёт и снимок проверок берутся из прохождения, а не считаются заново: после
  * финиша доску можно трогать, и итог не должен меняться задним числом.
  */
-function Report({ design, t, now, onRestart }: { design: Design; t: T; now: number; onRestart: () => void }) {
+export function TrainReport({
+  design,
+  update,
+  t,
+  now,
+  onReset,
+}: {
+  design: Design;
+  update: Update;
+  t: T;
+  now: number;
+  onReset: () => void;
+}) {
   const { scenario, session, training } = design;
   const passed = training.passed ?? {};
   const rows = report(runningChecks(design), passed);
@@ -333,7 +429,7 @@ function Report({ design, t, now, onRestart }: { design: Design; t: T; now: numb
         </section>
       )}
 
-      <button type="button" className="pg-button pg-button--wide" onClick={onRestart}>
+      <button type="button" className="pg-button pg-button--wide" onClick={() => restart(update, t, onReset)}>
         <i className="codicon codicon-refresh" aria-hidden="true" /> {t('train.again')}
       </button>
     </div>

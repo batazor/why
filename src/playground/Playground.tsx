@@ -8,7 +8,7 @@ import { CalcPanel, ChecksPanel, RequirementsPanel, TaskPanel, useFindings } fro
 import { InspectorPanel } from './inspector';
 import { ApiPanel } from './api-panel';
 import { ConductPanel, ScenarioPanel, ScorePanel, elapsed } from './scenario-panels';
-import { TrainPanel } from './train-panel';
+import { TOOL_OF_STEP, TrainDock, TrainReport } from './train-panel';
 import { BriefCard } from './brief';
 import { RequirementsDoc } from './req-doc';
 import { useIntegrity, isNotable } from './integrity';
@@ -492,6 +492,8 @@ export default function Playground({ lang, repository }: Props) {
   // Кандидату калькулятор и проверки — только если автор разрешил.
   const tabs = perms.tabs.filter((name) => {
     if (role === 'author') return true;
+    // Итог тренировки — вкладка только после финиша: до него ход прохождения показывает полоса над вкладками.
+    if (name === 'train') return Boolean(design.session.finishedAt);
     if (name === 'calc') return candidateEstimates(design) !== 'off';
     if (name === 'check') return role === 'interviewer' || design.scenario.allowChecks;
     // Отчёт — про собеседование на сервере: в локальной репетиции в нём нет ни журнала, ни людей.
@@ -508,7 +510,8 @@ export default function Playground({ lang, repository }: Props) {
    */
   const ownTabs = tabs.filter((name) => !BOARD_TABS.includes(name));
   const boardTabs = tabs.filter((name) => BOARD_TABS.includes(name));
-  const grouped = ownTabs.length > 0 && tabs.length > 5;
+  // У тренирующегося групп нет: ход прохождения — полоса над вкладками, а не вкладка, и делить остальное не на что.
+  const grouped = role !== 'trainee' && ownTabs.length > 0 && tabs.length > 5;
   const group: 'own' | 'board' = BOARD_TABS.includes(activeTab) ? 'board' : 'own';
   lastInGroup.current[group] = activeTab;
   const shownTabs = grouped ? (group === 'board' ? boardTabs : ownTabs) : tabs;
@@ -558,6 +561,12 @@ export default function Playground({ lang, repository }: Props) {
           : undefined);
 
   const timer = elapsed(design.session, now);
+  /** Тренировка началась заново: чистое полотно и инструмент первого шага. */
+  const resetTraining = () => {
+    setSelection({});
+    setCanvasKey((key) => key + 1);
+    setTab(TOOL_OF_STEP.req);
+  };
   const notableSignals = (withSignals ?? design).session.signals.filter((signal) => isNotable(signal, now)).length;
   const panelProps = { design: view, update: updateView, t, lang };
 
@@ -869,6 +878,17 @@ export default function Playground({ lang, repository }: Props) {
         </ReactFlowProvider>
 
         <section className="pg-side">
+          {role === 'trainee' && (
+            <TrainDock
+              design={design}
+              update={update}
+              t={t}
+              now={now}
+              onStep={(step) => setTab(TOOL_OF_STEP[step])}
+              onFinish={() => setTab('train')}
+              onReset={resetTraining}
+            />
+          )}
           {grouped && (
             <div className="pg-switch pg-tab-groups" role="group">
               {(['own', 'board'] as const).map((name) => (
@@ -880,9 +900,7 @@ export default function Playground({ lang, repository }: Props) {
                         : 'group.board'
                       : role === 'author'
                         ? 'group.scenario'
-                        : role === 'trainee'
-                          ? 'group.training'
-                          : 'group.interview',
+                        : 'group.interview',
                   )}
                 </button>
               ))}
@@ -938,18 +956,7 @@ export default function Playground({ lang, repository }: Props) {
                 lang={lang}
               />
             )}
-            {activeTab === 'train' && (
-              <TrainPanel
-                design={design}
-                update={update}
-                t={t}
-                now={now}
-                onReset={() => {
-                  setSelection({});
-                  setCanvasKey((key) => key + 1);
-                }}
-              />
-            )}
+            {activeTab === 'train' && <TrainReport design={design} update={update} t={t} now={now} onReset={resetTraining} />}
             {activeTab === 'req' && (
               <>
                 {/* Интервьюер только читает — ему сразу документ, без переключателя. */}

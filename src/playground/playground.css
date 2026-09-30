@@ -3020,64 +3020,160 @@ body:has(.pg) .site-footer {
 
 /* ----------------------------------------------------- Тренировка */
 
-.pg-train {
-  display: grid;
-  gap: 0.9rem;
-  align-content: start;
-}
-
-/* Шаги полосой: видно и где человек сейчас, и сколько осталось. */
-.pg-steps {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 0.25rem;
-}
-
-.pg-step {
+/*
+ * Полоса прохождения над вкладками: шаги, проверки шага и кнопка «дальше»
+ * на виду всё время, пока человек работает во вкладке под ней. Проверок на
+ * последнем шаге может быть много — тело полосы прокручивается само и не
+ * выдавливает вкладку за край.
+ */
+.pg-dock {
+  flex: none;
   display: flex;
+  flex-direction: column;
+  max-height: 45%;
+  border-bottom: 1px solid var(--pg-border);
+  background: var(--pg-bg);
+}
+
+/* До старта и после финиша — одна строка: текст и кнопка. */
+.pg-dock--idle,
+.pg-dock--done {
+  flex-direction: row;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.3rem 0.5rem;
-  border-radius: 6px;
+  gap: 0.5rem 0.75rem;
+  padding: 0.6rem 0.75rem;
+}
+
+.pg-dock--idle .pg-hint,
+.pg-dock--done .pg-hint {
+  flex: 1 1 12rem;
+  margin: 0;
+}
+
+.pg-dock__score {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
   color: var(--pg-muted);
 }
 
-.pg-step__num {
-  display: grid;
-  place-items: center;
-  width: 1.4rem;
-  height: 1.4rem;
-  border: 1px solid var(--pg-border);
-  border-radius: 50%;
-  font-size: 0.72rem;
+.pg-dock__score strong {
+  font-size: 1.3rem;
+  color: var(--pg-fg);
   font-variant-numeric: tabular-nums;
 }
 
-.pg-step.is-on {
-  background: var(--pg-accent-soft);
-  color: var(--pg-accent);
+.pg-dock__head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.5rem 0.5rem 0.75rem;
+}
+
+.pg-dock__title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
   font-weight: 600;
 }
 
-.pg-step.is-on .pg-step__num {
-  border-color: currentColor;
+/* Шаги кружками в строку: где человек сейчас и сколько осталось — с одного взгляда. */
+.pg-stepper {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
 }
 
-.pg-step.is-done {
+.pg-stepper__step {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 1px solid var(--pg-border);
+  border-radius: 50%;
+  background: var(--pg-panel);
+  color: var(--pg-muted);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  cursor: default;
+}
+
+.pg-stepper__step + .pg-stepper__step {
+  margin-left: 0.7rem;
+}
+
+/* Чёрточка между кружками. */
+.pg-stepper__step + .pg-stepper__step::before {
+  content: '';
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  width: 0.7rem;
+  border-top: 1px solid var(--pg-border);
+}
+
+.pg-stepper__step.is-on {
+  border-color: var(--pg-accent);
+  background: var(--pg-accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.pg-stepper__step.is-done {
+  border-color: var(--pg-good);
+  background: var(--pg-good-soft);
   color: var(--pg-good);
 }
 
-.pg-step.is-done .pg-step__num {
-  border-color: currentColor;
-  background: var(--pg-good-soft);
-}
-
 /* Пропущенный шаг не прячется: он попадёт в отчёт, и человек знает об этом. */
-.pg-step.is-skipped {
+.pg-stepper__step.is-skipped {
+  border-color: var(--pg-bad);
+  background: var(--pg-bad-soft);
   color: var(--pg-bad);
   text-decoration: line-through;
+}
+
+.pg-dock__body {
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  gap: 0.5rem;
+  padding: 0 0.75rem 0.5rem;
+}
+
+.pg-dock__body .pg-hint {
+  margin: 0;
+}
+
+/* Последняя подсказка — под проверками; все открытые лежат в карточке задания. */
+.pg-dock__hint {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--pg-muted);
+}
+
+.pg-dock__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.75rem 0.6rem;
+}
+
+.pg-dock__hint-button {
+  margin-left: auto;
+}
+
+.pg-count--good {
+  background: var(--pg-good-soft);
+  color: var(--pg-good);
 }
 
 .pg-checks {
@@ -3113,6 +3209,15 @@ body:has(.pg) .site-footer {
   color: var(--pg-good);
 }
 
+.pg-checks--dock {
+  margin: 0;
+}
+
+.pg-checks--dock li {
+  padding: 0.3rem 0.5rem;
+  font-size: 0.85rem;
+}
+
 /* Вводная — то, что ломает уже сделанное: карточка должна бросаться в глаза. */
 .pg-twist {
   padding: 0.6rem 0.75rem;
@@ -3121,14 +3226,14 @@ body:has(.pg) .site-footer {
   background: var(--pg-bad-soft);
 }
 
-.pg-twist p {
-  margin: 0.35rem 0 0;
+.pg-twist strong {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
-.pg-train__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
+.pg-twist p {
+  margin: 0.35rem 0 0;
 }
 
 .pg-button--wide {
@@ -3536,6 +3641,7 @@ body:has(.pg) .site-footer {
   .pg-toolbar,
   .pg-palette,
   .pg-tabs,
+  .pg-dock,
   .pg-report__replay,
   .pg-report__actions,
   .pg-canvas__banner,

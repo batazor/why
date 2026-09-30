@@ -591,7 +591,6 @@ const en = {
   'report.collapse': 'Narrow report',
 
   'tab.ai': 'AI interviewer',
-  'group.training': 'Practice',
   'ai.intro': 'The AI interviewer looks at your board and talks it through with you, like a live interviewer: asks about your blocks and links, looks for weak spots, does not give away the answer. Press “Question on the board” to start, or just write.',
   'ai.ask': 'Question on the board',
   'ai.review': 'Review',
@@ -776,7 +775,7 @@ const en = {
   'lint.noRoute': '{id} has no API route.',
   'lint.routeNoService': '{route} is not served by any block.',
 
-  'tab.train': 'Training',
+  'tab.train': 'Result',
   'role.trainee': 'Training',
   'role.traineeBanner': 'Training: the playground runs the interview. The reference solution stays hidden until the end.',
 
@@ -797,6 +796,9 @@ const en = {
   'train.step.design': 'Design',
   'train.step.estimate': 'Numbers',
   'train.step.harden': 'Weak spots',
+  'train.stepOf': 'Step {n} of {m}',
+  'train.fold': 'Hide the checks',
+  'train.unfold': 'Show the checks',
   'train.intro': 'Work through the task on your own. Each step opens once its checks go green.',
   'train.noScenario': 'This task has no reference solution, so there is nothing to check against. Open the example or ask the author for a scenario.',
   'train.start': 'Start',
@@ -1444,7 +1446,6 @@ const ru: Record<Key, string> = {
   'report.collapse': 'Отчёт уже',
 
   'tab.ai': 'ИИ-интервьюер',
-  'group.training': 'Тренировка',
   'ai.intro': 'ИИ-интервьюер смотрит на вашу доску и разбирает её вместе с вами, как живой интервьюер: спрашивает про ваши блоки и связи, ищет слабые места, не подсказывает готовый ответ. Нажмите «Вопрос по доске», чтобы начать, или просто напишите.',
   'ai.ask': 'Вопрос по доске',
   'ai.review': 'Разбор',
@@ -1629,7 +1630,7 @@ const ru: Record<Key, string> = {
   'lint.noRoute': 'У {id} нет маршрута в API.',
   'lint.routeNoService': '{route} не обслуживает ни один блок.',
 
-  'tab.train': 'Тренировка',
+  'tab.train': 'Итог',
   'role.trainee': 'Тренировка',
   'role.traineeBanner': 'Тренировка: собеседование ведёт песочница. Эталон не показывается до конца прохождения.',
 
@@ -1650,6 +1651,9 @@ const ru: Record<Key, string> = {
   'train.step.design': 'Схема',
   'train.step.estimate': 'Числа',
   'train.step.harden': 'Слабые места',
+  'train.stepOf': 'Шаг {n} из {m}',
+  'train.fold': 'Скрыть проверки',
+  'train.unfold': 'Показать проверки',
   'train.intro': 'Пройдите задачу сами. Следующий шаг открывается, когда зеленеют проверки текущего.',
   'train.noScenario': 'У этой задачи нет эталона, поэтому сверять не с чем. Откройте пример или попросите у автора сценарий.',
   'train.start': 'Начать',

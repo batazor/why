@@ -68,8 +68,10 @@ export const PERMISSIONS: Record<Role, Permissions> = {
    * Тренировка: тот же кандидат, но интервьюера играет песочница.
    *
    * Задачу выбирает сам — отсюда manageProjects; эталон не показывается до
-   * конца прохождения — отсюда compare: false. Вкладки «Проверки» нет: её
-   * место занимает «Тренировка», а два списка замечаний рядом только путают.
+   * конца прохождения — отсюда compare: false. Ход прохождения — полоса над
+   * вкладками, а не вкладка; «train» здесь — отчёт, и он появляется только
+   * после финиша. Вкладки «Проверки» нет: проверки шага показывает полоса,
+   * а два списка замечаний рядом только путают.
    */
   trainee: {
     board: 'answer',
@@ -77,7 +79,7 @@ export const PERMISSIONS: Record<Role, Permissions> = {
     editTask: false,
     manageProjects: true,
     compare: false,
-    tabs: ['train', 'ai', 'req', 'api', 'calc', 'inspect'],
+    tabs: ['train', 'req', 'api', 'calc', 'inspect', 'ai'],
   },
 };
 
