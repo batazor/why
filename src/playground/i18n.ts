@@ -590,13 +590,8 @@ const en = {
   'ai.error.network': 'No connection to the model. For a local one: is the server running, is this site allowed in CORS? ({detail})',
   'ai.error.other': 'The model returned an error: {detail}',
 
-  'pen.take': 'Take the board',
-  'pen.takeHint': 'Draw on the candidate’s board yourself — to show an idea. The candidate sees it live and waits until you give the board back.',
-  'pen.return': 'Give the board back',
-  'pen.returnHint': 'Let the candidate draw again',
-  'pen.busy': '{name} is drawing on the board now',
-  'pen.away': '{name} is drawing on your board — watch, the board comes back to you in a moment',
-  'pen.drawing': 'You are drawing on the candidate’s board — they see it live. What you add is marked as yours.',
+  'draw.together': 'The board is shared: you and the candidate draw at the same time. What you add is marked as yours.',
+  'draw.noCandidate': 'You can draw on the board once the candidate is in the room — their side saves it.',
   'canvas.byInterviewer': 'Drawn by the interviewer',
   'canvas.byInterviewerShort': 'I',
 
@@ -1409,13 +1404,8 @@ const ru: Record<Key, string> = {
   'ai.error.network': 'Нет связи с моделью. Если локальная — запущен ли сервер и разрешён ли этот сайт в CORS? ({detail})',
   'ai.error.other': 'Модель ответила ошибкой: {detail}',
 
-  'pen.take': 'Взять доску',
-  'pen.takeHint': 'Порисовать на доске кандидата самому — показать мысль. Кандидат видит это вживую и ждёт, пока вы вернёте доску.',
-  'pen.return': 'Вернуть доску',
-  'pen.returnHint': 'Кандидат снова рисует сам',
-  'pen.busy': 'Сейчас на доске рисует {name}',
-  'pen.away': '{name} рисует на вашей доске — смотрите, доска скоро вернётся к вам',
-  'pen.drawing': 'Вы рисуете на доске кандидата — он видит это вживую. Всё, что вы добавите, помечается как ваше.',
+  'draw.together': 'Доска общая: вы и кандидат рисуете одновременно. Всё, что добавите вы, помечается как ваше.',
+  'draw.noCandidate': 'Рисовать на доске можно, когда кандидат в комнате, — сохраняет её его сторона.',
   'canvas.byInterviewer': 'Нарисовал интервьюер',
   'canvas.byInterviewerShort': 'И',
 

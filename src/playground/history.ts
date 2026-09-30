@@ -78,6 +78,20 @@ export function useDesignHistory() {
     commit(after);
   }, []);
 
+  /**
+   * Чужая правка — с другой стороны собеседования. Шага истории она не
+   * создаёт и ложится на все снимки: отмена откатывает свои шаги, а не
+   * блок, который только что дорисовал другой.
+   */
+  const remote = useCallback((fn: (design: Design) => Design) => {
+    const before = current.current;
+    if (!before) return;
+    const rebase = (step: Snapshot) => snapshot(fn({ ...step, session: before.session, updatedAt: before.updatedAt }));
+    past.current = past.current.map(rebase);
+    future.current = future.current.map(rebase);
+    commit({ ...fn(before), updatedAt: new Date().toISOString() });
+  }, []);
+
   /** Шаг назад или вперёд: снимок подменяет содержимое, сессия остаётся текущей. */
   const step = useCallback((from: typeof past, to: typeof future) => {
     const now = current.current;
@@ -106,6 +120,7 @@ export function useDesignHistory() {
     design,
     load,
     update,
+    remote,
     undo,
     redo,
     forget,

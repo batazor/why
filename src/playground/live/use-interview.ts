@@ -3,7 +3,7 @@ import type { Person } from './auth';
 import type { Course, InterviewRepository } from './interviews';
 import { merge, signalsFrom, snapshotsFrom, type JournalEntry } from './journal';
 import { useRoom } from './room';
-import type { Board, Design } from '../model';
+import type { Design } from '../model';
 import type { Role } from '../roles';
 import type { T } from '../i18n';
 
@@ -11,7 +11,7 @@ import type { T } from '../i18n';
  * Живая сторона открытого собеседования — всё, что приходит и уходит по
  * комнате, поверх документа песочницы.
  *
- * - доска кандидата у интервьюера и ход собеседования у всех;
+ * - доска кандидата — общая: правки всех сторон — и ход собеседования у всех;
  * - задание кандидату со стартом;
  * - журнал у интервьюера: сигналы с серверным временем и снимки доски для
  *   записи; `replay` — какой снимок сейчас на полотне, null — живая доска;
@@ -27,12 +27,14 @@ interface Options {
   role: Role;
   design: Design | null;
   update: (fn: (design: Design) => Design) => void;
+  /** Чужая правка доски: мимо истории отмены. */
+  remote: (fn: (design: Design) => Design) => void;
   /** Какая доска на полотне: курсор над эталоном кандидату ни о чём не скажет. */
   board: 'answer' | 'reference';
   t: T;
 }
 
-export function useInterview({ interview, me, role, design, update, board, t }: Options) {
+export function useInterview({ interview, me, role, design, update, remote, board, t }: Options) {
   const [journal, setJournal] = useState<JournalEntry[]>([]);
   const [replay, setReplay] = useState<number | null>(null);
   /** Короткое сообщение, которое само пропадает: например, что кандидат зашёл. */
@@ -90,10 +92,10 @@ export function useInterview({ interview, me, role, design, update, board, t }: 
   );
 
   const onBoard = useCallback(
-    ({ designId, board: incoming }: { designId: string; board: Board }) =>
+    (designId: string, change: (design: Design) => Design) =>
       // Доска чужого проекта сюда не относится: интервьюер открыл другой сценарий.
-      update((current) => (current.id === designId ? { ...current, ...incoming } : current)),
-    [update],
+      remote((current) => (current.id === designId ? change(current) : current)),
+    [remote],
   );
 
   const onJournal = useCallback((entry: JournalEntry) => setJournal((current) => merge(current, [entry])), []);

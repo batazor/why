@@ -84,7 +84,7 @@ export default function Playground({ lang, repository }: Props) {
   /** Пока не ясно, где работаем, открывать нечего: иначе мелькнёт чужой проект. */
   const settled = cloud.mode === 'local' || cloud.mode === 'workspace' || cloud.mode === 'interview';
 
-  const { design, load, update, undo, redo, forget, canUndo, canRedo } = useDesignHistory();
+  const { design, load, update, remote, undo, redo, forget, canUndo, canRedo } = useDesignHistory();
   const [projects, setProjects] = useState<DesignSummary[]>([]);
   const [role, setRole] = useState<Role>(initialRole);
   const [tab, setTab] = useState<Tab>(PERMISSIONS[role].tabs[0]);
@@ -140,6 +140,7 @@ export default function Playground({ lang, repository }: Props) {
     role,
     design,
     update,
+    remote,
     board,
     t,
   });
@@ -148,12 +149,13 @@ export default function Playground({ lang, repository }: Props) {
 
   /**
    * Кто может рисовать. Вне собеседования — по правам роли. В собеседовании
-   * решает ручка: кандидат рисует, пока она у него; интервьюер — пока взял
-   * её сам. После конца не рисует никто.
+   * доска кандидата общая: интервьюер рисует на ней в любой момент, пока
+   * кандидат в комнате, — сохраняет доску клиент кандидата. После конца не
+   * рисует никто.
    */
-  const penAway = Boolean(interview) && role === 'candidate' && live.pen.holder === 'interviewer';
-  const drawing = Boolean(interview) && role === 'interviewer' && live.mine;
-  const readOnly = frozen || penAway || (!perms.editBoard && !drawing);
+  const candidateHere = live.peers.some((peer) => peer.role === 'candidate');
+  const drawing = Boolean(interview) && role === 'interviewer' && board === 'answer' && candidateHere;
+  const readOnly = frozen || (!perms.editBoard && !drawing);
 
   // Интервьюеру пространства роль автора недоступна: сценарии ему писать нельзя.
   const workspaceRole = cloud.mode === 'workspace' ? cloud.workspace.role : null;
@@ -484,14 +486,13 @@ export default function Playground({ lang, repository }: Props) {
           .join(' · ')
       : undefined;
 
-  const penBanner = penAway
-    ? t('pen.away', { name: live.pen.holder === 'interviewer' ? live.pen.name : '' })
-    : drawing
-      ? t('pen.drawing')
+  const drawBanner =
+    interview && role === 'interviewer' && board === 'answer' && !frozen
+      ? t(drawing ? 'draw.together' : 'draw.noCandidate')
       : undefined;
 
   const banner =
-    penBanner ??
+    drawBanner ??
     waiting ??
     (role === 'author'
       ? t('role.authorBanner')
@@ -646,27 +647,6 @@ export default function Playground({ lang, repository }: Props) {
             setCanvasKey((key) => key + 1);
           }}
         />
-
-        {/* Ручка: интервьюер берёт доску кандидата показать мысль и возвращает. */}
-        {interview && role === 'interviewer' && !frozen && (
-          <button
-            type="button"
-            className={`pg-button ${drawing ? 'pg-button--primary' : ''}`}
-            title={t(drawing ? 'pen.returnHint' : live.pen.holder === 'interviewer' ? 'pen.busy' : 'pen.takeHint', {
-              name: live.pen.holder === 'interviewer' ? live.pen.name : '',
-            })}
-            disabled={!drawing && live.pen.holder === 'interviewer'}
-            onClick={() => {
-              if (drawing) live.returnPen();
-              else {
-                setCompareView('answer');
-                live.takePen();
-              }
-            }}
-          >
-            <i className={`codicon codicon-${drawing ? 'debug-step-back' : 'edit'}`} aria-hidden="true" /> {t(drawing ? 'pen.return' : 'pen.take')}
-          </button>
-        )}
 
         {inWorkspace && isCloudId(design.id) && (
           <WorkspaceButtons

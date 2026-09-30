@@ -3,6 +3,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from './client';
 import type { Person } from './auth';
 import { pickBoard, type Board, type Design } from '../model';
+import { applyPatch, diffBoard, type BoardPatch } from './board-patch';
 import { course, type Course } from './interviews';
 import { toEntry, type JournalEntry, type JournalRow } from './journal';
 import type { Role } from '../roles';
@@ -15,13 +16,13 @@ import type { Role } from '../roles';
  * - broadcast `cursor` — курсор на полотне, в координатах схемы, а не экрана:
  *   у интервьюера другой масштаб и другой размер окна, и точка на экране
  *   указывала бы мимо блока;
- * - broadcast `board` — доска кандидата. Рисует тот, у кого ручка (`pen`):
- *   обычно кандидат, иногда интервьюер берёт её показать мысль. В каждый
- *   момент рисует кто-то один, поэтому сливать правки не нужно — последняя
- *   доска и есть правда. Сохраняет доску всегда клиент кандидата: писать в
- *   interview_boards может только он;
- * - broadcast `pen` — у кого ручка;
- *
+ * - broadcast `patch` — правка доски кандидата: только то, что поменялось
+ *   (см. board-patch.ts). Рисуют все сразу — кандидат и интервьюеры, — и
+ *   каждый накладывает чужие правки на свою доску, не затирая своих.
+ *   Сохраняет доску клиент кандидата: писать в interview_boards может только
+ *   он, поэтому интервьюер рисует, пока кандидат в комнате;
+ * - broadcast `board` — доска кандидата целиком: её шлёт кандидат тому, кто
+ *   только что зашёл, — правок до его прихода он не видел;
  * - broadcast `course` — ход собеседования: начал, закончил, открыл
  *   калькулятор, открыл подсказку, задал вопрос. Шлёт любой из ведущих;
  *   кандидат по нему ведёт таймер и видит открытые подсказки, другие ведущие —
@@ -51,25 +52,10 @@ export interface Point {
 
 export type RoomStatus = 'connecting' | 'live' | 'error';
 
-interface BoardMessage {
-  designId: string;
-  board: Board;
-}
-
 /** Курсор чаще 20 раз в секунду не нужен: глаз не заметит, а лимиты канала заметят. */
 const CURSOR_MS = 50;
-/** Доска тяжелее курсора: при перетаскивании блока хватит пяти снимков в секунду. */
+/** Правки доски копятся и уходят пачкой: при перетаскивании блока хватит пяти в секунду. */
 const BOARD_MS = 200;
-
-/**
- * Ручка: кто сейчас рисует на доске кандидата. По умолчанию — сам кандидат;
- * интервьюер может взять её («давайте добавим сюда кэш») и вернуть. Доску
- * по комнате шлёт тот, у кого ручка, остальные её принимают — так две
- * стороны никогда не правят одну доску одновременно, и сливать нечего.
- */
-export type Pen = { holder: 'candidate' } | { holder: 'interviewer'; key: string; name: string };
-
-const CANDIDATE_PEN: Pen = { holder: 'candidate' };
 
 /** Вкладка — отдельный участник: так проще проверить комнату одной учёткой в двух окнах. */
 const TAB = crypto.randomUUID().slice(0, 8);
@@ -79,8 +65,8 @@ interface Options {
   me: Person | null;
   role: Role;
   design: Design | null;
-  /** Интервьюеру пришла доска кандидата. */
-  onBoard: (message: BoardMessage) => void;
+  /** Пришла чужая правка доски — или доска кандидата целиком. */
+  onBoard: (designId: string, change: (design: Design) => Design) => void;
   /** Кандидату пришёл ход собеседования. */
   onCourse: (course: Course) => void;
   /** Интервьюеру пришла новая запись журнала. */
@@ -95,20 +81,12 @@ export function useRoom({ room, me, role, design, onBoard, onCourse, onJournal }
   const channel = useRef<RealtimeChannel | null>(null);
   const live = useRef(false);
   const key = me ? `${me.id}:${TAB}` : '';
-  const keyRef = useRef(key);
-  keyRef.current = key;
 
-  const [pen, setPenState] = useState<Pen>(CANDIDATE_PEN);
-  const penRef = useRef<Pen>(CANDIDATE_PEN);
-  const setPen = useCallback((next: Pen) => {
-    penRef.current = next;
-    setPenState(next);
-  }, []);
-  /** Моя ли сейчас ручка: кандидата по умолчанию или именно этой вкладки интервьюера. */
-  const holdsPen = useCallback(
-    () => (penRef.current.holder === 'candidate' ? roleRef.current === 'candidate' : penRef.current.key === keyRef.current),
-    [],
-  );
+  /**
+   * Доска, какой её знает комната: с чужими правками и своими отправленными.
+   * Разница между ней и доской на экране — свои правки, которые ещё не ушли.
+   */
+  const synced = useRef<{ id: string; board: Board } | null>(null);
 
   // Обработчики канала живут дольше рендера — свежие значения берут из ref.
   const roleRef = useRef(role);
@@ -124,25 +102,38 @@ export function useRoom({ room, me, role, design, onBoard, onCourse, onJournal }
   const onJournalRef = useRef(onJournal);
   onJournalRef.current = onJournal;
 
-  /** Доску шлёт тот, у кого ручка. */
+  /** Свои правки, которых комната ещё не видела. */
+  const sendPatch = useCallback(() => {
+    const current = designRef.current;
+    if (!current) return;
+    if (synced.current?.id !== current.id) {
+      // Открыли проект — от его доски и считаем правки.
+      synced.current = { id: current.id, board: pickBoard(current) };
+      return;
+    }
+    const patch = diffBoard(synced.current.board, current);
+    if (!patch || !live.current) return;
+    synced.current = { id: current.id, board: pickBoard(current) };
+    channel.current?.send({ type: 'broadcast', event: 'patch', payload: { designId: current.id, patch } });
+  }, []);
+
+  /** Доску целиком шлёт кандидат: у него она та, что сохранена. */
   const sendBoard = useCallback(() => {
     const current = designRef.current;
-    if (!live.current || !current || !holdsPen()) return;
-    const payload: BoardMessage = { designId: current.id, board: pickBoard(current) };
-    channel.current?.send({ type: 'broadcast', event: 'board', payload });
-  }, [holdsPen]);
+    if (!live.current || !current || roleRef.current !== 'candidate') return;
+    channel.current?.send({ type: 'broadcast', event: 'board', payload: { designId: current.id, board: pickBoard(current) } });
+  }, []);
 
-  /** Ход собеседования и ручку шлёт интервьюер. */
+  /** Ход собеседования шлёт интервьюер. */
   const sendCourseNow = useCallback(() => {
     const current = designRef.current;
     if (!live.current || !current || roleRef.current !== 'interviewer') return;
     const payload = course(current);
     lastCourse.current = JSON.stringify(payload);
     channel.current?.send({ type: 'broadcast', event: 'course', payload });
-    channel.current?.send({ type: 'broadcast', event: 'pen', payload: penRef.current });
   }, []);
 
-  /** Каждая сторона отдаёт своё: доску — у кого ручка, ход — интервьюер. */
+  /** Каждая сторона отдаёт своё: доску — кандидат, ход — интервьюер. */
   const sendOwn = useCallback(() => {
     sendBoard();
     sendCourseNow();
@@ -180,17 +171,23 @@ export function useRoom({ room, me, role, design, onBoard, onCourse, onJournal }
       })
       .on('presence', { event: 'leave' }, ({ key: left }) => {
         setCursors(({ [left]: _gone, ...rest }) => rest);
-        // Ушёл тот, у кого ручка, — доска снова у кандидата, а не повисла ничьей.
-        if (penRef.current.holder === 'interviewer' && penRef.current.key === left) setPen(CANDIDATE_PEN);
       })
-      .on('broadcast', { event: 'pen' }, ({ payload }) => setPen(payload as Pen))
       .on('broadcast', { event: 'cursor' }, ({ payload }) => {
         const { from, point } = payload as { from: string; point: Point | null };
         setCursors(({ [from]: _old, ...rest }) => (point ? { ...rest, [from]: point } : rest));
       })
+      .on('broadcast', { event: 'patch' }, ({ payload }) => {
+        const { designId, patch } = payload as { designId: string; patch: BoardPatch };
+        // Чужая правка — уже известна комнате: в свои неотправленные её не записать.
+        if (synced.current?.id === designId) synced.current = { id: designId, board: applyPatch(synced.current.board, patch) };
+        onBoardRef.current(designId, (current) => applyPatch(current, patch));
+      })
       .on('broadcast', { event: 'board' }, ({ payload }) => {
-        // Доску шлёт тот, у кого ручка; кто не рисует — принимает.
-        if (!holdsPen()) onBoardRef.current(payload as BoardMessage);
+        // Доска целиком — от кандидата; у него самого она своя.
+        if (roleRef.current === 'candidate') return;
+        const { designId, board } = payload as { designId: string; board: Board };
+        synced.current = { id: designId, board };
+        onBoardRef.current(designId, (current) => ({ ...current, ...board }));
       })
       .on('broadcast', { event: 'course' }, ({ payload }) => {
         lastCourse.current = JSON.stringify(payload);
@@ -230,22 +227,22 @@ export function useRoom({ room, me, role, design, onBoard, onCourse, onJournal }
       setCursors({});
       client.removeChannel(ch);
     };
-  }, [room, me, key, sendOwn, holdsPen, setPen]);
+  }, [room, me, key, sendOwn]);
 
   // Сменил роль — остальные должны это увидеть.
   useEffect(() => {
     if (live.current && me) channel.current?.track({ person: me, role });
   }, [role, me]);
 
-  /** Доска кандидата уходит по мере правок, но не чаще BOARD_MS. */
+  /** Свои правки уходят по мере рисования, но не чаще BOARD_MS. */
   const boardTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (!design || !holdsPen() || boardTimer.current) return;
+    if (!design || boardTimer.current) return;
     boardTimer.current = setTimeout(() => {
       boardTimer.current = null;
-      sendBoard();
+      sendPatch();
     }, BOARD_MS);
-  }, [role, pen, design?.nodes, design?.edges, design?.requirements, design?.api, design?.estimate, sendBoard, holdsPen]);
+  }, [design?.id, design?.nodes, design?.edges, design?.requirements, design?.api, design?.estimate, sendPatch]);
 
   // Ход собеседования меняется редко — отдаём сразу.
   useEffect(() => {
@@ -282,21 +279,5 @@ export function useRoom({ room, me, role, design, onBoard, onCourse, onJournal }
     [key],
   );
 
-  /** Интервьюер берёт доску — кандидат видит, что рисует он, и ждёт. */
-  const takePen = useCallback(() => {
-    if (!me || roleRef.current !== 'interviewer') return;
-    const next: Pen = { holder: 'interviewer', key: keyRef.current, name: me.name };
-    setPen(next);
-    channel.current?.send({ type: 'broadcast', event: 'pen', payload: next });
-  }, [me, setPen]);
-
-  const returnPen = useCallback(() => {
-    setPen(CANDIDATE_PEN);
-    channel.current?.send({ type: 'broadcast', event: 'pen', payload: CANDIDATE_PEN });
-  }, [setPen]);
-
-  /** Ручка у этой вкладки. */
-  const mine = pen.holder === 'candidate' ? role === 'candidate' : pen.key === key;
-
-  return { status, peers, cursors, sendCursor, pen, mine, takePen, returnPen };
+  return { status, peers, cursors, sendCursor };
 }
