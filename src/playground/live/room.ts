@@ -3,7 +3,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from './client';
 import type { Person } from './auth';
 import { pickBoard, type Board, type Design } from '../model';
-import { timing, type Timing } from './cloud';
+import { course, type Course } from './cloud';
 import { toEntry, type JournalEntry, type JournalRow } from './journal';
 import type { Role } from '../roles';
 
@@ -19,8 +19,11 @@ import type { Role } from '../roles';
  *   только кандидат, интервьюер её смотрит (editBoard: false в roles.ts),
  *   поэтому сливать правки двух сторон не нужно — последняя доска и есть правда.
  *
- * - broadcast `timing` — ход собеседования от интервьюера: начал, закончил,
- *   открыл калькулятор. Кандидат по нему ведёт таймер и разблокирует оценки;
+ * - broadcast `course` — ход собеседования: начал, закончил, открыл
+ *   калькулятор, открыл подсказку, задал вопрос. Шлёт любой из ведущих;
+ *   кандидат по нему ведёт таймер и видит открытые подсказки, другие ведущие —
+ *   держат общую картину. Одно и то же состояние дважды не шлётся, иначе
+ *   двое ведущих перекидывали бы его друг другу без конца;
  * - postgres_changes по interview_events — новые записи журнала. Их шлёт
  *   сама база после записи, а не кандидат, и только тем, кому журнал читать
  *   можно (RLS): кандидату они не приходят.
@@ -66,12 +69,12 @@ interface Options {
   /** Интервьюеру пришла доска кандидата. */
   onBoard: (message: BoardMessage) => void;
   /** Кандидату пришёл ход собеседования. */
-  onTiming: (timing: Timing) => void;
+  onCourse: (course: Course) => void;
   /** Интервьюеру пришла новая запись журнала. */
   onJournal?: (entry: JournalEntry) => void;
 }
 
-export function useRoom({ room, me, role, design, onBoard, onTiming, onJournal }: Options) {
+export function useRoom({ room, me, role, design, onBoard, onCourse, onJournal }: Options) {
   const [status, setStatus] = useState<RoomStatus>('connecting');
   const [peers, setPeers] = useState<Peer[]>([]);
   const [cursors, setCursors] = useState<Record<string, Point>>({});
@@ -87,8 +90,10 @@ export function useRoom({ room, me, role, design, onBoard, onTiming, onJournal }
   designRef.current = design;
   const onBoardRef = useRef(onBoard);
   onBoardRef.current = onBoard;
-  const onTimingRef = useRef(onTiming);
-  onTimingRef.current = onTiming;
+  const onCourseRef = useRef(onCourse);
+  onCourseRef.current = onCourse;
+  /** Последний известный ход — свой отправленный или чужой пришедший. */
+  const lastCourse = useRef('');
   const onJournalRef = useRef(onJournal);
   onJournalRef.current = onJournal;
 
@@ -100,9 +105,18 @@ export function useRoom({ room, me, role, design, onBoard, onTiming, onJournal }
       const payload: BoardMessage = { designId: current.id, board: pickBoard(current) };
       channel.current?.send({ type: 'broadcast', event: 'board', payload });
     } else if (roleRef.current === 'interviewer') {
-      channel.current?.send({ type: 'broadcast', event: 'timing', payload: timing(current.session) });
+      const payload = course(current);
+      lastCourse.current = JSON.stringify(payload);
+      channel.current?.send({ type: 'broadcast', event: 'course', payload });
     }
   }, []);
+
+  /** Отдать ход, только если он поменялся с последнего известного. */
+  const sendCourse = useCallback(() => {
+    const current = designRef.current;
+    if (!current || roleRef.current !== 'interviewer') return;
+    if (JSON.stringify(course(current)) !== lastCourse.current) sendOwn();
+  }, [sendOwn]);
 
   useEffect(() => {
     const client = supabase();
@@ -137,8 +151,9 @@ export function useRoom({ room, me, role, design, onBoard, onTiming, onJournal }
       .on('broadcast', { event: 'board' }, ({ payload }) => {
         if (roleRef.current === 'interviewer') onBoardRef.current(payload as BoardMessage);
       })
-      .on('broadcast', { event: 'timing' }, ({ payload }) => {
-        if (roleRef.current === 'candidate') onTimingRef.current(payload as Timing);
+      .on('broadcast', { event: 'course' }, ({ payload }) => {
+        lastCourse.current = JSON.stringify(payload);
+        onCourseRef.current(payload as Course);
       })
       .on(
         'postgres_changes',
@@ -193,8 +208,17 @@ export function useRoom({ room, me, role, design, onBoard, onTiming, onJournal }
 
   // Ход собеседования меняется редко — отдаём сразу.
   useEffect(() => {
-    if (role === 'interviewer') sendOwn();
-  }, [role, design?.session.startedAt, design?.session.finishedAt, design?.session.calcUnlockedAt, sendOwn]);
+    sendCourse();
+  }, [
+    role,
+    design?.session.startedAt,
+    design?.session.finishedAt,
+    design?.session.calcUnlockedAt,
+    design?.session.revealed,
+    design?.session.asked,
+    design?.session.estimateSnapshot,
+    sendCourse,
+  ]);
   useEffect(() => () => {
     if (boardTimer.current) clearTimeout(boardTimer.current);
   }, []);

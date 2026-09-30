@@ -40,7 +40,9 @@ function readCollapsed(): boolean {
 
 export function BriefCard({ design, t }: { design: Design; t: T }) {
   const [collapsed, setCollapsed] = useState(readCollapsed);
-  const hints = design.scenario.hints.filter((hint) => design.session.revealed.includes(hint.id));
+  // У кандидата в собеседовании на сервере подсказок в сценарии нет — они приходят открытыми.
+  const pool = design.scenario.hints.length ? design.scenario.hints : (design.session.revealedHints ?? []);
+  const hints = pool.filter((hint) => design.session.revealed.includes(hint.id));
 
   const toggle = () => {
     setCollapsed((value) => {

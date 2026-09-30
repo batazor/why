@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { totalScore, type Design, type Signal } from '../model';
 import { duration, summarize } from '../integrity';
-import { interviewUrl } from './cloud';
+import { interviewUrl, type Feedback, type Review } from './cloud';
 import type { Person } from './auth';
 import type { Snapshot } from './journal';
 import type { T } from '../i18n';
@@ -28,6 +28,9 @@ interface Props {
   candidate: Person | null;
   interviewer: Person | null;
   createdAt: string;
+  /** Оценки всех ведущих и отзыв кандидата — с сервера. */
+  loadReviews: () => Promise<Review[]>;
+  loadFeedback: () => Promise<Feedback | null>;
   now: number;
   t: T;
   lang: string;
@@ -43,13 +46,32 @@ export function ReportPanel({
   candidate,
   interviewer,
   createdAt,
+  loadReviews,
+  loadFeedback,
   now,
   t,
   lang,
 }: Props) {
   const [copied, setCopied] = useState(false);
+  const [others, setOthers] = useState<Review[]>([]);
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
+
+  // Чужие оценки и отзыв — при открытии отчёта; своя оценка — живая, из документа.
+  useEffect(() => {
+    loadReviews()
+      .then((all) => setOthers(all.filter((review) => !review.mine)))
+      .catch(() => setOthers([]));
+    loadFeedback()
+      .then(setFeedback)
+      .catch(() => setFeedback(null));
+  }, [loadReviews, loadFeedback]);
   const { scenario, session } = design;
-  const total = totalScore(scenario.rubric, session.scores);
+  const mine = totalScore(scenario.rubric, session.scores);
+  // Панель: итог — среднее по всем, кто поставил оценки; у каждого — свой столбец.
+  const panel = [{ name: t('report.you'), scores: session.scores }, ...others.map((review) => ({ name: review.reviewer.name, scores: review.scores }))];
+  const totals = panel.map((column) => totalScore(scenario.rubric, column.scores));
+  const counted = totals.filter((value): value is number => value !== null);
+  const total = others.length ? (counted.length ? Math.round(counted.reduce((sum, value) => sum + value, 0) / counted.length) : null) : mine;
   const summary = summarize(signals, now);
   const started = session.startedAt ? Date.parse(session.startedAt) : null;
   const ended = session.finishedAt ? Date.parse(session.finishedAt) : now;
@@ -97,7 +119,44 @@ export function ReportPanel({
           <span>{t('score.total')}</span>
           <strong>{total === null ? '—' : `${total}%`}</strong>
         </div>
-        {scenario.rubric.length ? (
+        {scenario.rubric.length && others.length ? (
+          <table className="pg-report__table">
+            <thead>
+              <tr>
+                <th />
+                {panel.map((column) => (
+                  <th key={column.name}>{column.name}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {scenario.rubric.map((item) => (
+                <tr key={item.id}>
+                  <td>
+                    {item.text}
+                    {item.weight > 1 && <span className="pg-count">×{item.weight}</span>}
+                  </td>
+                  {panel.map((column) => {
+                    const level = column.scores[item.id];
+                    return (
+                      <td key={column.name} className={level === undefined ? 'is-empty' : `pg-level--${level}`}>
+                        {level ?? '—'}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+              <tr>
+                <td>{t('score.total')}</td>
+                {totals.map((value, index) => (
+                  <td key={panel[index].name}>
+                    <strong>{value === null ? '—' : `${value}%`}</strong>
+                  </td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+        ) : scenario.rubric.length ? (
           <table className="pg-report__table">
             <tbody>
               {scenario.rubric.map((item) => {
@@ -123,7 +182,32 @@ export function ReportPanel({
 
       <section>
         <h4 className="pg-heading">{t('score.notes')}</h4>
-        <p className="pg-report__notes">{session.notes.trim() || '—'}</p>
+        {others.length ? (
+          [{ name: t('report.you'), notes: session.notes }, ...others.map((review) => ({ name: review.reviewer.name, notes: review.notes }))].map(
+            (entry) => (
+              <p key={entry.name} className="pg-report__notes">
+                <strong>{entry.name}:</strong> {entry.notes.trim() || '—'}
+              </p>
+            ),
+          )
+        ) : (
+          <p className="pg-report__notes">{session.notes.trim() || '—'}</p>
+        )}
+      </section>
+
+      <section>
+        <h4 className="pg-heading">{t('report.feedback')}</h4>
+        {feedback ? (
+          <>
+            <p className="pg-report__stars" aria-label={t('fb.rated', { n: String(feedback.rating) })}>
+              {'★'.repeat(feedback.rating)}
+              <span className="is-off">{'★'.repeat(5 - feedback.rating)}</span>
+            </p>
+            {feedback.comment && <p className="pg-report__notes">{feedback.comment}</p>}
+          </>
+        ) : (
+          <p className="pg-hint">{t('report.noFeedback')}</p>
+        )}
       </section>
 
       <section>

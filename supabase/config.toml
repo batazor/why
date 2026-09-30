@@ -1,0 +1,4 @@
+# Настройки Supabase CLI. Облачный проект привязывается командой
+#   supabase link --project-ref wckmoepcdpxylgrujvkw
+# История миграций на нём уже заполнена: supabase db push применит только новые.
+project_id = "why"

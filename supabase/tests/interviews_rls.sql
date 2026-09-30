@@ -303,6 +303,55 @@ do $$ begin
   values (current_setting('test.interview')::uuid, '{"revealed": [], "asked": [], "scores": {"r1": 3}, "notes": "strong"}');
   assert (select count(*) from public.profiles) = 3, 'interviewer sees colleagues and the candidate';
 
+  -- Общий ход: открытая подсказка с текстом — её увидит кандидат.
+  update public.interviews
+  set revealed_hints = '[{"id": "h1", "text": "Think about the read path"}]', asked = '["q1"]'
+  where id = current_setting('test.interview')::uuid;
+end $$;
+
+-- ─── Панель: второй интервьюер оценивает сам, не перетирая первого ────────
+reset role;
+select set_config('request.jwt.claims', '{"sub": "00000000-0000-4000-8000-00000000000a", "email": "alice@corp.test", "role": "authenticated"}', false);
+set role authenticated;
+do $$ begin
+  insert into public.interview_reviews (interview_id, session)
+  values (current_setting('test.interview')::uuid, '{"scores": {"r1": 1}, "notes": "weak"}');
+  update public.interview_reviews set session = '{"scores": {"r1": 0}}'
+  where interview_id = current_setting('test.interview')::uuid and reviewer_id = '00000000-0000-4000-8000-00000000000b';
+  assert (select session -> 'scores' ->> 'r1' from public.interview_reviews
+          where interview_id = current_setting('test.interview')::uuid and reviewer_id = '00000000-0000-4000-8000-00000000000b') = '3',
+    'one interviewer cannot rewrite another''s scores';
+  assert (select count(*) from public.interview_reviews where interview_id = current_setting('test.interview')::uuid) = 2,
+    'each interviewer has a review of their own';
+  begin
+    insert into public.interview_reviews (interview_id, reviewer_id, session)
+    values (current_setting('test.interview')::uuid, '00000000-0000-4000-8000-00000000000b', '{}');
+    raise exception 'FAIL: a review was written in someone else''s name';
+  exception when insufficient_privilege then null;
+  end;
+  -- Вести может любой из пространства, не только назначивший.
+  update public.interviews set status = 'live', started_at = coalesce(started_at, now())
+  where id = current_setting('test.interview')::uuid;
+  assert (select status from public.interviews where id = current_setting('test.interview')::uuid) = 'live',
+    'a colleague can conduct the interview';
+end $$;
+
+reset role;
+select set_config('request.jwt.claims', '{"sub": "00000000-0000-4000-8000-00000000000d", "email": "dana@mail.test", "role": "authenticated"}', false);
+set role authenticated;
+do $$ begin
+  assert (select revealed_hints -> 0 ->> 'text' from public.interviews) = 'Think about the read path', 'the candidate sees a revealed hint';
+  begin
+    insert into public.interview_feedback (interview_id, rating) values (current_setting('test.interview')::uuid, 5);
+    raise exception 'FAIL: feedback before the end';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+
+reset role;
+select set_config('request.jwt.claims', '{"sub": "00000000-0000-4000-8000-00000000000b", "email": "bob@corp.test", "role": "authenticated"}', false);
+set role authenticated;
+do $$ begin
   update public.interviews set status = 'finished', finished_at = now() where id = current_setting('test.interview')::uuid;
 end $$;
 
@@ -318,6 +367,15 @@ do $$ begin
   exception when insufficient_privilege then null;
   end;
   assert (select count(*) from public.interview_reviews) = 0, 'candidate still cannot read the review';
+
+  insert into public.interview_feedback (interview_id, rating, comment)
+  values (current_setting('test.interview')::uuid, 4, 'clear task');
+  assert (select rating from public.interview_feedback) = 4, 'the candidate leaves feedback after the end';
+  begin
+    insert into public.interview_feedback (interview_id, rating) values (current_setting('test.interview')::uuid, 1);
+    raise exception 'FAIL: feedback left twice';
+  exception when unique_violation then null;
+  end;
   begin
     insert into public.interview_events (interview_id, kind, payload)
     values (current_setting('test.interview')::uuid, 'signal', '{"id": "late"}');
@@ -343,6 +401,12 @@ do $$ begin
   exception when check_violation then null;
   end;
   assert (select status from public.interviews where id = current_setting('test.interview')::uuid) = 'finished', 'the interview stays finished';
+  assert (select rating from public.interview_feedback) = 4, 'staff read the candidate''s feedback';
+  begin
+    update public.interviews set revealed_hints = '[]' where id = current_setting('test.interview')::uuid;
+    raise exception 'FAIL: the course of a finished interview changed';
+  exception when check_violation then null;
+  end;
   begin
     perform public.refresh_interview_snapshot(current_setting('test.interview')::uuid);
     raise exception 'FAIL: the snapshot of a finished interview was refreshed';

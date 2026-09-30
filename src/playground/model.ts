@@ -232,6 +232,11 @@ export interface Session {
    */
   calcUnlockedAt?: string;
   estimateSnapshot?: string;
+  /**
+   * Открытые подсказки с текстом — у кандидата в собеседовании на сервере:
+   * закрытой части сценария у него нет, а подсказку он видеть должен.
+   */
+  revealedHints?: ScenarioItem[];
 }
 
 /**

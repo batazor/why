@@ -10,6 +10,7 @@ import {
   totalScore,
   type Board,
   type Criterion,
+  type ScenarioItem,
   type Signal,
   type Design,
   type DesignSummary,
@@ -227,13 +228,18 @@ export interface CalibrationRow {
   id: string;
   status: InterviewStatus;
   candidate: string;
-  interviewer: Person;
+  /** Кто оценивал; если никто — тот, кто назначил. */
+  interviewers: Person[];
+  /** Оценки каждого, кто вёл: итог по его баллам. */
+  reviews: { reviewer: Person; scores: Record<string, number>; total: number | null }[];
   /** Когда было: начало, иначе назначенное время, иначе создание. */
   at: string;
   durationMs: number | null;
   /** Критерии из снимка этого собеседования — у разных собеседований они могут отличаться. */
   rubric: Criterion[];
+  /** Средний уровень по критерию у всех, кто оценил. */
   scores: Record<string, number>;
+  /** Средний итог по всем оценившим. */
   total: number | null;
   revealed: number;
   hints: number;
@@ -253,11 +259,9 @@ export async function calibration(scenarioId: string): Promise<CalibrationRow[]>
   ) as InterviewRow[];
   if (!rows.length) return [];
   const ids = rows.map((row) => row.id);
-  const people = [...new Set(rows.flatMap((row) => [row.interviewer_id, row.candidate_id]).filter(Boolean))] as string[];
-  const [snapshots, reviews, profiles, events] = await Promise.all([
+  const [snapshots, reviews, events] = await Promise.all([
     db().from('interview_scenarios').select('interview_id, content').in('interview_id', ids),
-    db().from('interview_reviews').select('interview_id, session').in('interview_id', ids),
-    db().from('profiles').select('id, name, email, avatar_url').in('id', people),
+    db().from('interview_reviews').select('interview_id, reviewer_id, session').in('interview_id', ids),
     db()
       .from('interview_events')
       .select('id, interview_id, kind, payload, created_at')
@@ -268,10 +272,17 @@ export async function calibration(scenarioId: string): Promise<CalibrationRow[]>
   const content = new Map(
     (must(snapshots) as { interview_id: string; content: Partial<Scenario> }[]).map((row) => [row.interview_id, row.content]),
   );
-  const session = new Map(
-    (must(reviews) as { interview_id: string; session: Partial<Session> }[]).map((row) => [row.interview_id, row.session]),
+  const reviewRows = must(reviews) as { interview_id: string; reviewer_id: string; session: Partial<Session> }[];
+  const people = [
+    ...new Set([...rows.flatMap((row) => [row.interviewer_id, row.candidate_id]), ...reviewRows.map((row) => row.reviewer_id)]),
+  ].filter(Boolean) as string[];
+  const byId = new Map(
+    (must(await db().from('profiles').select('id, name, email, avatar_url').in('id', people)) as ProfileRow[]).map((row) => [
+      row.id,
+      toPerson(row),
+    ]),
   );
-  const byId = new Map((must(profiles) as ProfileRow[]).map((row) => [row.id, toPerson(row)]));
+  const person = (id: string): Person => byId.get(id) ?? { id, name: '—' };
   const journal = new Map<string, JournalEntry[]>();
   for (const row of must(events) as (JournalRow & { interview_id: string })[])
     journal.set(row.interview_id, [...(journal.get(row.interview_id) ?? []), toEntry(row)]);
@@ -279,20 +290,33 @@ export async function calibration(scenarioId: string): Promise<CalibrationRow[]>
   return rows.map((row) => {
     // Через migrate — чтобы у критериев были веса и прочие умолчания, как в документе.
     const scenario = migrate({ scenario: content.get(row.id) ?? {} }).scenario;
-    const scores = session.get(row.id)?.scores ?? {};
+    const own = reviewRows
+      .filter((review) => review.interview_id === row.id)
+      .map((review) => {
+        const scores = review.session.scores ?? {};
+        return { reviewer: person(review.reviewer_id), scores, total: totalScore(scenario.rubric, scores) };
+      });
+    // Уровень по критерию — среднее по всем, кто его оценил: панель видна одной строкой.
+    const scores: Record<string, number> = {};
+    for (const item of scenario.rubric) {
+      const levels = own.map((review) => review.scores[item.id]).filter((level): level is number => level !== undefined);
+      if (levels.length) scores[item.id] = levels.reduce((sum, level) => sum + level, 0) / levels.length;
+    }
+    const totals = own.map((review) => review.total).filter((total): total is number => total !== null);
     const started = row.started_at ? Date.parse(row.started_at) : null;
     const ended = row.finished_at ? Date.parse(row.finished_at) : null;
     return {
       id: row.id,
       status: row.status,
       candidate: (row.candidate_id && byId.get(row.candidate_id)?.name) || row.candidate_email || '',
-      interviewer: byId.get(row.interviewer_id) ?? { id: row.interviewer_id, name: '—' },
+      interviewers: own.length ? own.map((review) => review.reviewer) : [person(row.interviewer_id)],
+      reviews: own,
       at: row.started_at ?? row.scheduled_at ?? row.created_at,
       durationMs: started && ended ? ended - started : null,
       rubric: scenario.rubric,
       scores,
-      total: totalScore(scenario.rubric, scores),
-      revealed: session.get(row.id)?.revealed?.length ?? 0,
+      total: totals.length ? Math.round(totals.reduce((sum, total) => sum + total, 0) / totals.length) : null,
+      revealed: (row.revealed_hints ?? []).length,
       hints: scenario.hints.length,
       signals: signalsFrom(journal.get(row.id) ?? []),
     };
@@ -591,6 +615,9 @@ interface InterviewRow {
   calc_unlocked_at: string | null;
   scheduled_at: string | null;
   duration_minutes: number;
+  revealed_hints: ScenarioItem[];
+  asked: string[];
+  estimate_snapshot: string | null;
   /** Снимок открытой части сценария на момент создания собеседования. */
   brief: Brief | null;
   created_at: string;
@@ -705,28 +732,54 @@ export async function claimInvite(token: string): Promise<string> {
 }
 
 /** Работа интервьюера — то, что уходит в interview_reviews. Сигналы и время живут не здесь. */
+/** Своя оценка интервьюера — то, что уходит в его строку interview_reviews. */
 function reviewPart(session: Session) {
-  return {
-    revealed: session.revealed,
-    asked: session.asked,
-    scores: session.scores,
-    notes: session.notes,
-    ...(session.estimateSnapshot ? { estimateSnapshot: session.estimateSnapshot } : {}),
-  };
+  return { scores: session.scores, notes: session.notes };
 }
 
-/** Ход собеседования — колонки interviews. Их видит и кандидат: по ним его таймер и калькулятор. */
-export interface Timing {
+/**
+ * Ход собеседования — общий на всех, кто его ведёт, и видимый кандидату:
+ * время, открытый калькулятор, открытые подсказки (с текстом — сценарий
+ * кандидату закрыт), заданные вопросы, прикидка до калькулятора.
+ */
+export interface Course {
   startedAt?: string;
   finishedAt?: string;
   calcUnlockedAt?: string;
+  revealed: ScenarioItem[];
+  asked: string[];
+  estimateSnapshot?: string;
 }
 
-export const timing = (session: Session): Timing => ({
-  startedAt: session.startedAt,
-  finishedAt: session.finishedAt,
-  calcUnlockedAt: session.calcUnlockedAt,
-});
+export function course(design: Design): Course {
+  const { session } = design;
+  const known = new Map([...(session.revealedHints ?? []), ...design.scenario.hints].map((hint) => [hint.id, hint]));
+  return {
+    startedAt: session.startedAt,
+    finishedAt: session.finishedAt,
+    calcUnlockedAt: session.calcUnlockedAt,
+    revealed: session.revealed
+      .map((id) => known.get(id))
+      .filter((hint): hint is ScenarioItem => Boolean(hint))
+      .map((hint) => ({ id: hint.id, text: hint.text })),
+    asked: session.asked,
+    estimateSnapshot: session.estimateSnapshot,
+  };
+}
+
+/** Оценка одного интервьюера — для отчёта панели. */
+export interface Review {
+  reviewer: Person;
+  scores: Record<string, number>;
+  notes: string;
+  mine: boolean;
+}
+
+export interface Feedback {
+  rating: number;
+  comment: string;
+  createdAt: string;
+}
 
 /**
  * Одно собеседование как проект песочницы.
@@ -745,7 +798,7 @@ export class InterviewRepository implements DesignRepository {
   scheduledAt: string | null = null;
   durationMinutes = 60;
   private title = '';
-  private saved = { board: '', review: '', timing: '' };
+  private saved = { board: '', review: '', course: '' };
   /** Что из сигналов уже в журнале: сигнал «ушёл» дописывается ещё раз, когда человек вернулся. */
   private sent = new Map<string, string>();
   private snapshot = { board: '', at: 0 };
@@ -772,7 +825,9 @@ export class InterviewRepository implements DesignRepository {
       row.brief ? null : db().from('scenarios').select('*').eq('id', row.scenario_id).single(),
       staff ? db().from('interview_scenarios').select('content').eq('interview_id', id).maybeSingle() : null,
       db().from('interview_boards').select('board').eq('interview_id', id).maybeSingle(),
-      staff ? db().from('interview_reviews').select('session').eq('interview_id', id).maybeSingle() : null,
+      staff
+        ? db().from('interview_reviews').select('session').eq('interview_id', id).eq('reviewer_id', this.me).maybeSingle()
+        : null,
       db().from('profiles').select('id, name, email, avatar_url').eq('id', row.interviewer_id).maybeSingle(),
     ]);
     const candidate =
@@ -803,18 +858,24 @@ export class InterviewRepository implements DesignRepository {
       ...answer,
       session: {
         ...emptySession(),
-        ...work,
+        // Своя оценка — из своей строки; ход собеседования — из самого собеседования, общий.
+        scores: work.scores ?? {},
+        notes: work.notes ?? '',
+        revealed: (row.revealed_hints ?? []).map((hint) => hint.id),
+        asked: row.asked ?? [],
+        estimateSnapshot: row.estimate_snapshot ?? undefined,
         startedAt: row.started_at ?? undefined,
         finishedAt: row.finished_at ?? undefined,
         calcUnlockedAt: row.calc_unlocked_at ?? undefined,
       },
     });
+    design.session.revealedHints = row.revealed_hints ?? [];
     // Снимки в журнал — только изменения: доска, с которой пришли, уже известна.
     this.snapshot = { board: JSON.stringify(pickBoard(design)), at: 0 };
     this.saved = {
       board: JSON.stringify(pickBoard(design)),
       review: JSON.stringify(reviewPart(design.session)),
-      timing: JSON.stringify(timing(design.session)),
+      course: JSON.stringify(course(design)),
     };
     return design;
   }
@@ -831,19 +892,25 @@ export class InterviewRepository implements DesignRepository {
       return;
     }
 
+    // Своя оценка: строка своя, чужую не тронуть. Нет строки — первая оценка, вставляем.
     const review = JSON.stringify(reviewPart(design.session));
     if (review !== this.saved.review) {
-      must(
+      const updated = must(
         await db()
           .from('interview_reviews')
-          .upsert({ interview_id: this.interviewId, session: reviewPart(design.session) }),
-      );
+          .update({ session: reviewPart(design.session) })
+          .eq('interview_id', this.interviewId)
+          .eq('reviewer_id', this.me)
+          .select('interview_id'),
+      ) as unknown[];
+      if (!updated.length)
+        must(await db().from('interview_reviews').insert({ interview_id: this.interviewId, session: reviewPart(design.session) }));
       this.saved.review = review;
     }
 
-    const next = timing(design.session);
+    const next = course(design);
     const serialized = JSON.stringify(next);
-    if (serialized !== this.saved.timing) {
+    if (serialized !== this.saved.course) {
       must(
         await db()
           .from('interviews')
@@ -852,11 +919,51 @@ export class InterviewRepository implements DesignRepository {
             finished_at: next.finishedAt ?? null,
             calc_unlocked_at: next.calcUnlockedAt ?? null,
             status: next.finishedAt ? 'finished' : next.startedAt ? 'live' : 'scheduled',
+            revealed_hints: next.revealed,
+            asked: next.asked,
+            estimate_snapshot: next.estimateSnapshot ?? null,
           })
           .eq('id', this.interviewId),
       );
-      this.saved.timing = serialized;
+      this.saved.course = serialized;
     }
+  }
+
+  /** Оценки всех, кто вёл собеседование, — своя тоже, как она сохранена. */
+  async reviews(): Promise<Review[]> {
+    const rows = must(
+      await db().from('interview_reviews').select('reviewer_id, session').eq('interview_id', this.interviewId),
+    ) as { reviewer_id: string; session: Partial<Session> }[];
+    const people = rows.length
+      ? (must(
+          await db()
+            .from('profiles')
+            .select('id, name, email, avatar_url')
+            .in(
+              'id',
+              rows.map((row) => row.reviewer_id),
+            ),
+        ) as ProfileRow[])
+      : [];
+    const byId = new Map(people.map((row) => [row.id, toPerson(row)]));
+    return rows.map((row) => ({
+      reviewer: byId.get(row.reviewer_id) ?? { id: row.reviewer_id, name: '—' },
+      scores: row.session.scores ?? {},
+      notes: row.session.notes ?? '',
+      mine: row.reviewer_id === this.me,
+    }));
+  }
+
+  async feedback(): Promise<Feedback | null> {
+    const row = must(
+      await db().from('interview_feedback').select('rating, comment, created_at').eq('interview_id', this.interviewId).maybeSingle(),
+    ) as { rating: number; comment: string; created_at: string } | null;
+    return row ? { rating: row.rating, comment: row.comment, createdAt: row.created_at } : null;
+  }
+
+  /** Отзыв кандидата — один раз, после конца собеседования. */
+  async leaveFeedback(rating: number, comment: string): Promise<void> {
+    must(await db().from('interview_feedback').insert({ interview_id: this.interviewId, rating, comment: comment.trim() }));
   }
 
   async remove(): Promise<void> {

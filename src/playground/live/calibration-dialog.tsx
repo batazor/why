@@ -81,14 +81,21 @@ export function CalibrationDialog({
     return levels.length ? levels.reduce((sum, level) => sum + level, 0) / levels.length : null;
   });
 
+  /**
+   * Строгость — по оценкам каждого интервьюера, а не по итогу собеседования:
+   * в панели двое могут оценить одного кандидата по-разному, и видно это
+   * только так.
+   */
   const interviewers = useMemo(() => {
     const groups = new Map<string, { name: string; totals: number[]; count: number }>();
-    for (const row of shown) {
-      const group = groups.get(row.interviewer.id) ?? { name: row.interviewer.name, totals: [], count: 0 };
-      group.count += 1;
-      if (row.total !== null) group.totals.push(row.total);
-      groups.set(row.interviewer.id, group);
-    }
+    for (const row of shown)
+      for (const person of row.interviewers) {
+        const group = groups.get(person.id) ?? { name: person.name, totals: [] as number[], count: 0 };
+        group.count += 1;
+        const own = row.reviews.find((review) => review.reviewer.id === person.id);
+        if (own?.total !== null && own?.total !== undefined) group.totals.push(own.total);
+        groups.set(person.id, group);
+      }
     return [...groups.values()].map((group) => {
       const mean = group.totals.length ? group.totals.reduce((sum, value) => sum + value, 0) / group.totals.length : null;
       return { ...group, mean, shift: mean !== null && average !== null ? mean - average : null };
@@ -111,7 +118,7 @@ export function CalibrationDialog({
     ];
     const lines = shown.map((row) => [
       row.candidate || t('iv.byLink'),
-      row.interviewer.name,
+      row.interviewers.map((person) => person.name).join(', '),
       date.format(new Date(row.at)),
       row.durationMs ? duration(row.durationMs) : '',
       row.total ?? '',
@@ -194,7 +201,9 @@ export function CalibrationDialog({
                             <strong>{row.candidate || t('iv.byLink')}</strong>
                             {row.status !== 'finished' && <span className="pg-hint"> · {t(`iv.status.${row.status}`)}</span>}
                           </td>
-                          <td>{row.interviewer.name}</td>
+                          <td title={row.reviews.map((review) => `${review.reviewer.name}: ${review.total ?? '—'}%`).join('\n')}>
+                            {row.interviewers.map((person) => person.name).join(', ')}
+                          </td>
                           <td>
                             {date.format(new Date(row.at))}
                             {row.durationMs && <span className="pg-hint"> · {duration(row.durationMs)}</span>}
@@ -205,10 +214,10 @@ export function CalibrationDialog({
                             return (
                               <td
                                 key={item.id}
-                                className={`pg-cal__level ${level === undefined ? 'is-empty' : `pg-level--${level}`}`}
+                                className={`pg-cal__level ${level === undefined ? 'is-empty' : `pg-level--${Math.round(level)}`}`}
                                 title={own.has(item.id) ? undefined : t('cal.notInSnapshot')}
                               >
-                                {own.has(item.id) ? (level ?? '—') : '·'}
+                                {own.has(item.id) ? (level === undefined ? '—' : Number.isInteger(level) ? level : level.toFixed(1)) : '·'}
                               </td>
                             );
                           })}

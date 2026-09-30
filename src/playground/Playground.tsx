@@ -36,11 +36,12 @@ import { useAuth } from './live/auth';
 import { useRoom } from './live/room';
 import { Gate, LiveBar, RemoteCursors } from './live/live-ui';
 import { useCloud } from './live/use-cloud';
-import { InterviewRepository, isCloudId, openShare, paramFromUrl, setParams, type Timing } from './live/cloud';
+import { InterviewRepository, isCloudId, openShare, paramFromUrl, setParams, type Course } from './live/cloud';
 import { InterviewsDialog } from './live/interviews-dialog';
 import { TeamDialog } from './live/team-dialog';
 import { CalibrationDialog } from './live/calibration-dialog';
 import { formatSchedule } from './live/calendar';
+import { CandidateEnd } from './live/candidate-end';
 import { ReportPanel } from './live/report-panel';
 import { merge, signalsFrom, snapshotsFrom, type JournalEntry } from './live/journal';
 
@@ -90,6 +91,10 @@ export default function Playground({ lang, repository }: Props) {
   const [sharing, setSharing] = useState(false);
   const [interviewsOpen, setInterviewsOpen] = useState(false);
   const [teamOpen, setTeamOpen] = useState(false);
+  /** Кандидат закрыл экран конца собеседования — смотрит свою доску. */
+  const [endSeen, setEndSeen] = useState(false);
+  /** Короткое сообщение, которое само пропадает: например, что кандидат зашёл. */
+  const [toast, setToast] = useState('');
   const [calibrationOpen, setCalibrationOpen] = useState(false);
   /**
    * Журнал собеседования — у интервьюера. Из него сигналы честности (со
@@ -131,10 +136,29 @@ export default function Playground({ lang, repository }: Props) {
    * вживую, кандидат — ход собеседования. Комната — само собеседование.
    */
   const room = interview?.interviewId ?? null;
-  const onTiming = useCallback(
-    (next: Timing) => update((current) => ({ ...current, session: { ...current.session, ...next } })),
+  /**
+   * Ход собеседования от другого ведущего: время, калькулятор, открытые
+   * подсказки, заданные вопросы. Оценки не трогаются — они у каждого свои.
+   * Кандидат из хода берёт ещё и тексты подсказок: своих у него нет.
+   */
+  const onCourse = useCallback(
+    (next: Course) =>
+      update((current) => ({
+        ...current,
+        session: {
+          ...current.session,
+          startedAt: next.startedAt,
+          finishedAt: next.finishedAt,
+          calcUnlockedAt: next.calcUnlockedAt,
+          revealed: next.revealed.map((hint) => hint.id),
+          revealedHints: next.revealed,
+          asked: next.asked,
+          estimateSnapshot: next.estimateSnapshot,
+        },
+      })),
     [update],
   );
+
   const onBoard = useCallback(
     ({ designId, board: incoming }: { designId: string; board: Board }) =>
       // Доска чужого проекта сюда не относится: интервьюер открыл другой сценарий.
@@ -159,7 +183,37 @@ export default function Playground({ lang, repository }: Props) {
   }, [workspaceRole, role]);
 
   const onJournal = useCallback((entry: JournalEntry) => setJournal((current) => merge(current, [entry])), []);
-  const live = useRoom({ room: auth.me ? room : null, me: auth.me, role, design, onBoard, onTiming, onJournal });
+  const live = useRoom({ room: auth.me ? room : null, me: auth.me, role, design, onBoard, onCourse, onJournal });
+
+  /**
+   * Кандидат зашёл в комнату — интервьюеру сообщение, а если вкладка в
+   * фоне, то и в заголовке: пока ждёшь, обычно смотришь в другое окно.
+   */
+  const seenPeers = useRef(new Set<string>());
+  useEffect(() => {
+    if (role !== 'interviewer' || !interview) return;
+    for (const peer of live.peers) {
+      if (seenPeers.current.has(peer.key)) continue;
+      seenPeers.current.add(peer.key);
+      if (peer.role !== 'candidate') continue;
+      setToast(t('join.candidate', { name: peer.person.name }));
+      if (document.hidden) {
+        const original = document.title;
+        document.title = `● ${t('join.title', { name: peer.person.name })}`;
+        const restore = () => {
+          document.title = original;
+          document.removeEventListener('visibilitychange', restore);
+        };
+        document.addEventListener('visibilitychange', restore);
+      }
+    }
+  }, [live.peers, role, interview, t]);
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(''), 6000);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
   const { sendCursor } = live;
   // Эталон у интервьюера — другая схема: курсор над ним кандидату ни о чём не скажет.
   useEffect(() => {
@@ -288,6 +342,9 @@ export default function Playground({ lang, repository }: Props) {
    * уходят в него: панелям не нужно знать, чью доску они правят.
    */
   const snapshots = useMemo(() => snapshotsFrom(journal), [journal]);
+  // Стабильные ссылки: отчёт перечитывает чужие оценки при их смене, а не на каждый рендер.
+  const loadReviews = useCallback(() => (interview ? interview.reviews() : Promise.resolve([])), [interview]);
+  const loadFeedback = useCallback(() => (interview ? interview.feedback() : Promise.resolve(null)), [interview]);
   const view = useMemo(() => {
     if (!design) return design;
     if (board === 'reference') return { ...design, ...design.scenario.reference };
@@ -466,8 +523,26 @@ export default function Playground({ lang, repository }: Props) {
   const extraFindings = role === 'interviewer' && board === 'answer' ? compareToReference(design, design.scenario.reference) : [];
   const warnings = [...extraFindings, ...findings].filter((finding) => finding.level === 'warn').length;
 
+  /**
+   * Кандидат до старта видит, чего ждать: интервьюер ещё не пришёл или уже
+   * здесь и вот-вот начнёт, и на когда назначено. Пришёл заранее — не гадает,
+   * работает ли ссылка.
+   */
+  const waiting =
+    interview && role === 'candidate' && !design.session.startedAt
+      ? [
+          t(live.peers.some((peer) => peer.role === 'interviewer') ? 'wait.here' : 'wait.interviewer'),
+          interview.scheduledAt
+            ? t('when.startsAt', { when: formatSchedule({ at: interview.scheduledAt, minutes: interview.durationMinutes }, lang, t) })
+            : '',
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : undefined;
+
   const banner =
-    role === 'author'
+    waiting ??
+    (role === 'author'
       ? t('role.authorBanner')
       : role === 'trainee'
         ? t('role.traineeBanner')
@@ -475,7 +550,7 @@ export default function Playground({ lang, repository }: Props) {
           ? board === 'reference'
             ? t('view.reference')
             : t('role.interviewerBanner')
-          : undefined;
+          : undefined);
 
   const timer = elapsed(design.session, now);
   const notableSignals = (withSignals ?? design).session.signals.filter((signal) => isNotable(signal, now)).length;
@@ -513,14 +588,6 @@ export default function Playground({ lang, repository }: Props) {
               </span>
             )}
             {frozen && <span className="pg-live__alone">{t('iv.finished')}</span>}
-            {/* До старта кандидат видит, на когда назначено: пришёл заранее — знает, что ждать. */}
-            {interview && role === 'candidate' && !design.session.startedAt && interview.scheduledAt && (
-              <span className="pg-live__alone">
-                {t('when.startsAt', {
-                  when: formatSchedule({ at: interview.scheduledAt, minutes: interview.durationMinutes }, lang, t),
-                })}
-              </span>
-            )}
           </>
         ) : (
           <label className="pg-toolbar__project">
@@ -805,6 +872,12 @@ export default function Playground({ lang, repository }: Props) {
         )}
       </div>
 
+      {toast && (
+        <p className="pg-toast" role="status">
+          <i className="codicon codicon-person" aria-hidden="true" /> {toast}
+        </p>
+      )}
+
       {notice && (
         <p className="pg-notice" role="status">
           <i className="codicon codicon-warning" aria-hidden="true" /> {notice}
@@ -887,7 +960,19 @@ export default function Playground({ lang, repository }: Props) {
             addRef={addRef}
             readOnly={readOnly}
             banner={banner}
-            overlay={<BriefCard design={design} t={t} />}
+            overlay={
+              <>
+                <BriefCard design={design} t={t} />
+                {interview && role === 'candidate' && frozen && !endSeen && (
+                  <CandidateEnd
+                    t={t}
+                    load={loadFeedback}
+                    send={(rating, comment) => interview.leaveFeedback(rating, comment)}
+                    onClose={() => setEndSeen(true)}
+                  />
+                )}
+              </>
+            }
             onPointer={room && board === 'answer' ? sendCursor : undefined}
             layer={room && board === 'answer' ? <RemoteCursors cursors={live.cursors} peers={live.peers} /> : undefined}
           />
@@ -935,6 +1020,8 @@ export default function Playground({ lang, repository }: Props) {
                 candidate={interview.candidate}
                 interviewer={interview.interviewer}
                 createdAt={interview.createdAt}
+                loadReviews={loadReviews}
+                loadFeedback={loadFeedback}
                 now={now}
                 t={t}
                 lang={lang}

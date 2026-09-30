@@ -3724,3 +3724,103 @@ td.pg-level--0 { color: var(--pg-bad); font-weight: 600; }
 td.pg-level--1 { color: #c7791b; font-weight: 600; }
 td.pg-level--2 { color: var(--pg-compute); font-weight: 600; }
 td.pg-level--3 { color: #1f7a4d; font-weight: 600; }
+
+/* ── Сторона кандидата и панель ─────────────────────────────────────────── */
+
+.pg-end {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: color-mix(in srgb, var(--pg-bg) 70%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+.pg-end__box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  width: min(26rem, 100%);
+  padding: 1.5rem;
+  border: 1px solid var(--pg-border);
+  border-radius: var(--pg-radius);
+  background: var(--pg-panel);
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+}
+
+.pg-end__box h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.pg-end__box p {
+  margin: 0;
+}
+
+.pg-end__form {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.pg-stars {
+  display: flex;
+  justify-content: center;
+  gap: 0.2rem;
+}
+
+.pg-stars button {
+  padding: 0 0.1rem;
+  border: 0;
+  background: none;
+  color: var(--pg-border);
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.pg-stars button.is-on {
+  color: #e0a100;
+}
+
+.pg-report__stars {
+  margin: 0;
+  color: #e0a100;
+  font-size: 1.1rem;
+  letter-spacing: 0.1rem;
+}
+
+.pg-report__stars .is-off {
+  color: var(--pg-border);
+}
+
+.pg-report__table th {
+  padding: 0.3rem 0.2rem;
+  border-bottom: 1px solid var(--pg-border);
+  color: var(--pg-muted);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.pg-toast {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.6rem 0.9rem;
+  border-radius: var(--pg-radius);
+  background: var(--pg-fg);
+  color: var(--pg-bg);
+  font-size: 0.9rem;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
