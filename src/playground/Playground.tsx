@@ -416,11 +416,8 @@ export default function Playground({ lang, repository }: Props) {
       />
     );
 
-  /**
-   * Без учётки в песочницу не попадают: входят через Google или гостем.
-   * Исключение — кандидат: его ведёт приглашение или присланная ссылка.
-   */
-  if (auth.enabled && auth.ready && !auth.me && cloud.mode === 'local' && role !== 'candidate')
+  /** Без учётки в песочницу не попадают, в любой роли: входят через Google или гостем. */
+  if (auth.enabled && auth.ready && !auth.me && cloud.mode === 'local')
     return <WelcomeGate t={t} onSignIn={auth.signIn} onGuest={auth.guestAllowed ? auth.signInAsGuest : undefined} />;
 
   if (!design || !view) return <div className="pg pg--loading" />;
