@@ -223,10 +223,10 @@ function MatrixDialog({ node, group, requirements, patch, onClose, t, readOnly }
           <p className="pg-matrix__empty">{t('comp.noReqs')}</p>
         ) : rows.length === 0 ? (
           <p className="pg-matrix__empty">{t('comp.noRows')}</p>
-        ) : matrix.options.length === 0 ? (
-          <p className="pg-matrix__empty">{t('comp.noOptions')}</p>
         ) : (
           <div className="pg-compare__scroll">
+            {/* Строки видны и без колонок: сначала решают, по каким требованиям сравнивать, потом — что. */}
+            {matrix.options.length === 0 && <p className="pg-matrix__empty">{t('comp.noOptions')}</p>}
             <table className="pg-compare pg-matrix">
               <thead>
                 <tr>
@@ -321,23 +321,25 @@ function MatrixDialog({ node, group, requirements, patch, onClose, t, readOnly }
                   </tr>
                 ))}
               </tbody>
-              <tfoot>
-                <tr>
-                  <th scope="row">{t('comp.total')}</th>
-                  {matrix.options.map((option) => (
-                    <td key={option} className={option === node.tech ? 'is-chosen' : ''}>
-                      <div className="pg-matrix__total">
-                        <span className="pg-matrix__bar">
-                          <span style={{ width: `${rows.length ? (fits(option) / rows.length) * 100 : 0}%` }} />
-                        </span>
-                        <b>
-                          {fits(option)} / {rows.length}
-                        </b>
-                      </div>
-                    </td>
-                  ))}
-                </tr>
-              </tfoot>
+              {matrix.options.length > 0 && (
+                <tfoot>
+                  <tr>
+                    <th scope="row">{t('comp.total')}</th>
+                    {matrix.options.map((option) => (
+                      <td key={option} className={option === node.tech ? 'is-chosen' : ''}>
+                        <div className="pg-matrix__total">
+                          <span className="pg-matrix__bar">
+                            <span style={{ width: `${rows.length ? (fits(option) / rows.length) * 100 : 0}%` }} />
+                          </span>
+                          <b>
+                            {fits(option)} / {rows.length}
+                          </b>
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         )}
