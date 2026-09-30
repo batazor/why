@@ -1,5 +1,6 @@
 import { ESTIMATE_MODES, uid, totalScore, type Design, type EstimateMode, type Scenario, type ScenarioItem, type Session } from './model';
 import { deriveChecks, mergeChecks, type Check } from './checks';
+import { clock } from './integrity';
 import type { T } from './i18n';
 
 type Update = (fn: (design: Design) => Design) => void;
@@ -392,8 +393,5 @@ export function ScorePanel({ design, update, t }: Props) {
 export function elapsed(session: Session, now: number): string {
   if (!session.startedAt) return '';
   const end = session.finishedAt ? Date.parse(session.finishedAt) : now;
-  const seconds = Math.max(0, Math.floor((end - Date.parse(session.startedAt)) / 1000));
-  const mm = String(Math.floor(seconds / 60)).padStart(2, '0');
-  const ss = String(seconds % 60).padStart(2, '0');
-  return `${mm}:${ss}`;
+  return clock(Math.max(0, Math.floor((end - Date.parse(session.startedAt)) / 1000)), true);
 }

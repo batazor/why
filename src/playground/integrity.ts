@@ -271,8 +271,20 @@ export function summarize(signals: Signal[], now: number): SignalSummary {
   };
 }
 
-/** Длительность как на секундомере — 0:05, 12:40: одинаково читается на любом языке. */
+/** Длительность как на секундомере — 0:05, 12:40, 1:41:23: одинаково читается на любом языке. */
 export function duration(ms: number): string {
-  const seconds = Math.max(0, Math.round(ms / 1000));
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+  return clock(Math.max(0, Math.round(ms / 1000)));
+}
+
+/**
+ * Секунды — в м:сс, а от часа — в ч:мм:сс: «101:23» на таймере читается как
+ * сто одна минута только после раздумий. `padMinutes` — «05:12» вместо
+ * «5:12», чтобы таймер не прыгал по ширине.
+ */
+export function clock(seconds: number, padMinutes = false): string {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const mm = hours || padMinutes ? String(minutes).padStart(2, '0') : String(minutes);
+  const ss = String(seconds % 60).padStart(2, '0');
+  return hours ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
 }
