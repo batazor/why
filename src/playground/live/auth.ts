@@ -1,12 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
-import { supabase } from './client';
+import { guestSignInAllowed, supabase } from './client';
 
 /**
- * Вход через Google.
+ * Вход через Google — и гостем, по одному имени, для проверки.
  *
  * Имя и аватар берутся из профиля Google: интервьюеру важно видеть, что в
  * комнате именно тот человек, которого звали, а не «Гость 2».
+ *
+ * Гость — анонимный пользователь Supabase с именем в метаданных. Для сервера
+ * он такой же вошедший, как все: те же политики, свои пространство и
+ * собеседования. Почты у него нет, поэтому приглашение на почту он не примет —
+ * только приглашение по ссылке. Выйдя, гость теряет учётку насовсем.
  */
 
 export interface Person {
@@ -29,6 +34,11 @@ export function useAuth() {
   const [me, setMe] = useState<Person | null>(null);
   /** Пока клиент не дочитал сессию (и не обменял ?code= после Google), кнопку входа не показываем. */
   const [ready, setReady] = useState(!client);
+  const [guestAllowed, setGuestAllowed] = useState(false);
+
+  useEffect(() => {
+    if (client) guestSignInAllowed().then(setGuestAllowed);
+  }, [client]);
 
   /**
    * Токен обновляется раз в час, и на каждое обновление приходит новый
@@ -64,9 +74,19 @@ export function useAuth() {
     await client?.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: back.toString() } });
   }, [client]);
 
+  /** Вход гостем. Ошибку возвращает текстом — её показывают рядом с полем имени. */
+  const signInAsGuest = useCallback(
+    async (name: string): Promise<string | null> => {
+      if (!client) return 'Supabase is not configured';
+      const { error } = await client.auth.signInAnonymously({ options: { data: { name } } });
+      return error ? error.message : null;
+    },
+    [client],
+  );
+
   const signOut = useCallback(async () => {
     await client?.auth.signOut();
   }, [client]);
 
-  return { enabled: Boolean(client), ready, me, signIn, signOut };
+  return { enabled: Boolean(client), ready, me, guestAllowed, signIn, signInAsGuest, signOut };
 }

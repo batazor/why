@@ -269,12 +269,18 @@ export async function listInterviews(scenarioId: string): Promise<Interview[]> {
   }));
 }
 
-export async function createInterview(workspace: Workspace, scenarioId: string, email: string): Promise<void> {
+/**
+ * id задаётся здесь, а не сервером: вставка без чтения назад не требует
+ * права читать строку, и не нужно ждать, пока политика чтения её увидит.
+ */
+export async function createInterview(workspace: Workspace, scenarioId: string, email: string): Promise<string> {
+  const id = crypto.randomUUID();
   must(
     await db()
       .from('interviews')
-      .insert({ workspace_id: workspace.id, scenario_id: scenarioId, candidate_email: email.trim() || null }),
+      .insert({ id, workspace_id: workspace.id, scenario_id: scenarioId, candidate_email: email.trim() || null }),
   );
+  return id;
 }
 
 export async function cancelInterview(id: string): Promise<void> {

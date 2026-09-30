@@ -337,6 +337,7 @@ export default function Playground({ lang, repository }: Props) {
         me={auth.me}
         error={cloud.mode === 'gate' ? cloud.error : loadError}
         onSignIn={auth.signIn}
+        onGuest={auth.guestAllowed ? auth.signInAsGuest : undefined}
         onSignOut={auth.signOut}
         onLeave={() => {
           setLoadError('');
@@ -675,6 +676,7 @@ export default function Playground({ lang, repository }: Props) {
             status={live.status}
             peers={live.peers}
             onSignIn={auth.signIn}
+            onGuest={auth.guestAllowed ? auth.signInAsGuest : undefined}
             onSignOut={() => {
               if (confirm(t('live.signOutConfirm'))) auth.signOut();
             }}

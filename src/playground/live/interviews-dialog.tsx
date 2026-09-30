@@ -29,6 +29,8 @@ export function InterviewsDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState<string | null>(null);
+  /** Какое приглашение показано ссылкой: буфер обмена есть не везде, а ссылку можно выделить руками. */
+  const [shown, setShown] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -53,9 +55,10 @@ export function InterviewsDialog({
     setBusy(true);
     setError('');
     try {
-      await createInterview(workspace, scenarioId, email);
+      const id = await createInterview(workspace, scenarioId, email);
       setEmail('');
       await refresh();
+      setShown(id);
     } catch (reason) {
       setError((reason as Error).message);
     } finally {
@@ -64,6 +67,7 @@ export function InterviewsDialog({
   };
 
   const copy = async (item: Interview) => {
+    setShown(item.id);
     try {
       await navigator.clipboard.writeText(inviteUrl(item.inviteToken));
       setCopied(item.id);
@@ -121,6 +125,7 @@ export function InterviewsDialog({
                 const open = item.status === 'scheduled' || item.status === 'live';
                 return (
                   <li key={item.id} className={`pg-iv is-${item.status}`}>
+                    <div className="pg-iv__row">
                     <span className="pg-iv__who">
                       <strong>{item.candidate?.name ?? item.candidateEmail ?? t('iv.byLink')}</strong>
                       <span className="pg-hint">
@@ -157,6 +162,16 @@ export function InterviewsDialog({
                       >
                         <i className="codicon codicon-close" aria-hidden="true" />
                       </button>
+                    )}
+                    </div>
+                    {shown === item.id && !item.candidate && open && (
+                      <input
+                        className="pg-input pg-iv__link"
+                        readOnly
+                        value={inviteUrl(item.inviteToken)}
+                        aria-label={t('iv.link')}
+                        onFocus={(event) => event.currentTarget.select()}
+                      />
                     )}
                   </li>
                 );

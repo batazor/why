@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { ViewportPortal, useViewport } from '@xyflow/react';
 import type { Person } from './auth';
 import type { Peer, Point, RoomStatus } from './room';
@@ -52,6 +53,42 @@ function Avatar({ person, role }: { person: Person; role?: Role }) {
   );
 }
 
+/**
+ * Вход гостем: одно поле имени. Нужен, чтобы проверить собеседование в двух
+ * окнах без двух Google-аккаунтов.
+ */
+function GuestForm({ t, onSubmit }: { t: T; onSubmit: (name: string) => Promise<string | null> }) {
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  return (
+    <form
+      className="pg-guest"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        if (!name.trim()) return;
+        setBusy(true);
+        setError((await onSubmit(name.trim())) ?? '');
+        setBusy(false);
+      }}
+    >
+      <input
+        className="pg-input"
+        placeholder={t('guest.name')}
+        aria-label={t('guest.name')}
+        value={name}
+        maxLength={60}
+        autoFocus
+        onChange={(event) => setName(event.currentTarget.value)}
+      />
+      <button type="submit" className="pg-button" disabled={busy || !name.trim()}>
+        {t('guest.enter')}
+      </button>
+      {error && <span className="pg-guest__error">{error}</span>}
+    </form>
+  );
+}
+
 interface BarProps {
   t: T;
   role: Role;
@@ -62,6 +99,8 @@ interface BarProps {
   status: RoomStatus;
   peers: Peer[];
   onSignIn: () => void;
+  /** Вход гостем — только если сервер его разрешает. */
+  onGuest?: (name: string) => Promise<string | null>;
   onSignOut: () => void;
   /** Выйти из собеседования к сценариям пространства. Кандидату некуда — ему не передаётся. */
   onLeave?: () => void;
@@ -74,15 +113,24 @@ interface BarProps {
  * Тренировка остаётся локальной, а кандидат входит по приглашению — у него
  * своя заставка.
  */
-export function LiveBar({ t, role, me, ready, inRoom, status, peers, onSignIn, onSignOut, onLeave }: BarProps) {
+export function LiveBar({ t, role, me, ready, inRoom, status, peers, onSignIn, onGuest, onSignOut, onLeave }: BarProps) {
+  const [asGuest, setAsGuest] = useState(false);
   if (!ready) return null;
 
   if (!me) {
     if (role !== 'author' && role !== 'interviewer') return null;
+    if (asGuest && onGuest) return <GuestForm t={t} onSubmit={onGuest} />;
     return (
-      <button type="button" className="pg-button" onClick={onSignIn} title={t('live.signInHint')}>
-        <i className="codicon codicon-account" aria-hidden="true" /> {t('live.signIn')}
-      </button>
+      <span className="pg-live">
+        <button type="button" className="pg-button" onClick={onSignIn} title={t('live.signInHint')}>
+          <i className="codicon codicon-account" aria-hidden="true" /> {t('live.signIn')}
+        </button>
+        {onGuest && (
+          <button type="button" className="pg-button" onClick={() => setAsGuest(true)} title={t('guest.hint')}>
+            <i className="codicon codicon-person" aria-hidden="true" /> {t('guest.button')}
+          </button>
+        )}
+      </span>
     );
   }
 
@@ -127,6 +175,7 @@ export function Gate({
   me,
   error,
   onSignIn,
+  onGuest,
   onSignOut,
   onLeave,
 }: {
@@ -134,6 +183,7 @@ export function Gate({
   me: Person | null;
   error?: string;
   onSignIn: () => void;
+  onGuest?: (name: string) => Promise<string | null>;
   onSignOut: () => void;
   onLeave: () => void;
 }) {
@@ -148,6 +198,12 @@ export function Gate({
           <button type="button" className="pg-button pg-button--primary" onClick={onSignIn}>
             <i className="codicon codicon-account" aria-hidden="true" /> {t('live.signIn')}
           </button>
+        )}
+        {!me && onGuest && (
+          <>
+            <span className="pg-hint">{t('guest.or')}</span>
+            <GuestForm t={t} onSubmit={onGuest} />
+          </>
         )}
         {me && error && (
           <div className="pg-actions">

@@ -36,3 +36,18 @@ export function supabase(): SupabaseClient | null {
 }
 
 export const liveEnabled = () => supabase() !== null;
+
+/**
+ * Разрешён ли на сервере вход гостем. Флаг живёт в настройках Auth проекта,
+ * а не в сборке: выключил в Supabase — кнопка пропала без пересборки сайта.
+ */
+export async function guestSignInAllowed(): Promise<boolean> {
+  if (!URL_ || !KEY) return false;
+  try {
+    const response = await fetch(`${URL_}/auth/v1/settings`, { headers: { apikey: KEY } });
+    const settings = (await response.json()) as { external?: { anonymous_users?: boolean } };
+    return Boolean(settings.external?.anonymous_users);
+  } catch {
+    return false;
+  }
+}

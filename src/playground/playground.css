@@ -3338,11 +3338,22 @@ body:has(.pg) .site-footer {
 
 .pg-iv {
   display: flex;
-  align-items: center;
-  gap: 0.4rem;
+  flex-direction: column;
+  gap: 0.35rem;
   padding: 0.45rem 0.55rem;
   border: 1px solid var(--pg-border);
   border-radius: var(--pg-radius);
+}
+
+.pg-iv__row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.pg-iv__link {
+  width: 100%;
+  font-size: 0.78rem;
 }
 
 .pg-iv.is-cancelled {
@@ -3398,4 +3409,22 @@ body:has(.pg) .site-footer {
 .pg-gate__icon {
   font-size: 28px !important;
   color: var(--pg-accent);
+}
+
+.pg-guest {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.pg-guest .pg-input {
+  width: 11rem;
+}
+
+.pg-guest__error {
+  flex-basis: 100%;
+  color: var(--pg-bad);
+  font-size: 0.8rem;
 }

@@ -362,6 +362,11 @@ const en = {
 
   'live.signOut': 'Signed in as {name}. Click to sign out',
   'live.signIn': 'Sign in with Google',
+  'guest.button': 'As a guest',
+  'guest.hint': 'For testing: sign in without Google, by name only. Signing out loses the guest account.',
+  'guest.name': 'Your name',
+  'guest.enter': 'Sign in',
+  'guest.or': 'or, for testing, as a guest',
   'live.signInHint': 'Keep scenarios in a shared workspace and run interviews with invitations',
   'live.leave': 'Back to scenarios',
 
@@ -385,6 +390,7 @@ const en = {
   'iv.byLink': 'Invitation by link',
   'iv.notAccepted': 'not accepted yet',
   'iv.copy': 'Copy invitation',
+  'iv.link': 'Invitation link',
   'iv.open': 'Open',
   'iv.cancel': 'Cancel the interview',
   'iv.cancelConfirm': 'Cancel this interview? The invitation will stop working.',
@@ -938,6 +944,11 @@ const ru: Record<Key, string> = {
 
   'live.signOut': 'Вы вошли как {name}. Нажмите, чтобы выйти',
   'live.signIn': 'Войти через Google',
+  'guest.button': 'Гостем',
+  'guest.hint': 'Для теста: вход без Google, только по имени. Выйдя, гость теряет учётку.',
+  'guest.name': 'Ваше имя',
+  'guest.enter': 'Войти',
+  'guest.or': 'или, для теста, гостем',
   'live.signInHint': 'Сценарии — в общем пространстве, собеседования — по приглашениям',
   'live.leave': 'К сценариям',
 
@@ -961,6 +972,7 @@ const ru: Record<Key, string> = {
   'iv.byLink': 'Приглашение по ссылке',
   'iv.notAccepted': 'ещё не принято',
   'iv.copy': 'Скопировать приглашение',
+  'iv.link': 'Ссылка-приглашение',
   'iv.open': 'Открыть',
   'iv.cancel': 'Отменить собеседование',
   'iv.cancelConfirm': 'Отменить собеседование? Приглашение перестанет работать.',
