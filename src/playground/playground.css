@@ -3287,6 +3287,7 @@ body:has(.pg) .site-footer {
   background: var(--pg-cursor);
   color: #fff;
   font-size: 0.72rem;
+  font-weight: 600;
   white-space: nowrap;
 }
 

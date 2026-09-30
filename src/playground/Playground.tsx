@@ -36,6 +36,7 @@ import { useAuth } from './live/auth';
 import { useInterview } from './live/use-interview';
 import { Gate, LiveBar, RemoteCursors, WelcomeGate } from './live/live-ui';
 import { useCloud } from './live/use-cloud';
+import { usePresence } from './live/presence';
 import { InterviewRepository } from './live/interviews';
 import { isCloudId } from './live/db';
 import { cabinetUrl, openShare, paramFromUrl, setParams } from './live/links';
@@ -146,6 +147,35 @@ export default function Playground({ lang, repository }: Props) {
   });
   const { sendCursor } = live;
   const room = interview?.interviewId ?? null;
+
+  /**
+   * Коллеги над тем же сценарием пространства: их курсоры с именами на
+   * полотне и аватары в строке инструментов — как в комнате, только без
+   * доски и хода. В собеседовании этим занята комната, в браузере — не с кем.
+   */
+  const presence = usePresence({
+    topic: cloud.mode === 'workspace' && design && isCloudId(design.id) ? `scenario:${design.id}` : null,
+    me: auth.me,
+    role,
+    board,
+  });
+  /**
+   * Чьи курсоры на полотне. В комнате — на доске кандидата, цвет по роли.
+   * Над сценарием — коллеги на той же доске, что и я: курсор над эталоном
+   * тому, кто смотрит доску кандидата, указывал бы в пустоту.
+   */
+  const shownCursors = room
+    ? board === 'answer'
+      ? { send: sendCursor, cursors: live.cursors, peers: live.peers, byPerson: false }
+      : null
+    : presence.enabled
+      ? {
+          send: presence.sendCursor,
+          cursors: presence.cursors,
+          peers: presence.peers.filter((peer) => peer.board === board),
+          byPerson: true,
+        }
+      : null;
 
   /**
    * Кто может рисовать. Вне собеседования — по правам роли. В собеседовании
@@ -711,7 +741,7 @@ export default function Playground({ lang, repository }: Props) {
             onTeam={inWorkspace ? () => setDialog('team') : undefined}
             onCabinet={inWorkspace ? () => location.assign(cabinetUrl()) : undefined}
             status={live.status}
-            peers={live.peers}
+            peers={interview ? live.peers : presence.peers}
             onSignIn={auth.signIn}
             onGuest={auth.guestAllowed ? auth.signInAsGuest : undefined}
             onSignOut={() => {
@@ -829,8 +859,12 @@ export default function Playground({ lang, repository }: Props) {
               </>
             }
             drawnBy={drawing ? 'interviewer' : undefined}
-            onPointer={room && board === 'answer' ? sendCursor : undefined}
-            layer={room && board === 'answer' ? <RemoteCursors cursors={live.cursors} peers={live.peers} /> : undefined}
+            onPointer={shownCursors?.send}
+            layer={
+              shownCursors && (
+                <RemoteCursors cursors={shownCursors.cursors} peers={shownCursors.peers} byPerson={shownCursors.byPerson} />
+              )
+            }
           />
         </ReactFlowProvider>
 

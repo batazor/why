@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { ViewportPortal, useViewport } from '@xyflow/react';
 import type { Person } from './auth';
-import type { Peer, Point, RoomStatus } from './room';
+import { colorOf, type Peer, type Point } from './presence';
+import type { RoomStatus } from './room';
 import type { InvitePreview } from './links';
 import { formatSchedule } from './calendar';
 import { Menu, MenuItem, MenuNote, MenuSeparator } from '../menu';
@@ -14,8 +15,19 @@ import type { T } from '../i18n';
  * Точка приходит в координатах схемы, и ViewportPortal ставит её туда же,
  * куда встал бы блок. Портал масштабируется вместе с полотном — стрелка с
  * подписью растягивалась бы с ним, поэтому её масштаб обратный.
+ *
+ * В комнате цвет говорит о роли: кандидат или интервьюер. Над сценарием
+ * пространства роли у всех похожие, и цвет — свой у каждого (byPerson).
  */
-export function RemoteCursors({ cursors, peers }: { cursors: Record<string, Point>; peers: Peer[] }) {
+export function RemoteCursors({
+  cursors,
+  peers,
+  byPerson = false,
+}: {
+  cursors: Record<string, Point>;
+  peers: Peer[];
+  byPerson?: boolean;
+}) {
   const { zoom } = useViewport();
   const byKey = new Map(peers.map((peer) => [peer.key, peer]));
   return (
@@ -26,8 +38,13 @@ export function RemoteCursors({ cursors, peers }: { cursors: Record<string, Poin
         return (
           <div
             key={key}
-            className={`pg-cursor pg-cursor--${peer.role}`}
-            style={{ transform: `translate(${point.x}px, ${point.y}px) scale(${1 / zoom})` }}
+            className={byPerson ? 'pg-cursor' : `pg-cursor pg-cursor--${peer.role}`}
+            style={
+              {
+                transform: `translate(${point.x}px, ${point.y}px) scale(${1 / zoom})`,
+                ...(byPerson && { '--pg-cursor': colorOf(peer.person.id) }),
+              } as CSSProperties
+            }
             aria-hidden="true"
           >
             <svg width="16" height="20" viewBox="0 0 16 20">
@@ -41,7 +58,8 @@ export function RemoteCursors({ cursors, peers }: { cursors: Record<string, Poin
   );
 }
 
-export function Avatar({ person, role }: { person: Person; role?: Role }) {
+/** Кольцо аватара: цвет роли в комнате или свой цвет человека над сценарием. */
+export function Avatar({ person, role, color }: { person: Person; role?: Role; color?: string }) {
   const initials = person.name
     .split(/\s+/)
     .map((part) => part[0])
@@ -49,7 +67,7 @@ export function Avatar({ person, role }: { person: Person; role?: Role }) {
     .slice(0, 2)
     .toUpperCase();
   return (
-    <span className={`pg-avatar ${role ? `pg-avatar--${role}` : ''}`}>
+    <span className={`pg-avatar ${role ? `pg-avatar--${role}` : ''}`} style={color ? { boxShadow: `0 0 0 2px ${color}` } : undefined}>
       {/* Google отдаёт аватар с 403, если видит чужой Referer. */}
       {person.avatar ? <img src={person.avatar} alt="" referrerPolicy="no-referrer" /> : initials}
     </span>
@@ -107,6 +125,7 @@ interface BarProps {
   /** Перейти в кабинет интервьюера — отдельную страницу. */
   onCabinet?: () => void;
   status: RoomStatus;
+  /** В комнате — её участники; над сценарием пространства — коллеги, открывшие его же. */
   peers: Peer[];
   onSignIn: () => void;
   /** Вход гостем — только если сервер его разрешает. */
@@ -187,6 +206,15 @@ export function LiveBar({
             </button>
           )}
         </>
+      )}
+      {!inRoom && peers.length > 0 && (
+        <span className="pg-live__peers">
+          {peers.map((peer) => (
+            <span key={peer.key} title={t('live.here', { name: peer.person.name })}>
+              <Avatar person={peer.person} color={colorOf(peer.person.id)} />
+            </span>
+          ))}
+        </span>
       )}
       <Menu label={me.name} align="right" trigger={<Avatar person={me} />}>
         <MenuNote>

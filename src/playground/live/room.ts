@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from './client';
 import type { Person } from './auth';
+import { peersOf, presenceKey, useCursorSender, type LiveStatus, type Peer, type Point } from './presence';
 import { pickBoard, type Board, type Design } from '../model';
 import { applyPatch, diffBoard, type BoardPatch } from './board-patch';
 import { course, type Course } from './interviews';
@@ -13,9 +14,8 @@ import type { Role } from '../roles';
  *
  * Что по нему ходит:
  * - presence — кто в комнате и в какой роли;
- * - broadcast `cursor` — курсор на полотне, в координатах схемы, а не экрана:
- *   у интервьюера другой масштаб и другой размер окна, и точка на экране
- *   указывала бы мимо блока;
+ * - broadcast `cursor` — курсор на полотне, в координатах схемы (общее с
+ *   присутствием над сценарием пространства — presence.ts);
  * - broadcast `patch` — правка доски кандидата: только то, что поменялось
  *   (см. board-patch.ts). Рисуют все сразу — кандидат и интервьюеры, — и
  *   каждый накладывает чужие правки на свою доску, не затирая своих.
@@ -38,27 +38,10 @@ import type { Role } from '../roles';
  * пережить перезагрузку, сохраняет InterviewRepository.
  */
 
-export interface Peer {
-  /** Ключ присутствия: один человек в двух вкладках — два участника. */
-  key: string;
-  person: Person;
-  role: Role;
-}
+export type RoomStatus = LiveStatus;
 
-export interface Point {
-  x: number;
-  y: number;
-}
-
-export type RoomStatus = 'connecting' | 'live' | 'error';
-
-/** Курсор чаще 20 раз в секунду не нужен: глаз не заметит, а лимиты канала заметят. */
-const CURSOR_MS = 50;
 /** Правки доски копятся и уходят пачкой: при перетаскивании блока хватит пяти в секунду. */
 const BOARD_MS = 200;
-
-/** Вкладка — отдельный участник: так проще проверить комнату одной учёткой в двух окнах. */
-const TAB = crypto.randomUUID().slice(0, 8);
 
 interface Options {
   room: string | null;
@@ -80,7 +63,7 @@ export function useRoom({ room, me, role, design, onBoard, onCourse, onJournal }
 
   const channel = useRef<RealtimeChannel | null>(null);
   const live = useRef(false);
-  const key = me ? `${me.id}:${TAB}` : '';
+  const key = presenceKey(me);
 
   /**
    * Доска, какой её знает комната: с чужими правками и своими отправленными.
@@ -157,14 +140,7 @@ export function useRoom({ room, me, role, design, onBoard, onCourse, onJournal }
     });
     channel.current = ch;
 
-    ch.on('presence', { event: 'sync' }, () => {
-      const state = ch.presenceState<{ person: Person; role: Role }>();
-      setPeers(
-        Object.entries(state)
-          .filter(([name]) => name !== key)
-          .map(([name, metas]) => ({ key: name, person: metas[0].person, role: metas[0].role })),
-      );
-    })
+    ch.on('presence', { event: 'sync' }, () => setPeers(peersOf(ch, key)))
       .on('presence', { event: 'join' }, ({ key: joined }) => {
         // Пришедший позже не видел ни одной правки — отдаём ему своё сразу, без ожидания следующей.
         if (joined !== key) sendOwn();
@@ -261,23 +237,7 @@ export function useRoom({ room, me, role, design, onBoard, onCourse, onJournal }
     if (boardTimer.current) clearTimeout(boardTimer.current);
   }, []);
 
-  /** Курсор: последняя точка уходит не чаще CURSOR_MS, `null` — курсор ушёл с полотна. */
-  const pending = useRef<Point | null | undefined>(undefined);
-  const cursorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const sendCursor = useCallback(
-    (point: Point | null) => {
-      if (!live.current) return;
-      pending.current = point;
-      if (cursorTimer.current) return;
-      cursorTimer.current = setTimeout(() => {
-        cursorTimer.current = null;
-        if (pending.current === undefined) return;
-        channel.current?.send({ type: 'broadcast', event: 'cursor', payload: { from: key, point: pending.current } });
-        pending.current = undefined;
-      }, CURSOR_MS);
-    },
-    [key],
-  );
+  const sendCursor = useCursorSender(channel, live, key);
 
   return { status, peers, cursors, sendCursor };
 }
