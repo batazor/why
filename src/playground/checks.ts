@@ -31,7 +31,7 @@ export type Rule =
   | { is: 'routes' }
   /** У хранилища такого типа описаны данные. */
   | { is: 'schema'; kind: string }
-  /** Есть прикидка, и в ней есть числа. */
+  /** Есть прикидка, и в ней хотя бы два числа: исходное и то, что из него вышло. */
   | { is: 'estimate' }
   /** Годится любое из: «или кэш, или реплика для чтения». */
   | { is: 'any'; rules: Rule[] }
@@ -47,6 +47,20 @@ export interface Check {
   /** Автор снял проверку: она остаётся в проекте, но не считается. */
   off?: boolean;
 }
+
+/**
+ * Числа в тексте прикидки: «50 тыс.», «4,6/с», «1 000 000», «2.2 TB», «×6».
+ * Цифры, прилипшие к букве или дефису, — не величины, а имена: p99, C4,
+ * FR-2, jobs-pg. Пробел или запятая между тройками цифр — одно число.
+ */
+const NUMBER = /(?<![\p{L}\d-])\d+(?:[ \u00a0\u202f,]\d{3})*(?:[.,]\d+)?/gu;
+
+export function numbersIn(text: string): string[] {
+  return (text.match(NUMBER) ?? []).map((item) => item.replace(/[ \u00a0\u202f]/g, ''));
+}
+
+/** Меньше двух чисел — не прикидка: нечего сравнить с тем, откуда взялось. */
+export const ESTIMATE_MIN_NUMBERS = 2;
 
 /** Активные проверки: снятые автором не участвуют ни в воротах, ни в счёте. */
 export const active = (checks: Check[]) => checks.filter((check) => !check.off);
@@ -90,11 +104,12 @@ export function holds(board: Board, rule: Rule): boolean {
       return board.nodes.some((node) => node.kind === rule.kind && (node.schema?.length ?? 0) > 0);
 
     /**
-     * Прикидка без единой цифры — это не прикидка, а намерение посчитать.
-     * Поэтому смотрим не на длину текста, а на то, есть ли в нём числа.
+     * Прикидка — это числа и откуда они взялись: хотя бы исходное и то, что
+     * из него вышло. Одна цифра в тексте — ещё не прикидка, а длина текста
+     * ничего не говорит о его арифметике, поэтому считаем именно числа.
      */
     case 'estimate':
-      return /\d/.test(board.estimate) && board.estimate.trim().length >= 40;
+      return numbersIn(board.estimate).length >= ESTIMATE_MIN_NUMBERS;
 
     case 'any':
       return rule.rules.some((item) => holds(board, item));

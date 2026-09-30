@@ -6,7 +6,7 @@
  * React, ни хранилища: те же функции потом посчитают прохождение на сервере.
  */
 
-import { active, type Check, type Rule } from './checks';
+import { active, numbersIn, type Check, type Rule } from './checks';
 import {
   TRAIN_STEPS,
   nextRequirementId,
@@ -51,14 +51,15 @@ export function checksOf(step: TrainStep, checks: Check[]): Check[] {
 /**
  * Пересчитана ли прикидка после вводной.
  *
- * Вводная меняет числа задачи, и старая прикидка перестаёт быть верной. Сам
- * текст правило проверить не может — сравниваем с тем, что было в момент
- * вводной: любая правка считается пересчётом, спорить с человеком о качестве
- * его арифметики песочница не будет.
+ * Вводная меняет числа задачи, и старая прикидка перестаёт быть верной.
+ * Пересчёт — это когда изменились числа, а не когда поправили слово:
+ * сравниваем набор чисел с тем, что был в момент вводной. Какие именно числа
+ * получились, песочница не судит — спорить с человеком о его арифметике она
+ * не будет.
  */
-function recounted(design: Design): boolean {
+export function recounted(design: Design): boolean {
   const mark = design.training.estimateMark;
-  return mark === undefined || design.estimate.trim() !== mark.trim();
+  return mark === undefined || numbersIn(design.estimate).join(' ') !== numbersIn(mark).join(' ');
 }
 
 /**

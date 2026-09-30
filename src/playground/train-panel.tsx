@@ -13,6 +13,7 @@ import {
   checksOf,
   nextStep,
   pickTwist,
+  recounted,
   report,
   runningChecks,
   stepDone,
@@ -176,7 +177,7 @@ export function TrainPanel({ design, update, t, now, onReset }: Props) {
             </li>
           ))}
         </ul>
-        {step === 'harden' && training.estimateMark !== undefined && design.estimate.trim() === training.estimateMark.trim() && (
+        {step === 'harden' && !recounted(design) && (
           <p className="pg-hint pg-hint--warn">{t('train.recount')}</p>
         )}
       </section>
