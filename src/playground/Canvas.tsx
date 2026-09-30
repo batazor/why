@@ -51,8 +51,12 @@ function BlockNode({ data, selected }: NodeProps) {
     <div
       className={`pg-block pg-block--${spec.category} ${selected ? 'is-selected' : ''} ${node.drawnBy ? 'is-by-interviewer' : ''}`}
       title={node.drawnBy ? t('canvas.byInterviewer') : undefined}
-      data-by={node.drawnBy ? t('canvas.byInterviewerShort') : undefined}
     >
+      {node.drawnBy && (
+        <span className="pg-block__by" aria-label={t('canvas.byInterviewer')}>
+          <i className="codicon codicon-person" aria-hidden="true" />
+        </span>
+      )}
       {SIDES.map(([id, side]) => (
         <Handle key={id} id={id} type="source" position={side} className="pg-block__handle" />
       ))}

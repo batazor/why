@@ -593,7 +593,6 @@ const en = {
   'draw.together': 'The board is shared: you and the candidate draw at the same time. What you add is marked as yours.',
   'draw.noCandidate': 'You can draw on the board once the candidate is in the room — their side saves it.',
   'canvas.byInterviewer': 'Drawn by the interviewer',
-  'canvas.byInterviewerShort': 'I',
 
   'tab.assist': 'AI assistant',
   'assist.intro': 'The assistant sees the candidate’s board, the reference, the rubric and the prepared questions, and helps you — the candidate does not see it. Your own key or local model, as in practice mode.',
@@ -1407,7 +1406,6 @@ const ru: Record<Key, string> = {
   'draw.together': 'Доска общая: вы и кандидат рисуете одновременно. Всё, что добавите вы, помечается как ваше.',
   'draw.noCandidate': 'Рисовать на доске можно, когда кандидат в комнате, — сохраняет её его сторона.',
   'canvas.byInterviewer': 'Нарисовал интервьюер',
-  'canvas.byInterviewerShort': 'И',
 
   'tab.assist': 'ИИ-помощник',
   'assist.intro': 'Помощник видит доску кандидата, эталон, критерии и заготовленные вопросы и помогает вам — кандидат его не видит. Свой ключ или локальная модель, как в тренировке.',

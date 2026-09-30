@@ -4061,17 +4061,16 @@ td.pg-level--3 { color: #1f7a4d; font-weight: 600; }
   }
 }
 
-/* ── Ручка: что нарисовал интервьюер ────────────────────────────────────── */
+/* ── Что нарисовал интервьюер ───────────────────────────────────────────── */
 
 /* Своё у кандидата — сплошная рамка; нарисованное интервьюером — пунктир и
-   метка, чтобы в отчёте и в записи было видно, что подсказали. */
+   значок, чтобы в отчёте и в записи было видно, что подсказали. */
 .pg-block.is-by-interviewer {
   outline: 2px dashed var(--pg-live-interviewer);
   outline-offset: 3px;
 }
 
-.pg-block.is-by-interviewer::after {
-  content: attr(data-by);
+.pg-block__by {
   position: absolute;
   top: -9px;
   right: -9px;
@@ -4082,8 +4081,11 @@ td.pg-level--3 { color: #1f7a4d; font-weight: 600; }
   border-radius: 50%;
   background: var(--pg-live-interviewer);
   color: #fff;
-  font-size: 0.65rem;
-  font-weight: 700;
+  pointer-events: none;
+}
+
+.pg-block__by .codicon {
+  font-size: 12px;
 }
 
 .pg-edge.is-by-interviewer path {
