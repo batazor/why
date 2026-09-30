@@ -46,6 +46,7 @@ import { formatSchedule } from './live/calendar';
 import { CandidateEnd } from './live/candidate-end';
 import { ReportPanel } from './live/report-panel';
 import { AiPanel } from './ai/ai-panel';
+import { AssistantPanel } from './ai/assistant-panel';
 
 /**
  * Песочница системного дизайна для собеседований.
@@ -126,7 +127,6 @@ export default function Playground({ lang, repository }: Props) {
   const board = role === 'interviewer' ? compareView : perms.board;
   /** Собеседование закончено — доска кандидата заморожена и на сервере, и здесь. */
   const frozen = Boolean(interview && design?.session.finishedAt);
-  const readOnly = !perms.editBoard || frozen;
 
   const refresh = useCallback(async () => setProjects(await repo.list()), [repo]);
 
@@ -145,6 +145,15 @@ export default function Playground({ lang, repository }: Props) {
   });
   const { sendCursor } = live;
   const room = interview?.interviewId ?? null;
+
+  /**
+   * Кто может рисовать. Вне собеседования — по правам роли. В собеседовании
+   * решает ручка: кандидат рисует, пока она у него; интервьюер — пока взял
+   * её сам. После конца не рисует никто.
+   */
+  const penAway = Boolean(interview) && role === 'candidate' && live.pen.holder === 'interviewer';
+  const drawing = Boolean(interview) && role === 'interviewer' && live.mine;
+  const readOnly = frozen || penAway || (!perms.editBoard && !drawing);
 
   // Интервьюеру пространства роль автора недоступна: сценарии ему писать нельзя.
   const workspaceRole = cloud.mode === 'workspace' ? cloud.workspace.role : null;
@@ -475,7 +484,14 @@ export default function Playground({ lang, repository }: Props) {
           .join(' · ')
       : undefined;
 
+  const penBanner = penAway
+    ? t('pen.away', { name: live.pen.holder === 'interviewer' ? live.pen.name : '' })
+    : drawing
+      ? t('pen.drawing')
+      : undefined;
+
   const banner =
+    penBanner ??
     waiting ??
     (role === 'author'
       ? t('role.authorBanner')
@@ -631,6 +647,27 @@ export default function Playground({ lang, repository }: Props) {
           }}
         />
 
+        {/* Ручка: интервьюер берёт доску кандидата показать мысль и возвращает. */}
+        {interview && role === 'interviewer' && !frozen && (
+          <button
+            type="button"
+            className={`pg-button ${drawing ? 'pg-button--primary' : ''}`}
+            title={t(drawing ? 'pen.returnHint' : live.pen.holder === 'interviewer' ? 'pen.busy' : 'pen.takeHint', {
+              name: live.pen.holder === 'interviewer' ? live.pen.name : '',
+            })}
+            disabled={!drawing && live.pen.holder === 'interviewer'}
+            onClick={() => {
+              if (drawing) live.returnPen();
+              else {
+                setCompareView('answer');
+                live.takePen();
+              }
+            }}
+          >
+            <i className={`codicon codicon-${drawing ? 'debug-step-back' : 'edit'}`} aria-hidden="true" /> {t(drawing ? 'pen.return' : 'pen.take')}
+          </button>
+        )}
+
         {inWorkspace && isCloudId(design.id) && (
           <WorkspaceButtons
             t={t}
@@ -780,6 +817,7 @@ export default function Playground({ lang, repository }: Props) {
                 )}
               </>
             }
+            drawnBy={drawing ? 'interviewer' : undefined}
             onPointer={room && board === 'answer' ? sendCursor : undefined}
             layer={room && board === 'answer' ? <RemoteCursors cursors={live.cursors} peers={live.peers} /> : undefined}
           />
@@ -917,6 +955,8 @@ export default function Playground({ lang, repository }: Props) {
               />
             )}
             {activeTab === 'ai' && <AiPanel design={view} update={update} t={t} lang={lang} />}
+            {/* Помощник смотрит на живую доску кандидата и эталон, а не на снимок записи. */}
+            {activeTab === 'assist' && <AssistantPanel design={design} update={update} t={t} lang={lang} now={now} />}
             {activeTab === 'check' && <ChecksPanel {...panelProps} extra={extraFindings} />}
           </div>
         </section>

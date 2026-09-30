@@ -1,24 +1,15 @@
-import { APICallError, streamText, type LanguageModel, type ModelMessage } from 'ai';
-import { createAnthropic } from '@ai-sdk/anthropic';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { createOpenAI } from '@ai-sdk/openai';
-import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
+import type { ModelMessage } from 'ai';
+import { streamReply } from './llm';
 import { active } from '../checks';
 import type { AiTurn, Design } from '../model';
-import { keyOf, modelOf, type AiSettings } from './settings';
-import { AiError } from './errors';
+import type { AiSettings } from './settings';
 
 /**
  * ИИ-интервьюер для тренировки: смотрит на доску человека и ведёт разговор
  * так, как вёл бы живой интервьюер, — спрашивает по его схеме, а не по
  * шаблону, и в конце разбирает прохождение.
  *
- * Модель — какая угодно: запрос идёт через AI SDK (ai-sdk.dev), и у всех
- * сервисов один и тот же код разговора. Вызов — прямо из браузера с ключом
- * человека; Claude для этого нужен заголовок
- * anthropic-dangerous-direct-browser-access, без него API браузеру не
- * отвечает. Локальная модель — через OpenAI-совместимый адрес Ollama или
- * LM Studio на машине человека.
+ * Как именно зовётся модель — в llm.ts: здесь только разговор.
  *
  * Системная подсказка неизменна и кэшируется; доска меняется каждый ход и
  * едет только в последнем сообщении — так кэш не сбивается от хода к ходу.
@@ -54,7 +45,7 @@ When asked for a review, assess the whole run: what is done well, what is missin
 };
 
 /** Доска человека словами: модель видит то же, что интервьюер на экране. */
-export function describeBoard(design: Design, lang: string): string {
+export function describeBoard(design: Design, lang: string, { checks: withChecks = true } = {}): string {
   const ru = lang === 'ru';
   const name = new Map(design.nodes.map((node) => [node.id, node.label || node.kind]));
   const lines: string[] = [];
@@ -87,17 +78,21 @@ export function describeBoard(design: Design, lang: string): string {
       const tech = node.tech ? `, ${node.tech}` : '';
       const note = node.note.trim() ? ` — ${node.note.trim()}` : '';
       const schema = node.schema?.length ? ` (${ru ? 'таблицы' : 'tables'}: ${node.schema.map((table) => table.name).join(', ')})` : '';
-      return `- ${node.label || node.kind} [${node.kind}${tech}]${note}${schema}`;
+      // Нарисованное интервьюером — не заслуга кандидата: модель должна это видеть.
+      const by = node.drawnBy ? (ru ? ' (нарисовал интервьюер)' : ' (drawn by the interviewer)') : '';
+      return `- ${node.label || node.kind} [${node.kind}${tech}]${note}${schema}${by}`;
     }),
   );
   section(
     ru ? 'СВЯЗИ' : 'LINKS',
     design.edges.map(
       (edge) =>
-        `- ${name.get(edge.source) ?? edge.source} → ${name.get(edge.target) ?? edge.target} (${edge.mode})${edge.label ? ` — ${edge.label}` : ''}`,
+        `- ${name.get(edge.source) ?? edge.source} → ${name.get(edge.target) ?? edge.target} (${edge.mode})${edge.label ? ` — ${edge.label}` : ''}${
+          edge.drawnBy ? (ru ? ' (провёл интервьюер)' : ' (drawn by the interviewer)') : ''
+        }`,
     ),
   );
-  const checks = active(design.scenario.checks ?? []);
+  const checks = withChecks ? active(design.scenario.checks ?? []) : [];
   if (checks.length) section(ru ? 'ПРОВЕРКИ ТРЕНИРОВКИ' : 'PRACTICE CHECKS', checks.map((check) => `- ${check.text}`));
   return lines.join('\n').trim();
 }
@@ -130,29 +125,6 @@ interface Request {
   onText: (chunk: string) => void;
 }
 
-/** Модели Claude, у которых на отказ есть резервная модель на стороне сервера. */
-const FALLBACK_MODELS = new Set(['claude-opus-5', 'claude-fable-5-1']);
-
-
-/** Модель выбранного сервиса — с ключом человека, прямо из браузера. */
-function languageModel(settings: AiSettings): LanguageModel {
-  const apiKey = keyOf(settings);
-  const model = modelOf(settings);
-  switch (settings.provider) {
-    case 'anthropic':
-      return createAnthropic({ apiKey, headers: { 'anthropic-dangerous-direct-browser-access': 'true' } })(model);
-    case 'openai':
-      return createOpenAI({ apiKey })(model);
-    case 'google':
-      return createGoogleGenerativeAI({ apiKey })(model);
-    case 'openrouter':
-      return createOpenAICompatible({ name: 'openrouter', baseURL: 'https://openrouter.ai/api/v1', apiKey })(model);
-    case 'local':
-      // Ollama отвечает браузеру, только если сайт разрешён в OLLAMA_ORIGINS; LM Studio — если включён CORS.
-      return createOpenAICompatible({ name: 'local', baseURL: settings.baseUrl.trim().replace(/\/+$/, '') })(model);
-  }
-}
-
 /** Один ход интервьюера: ответ приходит по кусочкам через onText. Возвращает полный текст. */
 export async function interviewerTurn(request: Request): Promise<string> {
   const lang = request.lang === 'ru' ? 'ru' : 'en';
@@ -164,62 +136,5 @@ export async function interviewerTurn(request: Request): Promise<string> {
     ),
     { role: 'user', content: last },
   ];
-  const { settings } = request;
-  const claude = settings.provider === 'anthropic';
-
-  const result = streamText({
-    model: languageModel(settings),
-    instructions: SYSTEM[lang],
-    messages,
-    abortSignal: request.signal,
-    maxRetries: 1,
-    ...(claude ? { maxOutputTokens: 32000 } : {}),
-    providerOptions: claude
-      ? {
-          anthropic: {
-            // Разговор, а не задача на час: средней глубины размышлений хватает и не тянет время.
-            thinking: { type: 'adaptive' },
-            effort: 'medium',
-            // Неизменная системная подсказка и история кэшируются; меняется только последний ход.
-            cacheControl: { type: 'ephemeral' },
-            ...(FALLBACK_MODELS.has(modelOf(settings)) ? { fallbacks: 'default' } : {}),
-          },
-        }
-      : undefined,
-  });
-
-  let text = '';
-  try {
-    for await (const part of result.fullStream) {
-      if (part.type === 'text-delta') {
-        text += part.text;
-        request.onText(part.text);
-      } else if (part.type === 'error') {
-        throw part.error;
-      } else if (part.type === 'abort') {
-        throw Object.assign(new Error('aborted'), { name: 'AbortError' });
-      } else if (part.type === 'finish' && part.finishReason === 'content-filter') {
-        throw new AiError('refusal', part.rawFinishReason ?? 'content-filter');
-      }
-    }
-  } catch (error) {
-    throw normalize(error);
-  }
-  return text;
-}
-
-/** Ошибки разных сервисов — к нескольким понятным причинам. Остановка остаётся AbortError. */
-function normalize(error: unknown): Error {
-  if (error instanceof AiError) return error;
-  const err = error as Error;
-  if (err?.name === 'AbortError') return err;
-  if (APICallError.isInstance(error)) {
-    if (error.statusCode === 401 || error.statusCode === 403) return new AiError('key', error.message);
-    if (error.statusCode === 429) return new AiError('rate', error.message);
-    if (error.statusCode === undefined) return new AiError('network', error.message);
-    return new AiError('other', error.message);
-  }
-  // fetch не дотянулся: сервер не запущен или не пускает этот сайт (CORS).
-  if (err instanceof TypeError) return new AiError('network', err.message);
-  return new AiError('other', err?.message ?? String(error));
+  return streamReply({ settings: request.settings, system: SYSTEM[lang], messages, signal: request.signal, onText: request.onText });
 }

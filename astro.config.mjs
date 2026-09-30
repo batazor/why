@@ -82,6 +82,12 @@ export default defineConfig({
         '@tisoap/react-flow-smart-edge',
         // Живая сессия песочницы: клиент Supabase грузится лениво, со входом.
         '@supabase/supabase-js',
+        // ИИ-интервьюер и помощник: AI SDK и провайдеры тоже грузятся лениво, по первому вопросу.
+        'ai',
+        '@ai-sdk/anthropic',
+        '@ai-sdk/openai',
+        '@ai-sdk/google',
+        '@ai-sdk/openai-compatible',
       ],
     },
   },

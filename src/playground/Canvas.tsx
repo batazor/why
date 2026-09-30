@@ -48,7 +48,11 @@ function BlockNode({ data, selected }: NodeProps) {
   const { node, t, reqs } = data as unknown as BlockData;
   const spec = blockSpec(node.kind);
   return (
-    <div className={`pg-block pg-block--${spec.category} ${selected ? 'is-selected' : ''}`}>
+    <div
+      className={`pg-block pg-block--${spec.category} ${selected ? 'is-selected' : ''} ${node.drawnBy ? 'is-by-interviewer' : ''}`}
+      title={node.drawnBy ? t('canvas.byInterviewer') : undefined}
+      data-by={node.drawnBy ? t('canvas.byInterviewerShort') : undefined}
+    >
       {SIDES.map(([id, side]) => (
         <Handle key={id} id={id} type="source" position={side} className="pg-block__handle" />
       ))}
@@ -94,7 +98,7 @@ function toFlowEdge(edge: DesignEdge): Edge {
     label: edge.label || undefined,
     // Асинхронная связь бежит пунктиром: сообщение ушло, отправитель не ждёт.
     animated: edge.mode === 'async',
-    className: `pg-edge pg-edge--${edge.mode}`,
+    className: `pg-edge pg-edge--${edge.mode} ${edge.drawnBy ? 'is-by-interviewer' : ''}`,
     markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18 },
   };
 }
@@ -115,9 +119,23 @@ interface Props {
   layer?: ReactNode;
   /** Где курсор на схеме, `null` — ушёл с полотна. Нужно комнате собеседования. */
   onPointer?: (point: { x: number; y: number } | null) => void;
+  /** Рисует интервьюер, взяв доску: новое на схеме помечается его. */
+  drawnBy?: 'interviewer';
 }
 
-export default function Canvas({ design, update, onSelect, t, addRef, readOnly = false, banner, overlay, layer, onPointer }: Props) {
+export default function Canvas({
+  design,
+  update,
+  onSelect,
+  t,
+  addRef,
+  readOnly = false,
+  banner,
+  overlay,
+  layer,
+  onPointer,
+  drawnBy,
+}: Props) {
   const flow = useReactFlow();
 
   /**
@@ -218,11 +236,12 @@ export default function Canvas({ design, update, onSelect, t, addRef, readOnly =
             target: connection.target,
             label: '',
             mode: 'sync',
+            ...(drawnBy ? { drawnBy } : {}),
           },
         ],
       }));
     },
-    [update],
+    [update, drawnBy],
   );
 
   const add = useCallback(
@@ -244,10 +263,13 @@ export default function Canvas({ design, update, onSelect, t, addRef, readOnly =
       fresh.current = id;
       update((current) => ({
         ...current,
-        nodes: [...current.nodes, { id, kind, label: t(`block.${kind}`), note: '', x: Math.round(center.x), y: Math.round(center.y) }],
+        nodes: [
+          ...current.nodes,
+          { id, kind, label: t(`block.${kind}`), note: '', x: Math.round(center.x), y: Math.round(center.y), ...(drawnBy ? { drawnBy } : {}) },
+        ],
       }));
     },
-    [flow, update, t, design.nodes.length],
+    [flow, update, t, design.nodes.length, drawnBy],
   );
 
   useEffect(() => addRef((kind) => add(kind)), [add, addRef]);

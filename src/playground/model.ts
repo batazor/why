@@ -29,6 +29,8 @@ export interface DesignNode {
   matrix?: TechMatrix;
   /** Схема данных хранилища: таблицы, коллекции, ключи кэша, сообщения очереди. */
   schema?: DbTable[];
+  /** Нарисовал интервьюер, взяв доску в собеседовании, — а не сам кандидат. */
+  drawnBy?: 'interviewer';
   x: number;
   y: number;
 }
@@ -64,6 +66,8 @@ export interface DesignEdge {
   target: string;
   label: string;
   mode: EdgeMode;
+  /** Провёл интервьюер, взяв доску в собеседовании. */
+  drawnBy?: 'interviewer';
 }
 
 export type RequirementKind = 'fr' | 'nfr';

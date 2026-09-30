@@ -4060,3 +4060,88 @@ td.pg-level--3 { color: #1f7a4d; font-weight: 600; }
     animation: none;
   }
 }
+
+/* ── Ручка: что нарисовал интервьюер ────────────────────────────────────── */
+
+/* Своё у кандидата — сплошная рамка; нарисованное интервьюером — пунктир и
+   метка, чтобы в отчёте и в записи было видно, что подсказали. */
+.pg-block.is-by-interviewer {
+  outline: 2px dashed var(--pg-live-interviewer);
+  outline-offset: 3px;
+}
+
+.pg-block.is-by-interviewer::after {
+  content: attr(data-by);
+  position: absolute;
+  top: -9px;
+  right: -9px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--pg-live-interviewer);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.pg-edge.is-by-interviewer path {
+  stroke: var(--pg-live-interviewer) !important;
+}
+
+/* ── ИИ-помощник интервьюеру ────────────────────────────────────────────── */
+
+.pg-assist section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.pg-assist .pg-ai__turn {
+  max-width: none;
+}
+
+.pg-assist__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pg-assist__item {
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid var(--pg-border);
+}
+
+.pg-assist__item .pg-hint {
+  margin: 0.2rem 0 0;
+}
+
+.pg-assist__row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.pg-assist__text {
+  flex: 1;
+  font-size: 0.85rem;
+}
+
+.pg-assist__level {
+  min-width: 1.4rem;
+  text-align: center;
+  font-weight: 700;
+}
+
+.pg-assist__level.is-empty {
+  color: var(--pg-muted);
+}
+
+.pg-assist__level.pg-level--0 { color: var(--pg-bad); }
+.pg-assist__level.pg-level--1 { color: #c7791b; }
+.pg-assist__level.pg-level--2 { color: var(--pg-compute); }
+.pg-assist__level.pg-level--3 { color: #1f7a4d; }
