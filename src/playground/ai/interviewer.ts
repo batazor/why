@@ -1,6 +1,7 @@
 import type { ModelMessage } from 'ai';
 import { streamReply } from './llm';
-import { active } from '../checks';
+import { active, checkText } from '../checks';
+import { translator } from '../i18n';
 import type { AiTurn, Design } from '../model';
 import type { AiSettings } from './settings';
 
@@ -93,7 +94,8 @@ export function describeBoard(design: Design, lang: string, { checks: withChecks
     ),
   );
   const checks = withChecks ? active(design.scenario.checks ?? []) : [];
-  if (checks.length) section(ru ? 'ПРОВЕРКИ ТРЕНИРОВКИ' : 'PRACTICE CHECKS', checks.map((check) => `- ${check.text}`));
+  const t = translator(lang);
+  if (checks.length) section(ru ? 'ПРОВЕРКИ ТРЕНИРОВКИ' : 'PRACTICE CHECKS', checks.map((check) => `- ${checkText(check, t)}`));
   return lines.join('\n').trim();
 }
 

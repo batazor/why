@@ -1,5 +1,5 @@
 import { ESTIMATE_MODES, uid, totalScore, type Design, type EstimateMode, type Scenario, type ScenarioItem, type Session } from './model';
-import { deriveChecks, mergeChecks, type Check } from './checks';
+import { checkText, deriveChecks, mergeChecks, type Check } from './checks';
 import { clock } from './integrity';
 import type { T } from './i18n';
 
@@ -131,7 +131,7 @@ function ChecksEditor({ design, update, t }: Props) {
                   set(checks.map((other) => (other.id === check.id ? { ...other, off } : other)));
                 }}
               />
-              <span>{check.text}</span>
+              <span>{checkText(check, t)}</span>
             </label>
             <select
               className="pg-input pg-select pg-weight"

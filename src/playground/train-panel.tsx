@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { deriveChecks, evaluate } from './checks';
+import { checkText, deriveChecks, evaluate } from './checks';
 import {
   TRAIN_STEPS,
   compareToReference,
@@ -275,7 +275,7 @@ export function TrainDock({ design, update, t, now, onStep, onFinish, onReset }:
                   className={`codicon codicon-${passed[check.id] ? 'pass-filled' : 'circle-large-outline'}`}
                   aria-hidden="true"
                 />
-                <span>{check.text}</span>
+                <span>{checkText(check, t)}</span>
                 {check.weight > 1 && <span className="pg-count">×{check.weight}</span>}
               </li>
             ))}
@@ -385,7 +385,7 @@ export function TrainReport({
             {missed.map((row) => (
               <li key={row.check.id}>
                 <i className="codicon codicon-circle-large-outline" aria-hidden="true" />
-                <span>{row.check.text}</span>
+                <span>{checkText(row.check, t)}</span>
                 <span className="pg-count">{t(`train.step.${row.step}`)}</span>
               </li>
             ))}

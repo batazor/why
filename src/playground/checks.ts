@@ -119,6 +119,46 @@ export function holds(board: Board, rule: Rule): boolean {
   }
 }
 
+/**
+ * Текст проверки — из правила: правило и есть её смысл, а слова к нему
+ * подбираются на языке того, кто смотрит, и меняются вместе с песочницей, а
+ * не застывают в проекте. Правила, которые словами не описать (произвольное
+ * «любое из», «нет того-то»), остаются с текстом из проекта.
+ */
+export function describe(rule: Rule, t: T): string | undefined {
+  const block = (kind: string) => t(`block.${kind}`);
+  switch (rule.is) {
+    case 'reqs':
+      return t(rule.kind === 'fr' ? 'check.reqsFr' : 'check.reqsNfr', { n: String(rule.min) });
+    case 'numbers':
+      return t('check.numbers');
+    case 'covered':
+      return t('check.covered');
+    case 'routes':
+      return t('check.routes');
+    case 'kind':
+      return rule.min && rule.min > 1 ? undefined : t('check.kind', { kind: block(rule.kind) });
+    case 'path':
+      return t(rule.mode === 'async' ? 'check.pathAsync' : 'check.path', { from: block(rule.from), to: block(rule.to) });
+    case 'schema':
+      return t('check.schema', { kind: block(rule.kind) });
+    case 'estimate':
+      return t('check.estimate');
+    case 'any': {
+      // Встречные связи одного режима — «между A и B, в любую сторону».
+      const [a, b] = rule.rules;
+      if (rule.rules.length === 2 && a.is === 'path' && b.is === 'path' && a.from === b.to && a.to === b.from && a.mode === b.mode)
+        return t(a.mode === 'async' ? 'check.pathBothAsync' : 'check.pathBoth', { from: block(a.from), to: block(a.to) });
+      return undefined;
+    }
+    case 'not':
+      return undefined;
+  }
+}
+
+/** Что показать человеку: свежие слова по правилу, а если их нет — текст из проекта. */
+export const checkText = (check: Check, t: T): string => describe(check.rule, t) ?? check.text;
+
 export function evaluate(board: Board, checks: Check[]): Record<string, boolean> {
   const passed: Record<string, boolean> = {};
   for (const check of active(checks)) passed[check.id] = holds(board, check.rule);
@@ -183,23 +223,22 @@ function worthChecking(toKind: string, mode: EdgeMode): boolean {
 export function deriveChecks(scenario: Scenario, t: T): Check[] {
   const { reference } = scenario;
   const checks: Check[] = [];
-  const add = (rule: Rule, text: string, weight = 1) => checks.push({ id: uid('chk'), text, weight, rule });
-  const block = (kind: string) => t(`block.${kind}`);
+  /* Текст кладётся в проект для сервера и для правил, которые словами не описать; на экране он берётся из правила. */
+  const add = (rule: Rule, weight = 1) => checks.push({ id: uid('chk'), text: describe(rule, t) ?? '', weight, rule });
 
   const fr = reference.requirements.filter((item) => item.kind === 'fr' && item.text.trim()).length;
   const nfr = reference.requirements.filter((item) => item.kind === 'nfr' && item.text.trim()).length;
   if (fr) {
     const min = threshold(fr);
-    add({ is: 'reqs', kind: 'fr', min }, t('check.reqsFr', { n: String(min) }), 2);
+    add({ is: 'reqs', kind: 'fr', min }, 2);
   }
   if (nfr) {
     const min = threshold(nfr);
-    add({ is: 'reqs', kind: 'nfr', min }, t('check.reqsNfr', { n: String(min) }), 2);
-    if (reference.requirements.some((item) => item.kind === 'nfr' && item.target.trim()))
-      add({ is: 'numbers' }, t('check.numbers'), 3);
+    add({ is: 'reqs', kind: 'nfr', min }, 2);
+    if (reference.requirements.some((item) => item.kind === 'nfr' && item.target.trim())) add({ is: 'numbers' }, 3);
   }
-  if (reference.requirements.some((item) => item.covers.length)) add({ is: 'covered' }, t('check.covered'), 2);
-  if (reference.api.length) add({ is: 'routes' }, t('check.routes'), 1);
+  if (reference.requirements.some((item) => item.covers.length)) add({ is: 'covered' }, 2);
+  if (reference.api.length) add({ is: 'routes' }, 1);
 
   /**
    * Связи выводятся раньше блоков: связь уже говорит, что оба её конца на
@@ -227,40 +266,28 @@ export function deriveChecks(scenario: Scenario, t: T): Check[] {
     if (seen.has(key)) continue;
     seen.add(key);
     linked.add(from).add(to);
-    const names = { from: block(from), to: block(to) };
-    paths.push(
-      back
-        ? {
-            id: uid('chk'),
-            text: t('check.pathBoth', names),
-            weight: 2,
-            rule: {
-              is: 'any',
-              rules: [
-                { is: 'path', from, to, mode: edge.mode },
-                { is: 'path', from: to, to: from, mode: edge.mode },
-              ],
-            },
-          }
-        : {
-            id: uid('chk'),
-            text: t(edge.mode === 'async' ? 'check.pathAsync' : 'check.path', names),
-            weight: 2,
-            rule: { is: 'path', from, to, mode: edge.mode },
-          },
-    );
+    const rule: Rule = back
+      ? {
+          is: 'any',
+          rules: [
+            { is: 'path', from, to, mode: edge.mode },
+            { is: 'path', from: to, to: from, mode: edge.mode },
+          ],
+        }
+      : { is: 'path', from, to, mode: edge.mode };
+    paths.push({ id: uid('chk'), text: describe(rule, t) ?? '', weight: 2, rule });
   }
 
   const kinds = new Set(reference.nodes.map((node) => node.kind));
   for (const kind of kinds)
-    if (!OBVIOUS.has(kind) && !linked.has(kind)) add({ is: 'kind', kind }, t('check.kind', { kind: block(kind) }));
+    if (!OBVIOUS.has(kind) && !linked.has(kind)) add({ is: 'kind', kind });
   checks.push(...paths);
 
   for (const kind of kinds)
     if (STATEFUL_KINDS.has(kind) && reference.nodes.some((node) => node.kind === kind && node.schema?.length))
-      add({ is: 'schema', kind }, t('check.schema', { kind: block(kind) }));
+      add({ is: 'schema', kind });
 
-  if (reference.estimate.trim()) add({ is: 'estimate' }, t('check.estimate'), 3);
+  if (reference.estimate.trim()) add({ is: 'estimate' }, 3);
 
   return checks;
 }
