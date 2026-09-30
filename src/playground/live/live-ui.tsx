@@ -41,7 +41,7 @@ export function RemoteCursors({ cursors, peers }: { cursors: Record<string, Poin
   );
 }
 
-function Avatar({ person, role }: { person: Person; role?: Role }) {
+export function Avatar({ person, role }: { person: Person; role?: Role }) {
   const initials = person.name
     .split(/\s+/)
     .map((part) => part[0])
@@ -104,6 +104,8 @@ interface BarProps {
   /** В пространстве: его название в меню и пункт «Команда». */
   workspaceName?: string;
   onTeam?: () => void;
+  /** Перейти в кабинет интервьюера — отдельную страницу. */
+  onCabinet?: () => void;
   status: RoomStatus;
   peers: Peer[];
   onSignIn: () => void;
@@ -128,6 +130,7 @@ export function LiveBar({
   finished = false,
   workspaceName,
   onTeam,
+  onCabinet,
   status,
   peers,
   onSignIn,
@@ -190,6 +193,11 @@ export function LiveBar({
           <strong>{me.name}</strong>
           {workspaceName && <span>{workspaceName}</span>}
         </MenuNote>
+        {onCabinet && (
+          <MenuItem icon="dashboard" onClick={onCabinet}>
+            {t('cab.button')}
+          </MenuItem>
+        )}
         {onTeam && (
           <MenuItem icon="organization" onClick={onTeam}>
             {t('team.button')}

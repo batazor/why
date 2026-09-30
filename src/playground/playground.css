@@ -3743,48 +3743,85 @@ td.pg-level--1 { color: #c7791b; font-weight: 600; }
 td.pg-level--2 { color: var(--pg-compute); font-weight: 600; }
 td.pg-level--3 { color: #1f7a4d; font-weight: 600; }
 
-/* ── Кабинет интервьюера ────────────────────────────────────────────────── */
+/* ── Кабинет интервьюера — отдельная страница ───────────────────────────── */
 
-.pg-cab {
-  width: min(64rem, calc(100vw - 2rem));
-  max-width: none;
+/* Страница со списками, а не полотно: высота по содержимому, страница прокручивается. */
+.pg-cabinet {
+  height: auto;
+  min-height: calc(100dvh - 3.6rem);
 }
 
-.pg-cab__summary {
-  margin: 0 0 0 auto;
+.pg-cabinet__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 650;
 }
 
-.pg-cab__section {
-  margin-top: 1rem;
+.pg-cabinet__space {
+  margin: 0;
 }
 
-.pg-cab__section h4 {
+.pg-cabinet__spacer {
+  flex: 1;
+}
+
+.pg-cabinet__body {
+  width: min(64rem, 100%);
+  margin: 0 auto;
+  padding: 1rem 1rem 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.pg-cabinet__card {
+  padding: 0.9rem 1rem 1rem;
+  border: 1px solid var(--pg-border);
+  border-radius: var(--pg-radius);
+  background: var(--pg-panel);
+}
+
+.pg-cabinet__card h2 {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  margin: 0 0 0.4rem;
-  font-size: 0.9rem;
+  margin: 0 0 0.6rem;
+  font-size: 0.95rem;
 }
 
-.pg-cab__table tbody tr.is-live td:first-child {
+.pg-cabinet__new {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.pg-cabinet__new .pg-field {
+  margin: 0;
+}
+
+.pg-cabinet__new .pg-hint {
+  margin: 0;
+}
+
+.pg-cabinet__summary {
+  margin: 0 0 0 auto;
+}
+
+/* Идущее собеседование заметно и в списке. */
+.pg-iv.is-live {
+  border-color: var(--pg-good);
   box-shadow: inset 3px 0 0 var(--pg-good);
 }
 
-.pg-cab__table td.is-live {
-  color: var(--pg-good);
-  font-weight: 600;
-}
-
-.pg-cab__table td.is-live .codicon {
-  font-size: 9px;
-}
-
-.pg-cab__table tbody tr.is-static {
+.pg-cabinet__table tbody tr.is-static {
   cursor: default;
   opacity: 0.6;
 }
 
-.pg-cab__table tbody tr.is-static:hover {
+.pg-cabinet__table tbody tr.is-static:hover {
   background: transparent;
 }
 

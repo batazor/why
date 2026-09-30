@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { cancelInterview, createInterview, listInterviews, refreshSnapshot, renewInvite, reschedule, type Interview, type Schedule } from './interviews';
 import { inviteUrl, mailtoUrl } from './links';
 import { scenarioUpdatedAt as fetchScenarioUpdatedAt } from './scenarios';
@@ -37,12 +37,9 @@ export function InterviewsDialog({
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [copied, setCopied] = useState<string | null>(null);
-  /** Какое приглашение показано ссылкой: буфер обмена есть не везде, а ссылку можно выделить руками. */
+  /** Какое приглашение показать ссылкой сразу — только что созданное. */
   const [shown, setShown] = useState<string | null>(null);
   const [schedule, setSchedule] = useState<Schedule>({ at: null, minutes: 60 });
-  /** Какое собеседование сейчас переносят и на когда. */
-  const [moving, setMoving] = useState<{ id: string; schedule: Schedule } | null>(null);
   /** Когда сценарий правили последний раз на сервере — чтобы заметить, что снимок отстал. */
   const [scenarioUpdatedAt, setScenarioUpdatedAt] = useState<string | null>(null);
 
@@ -74,27 +71,14 @@ export function InterviewsDialog({
       const id = await createInterview(workspace, scenarioId, email, schedule);
       setEmail('');
       setSchedule({ at: null, minutes: 60 });
-      await refresh();
       setShown(id);
+      await refresh();
     } catch (reason) {
       setError((reason as Error).message);
     } finally {
       setBusy(false);
     }
   };
-
-  const copy = async (item: Interview) => {
-    setShown(item.id);
-    try {
-      await navigator.clipboard.writeText(inviteUrl(item.inviteToken));
-      setCopied(item.id);
-      setTimeout(() => setCopied(null), 1500);
-    } catch {
-      /* буфер недоступен */
-    }
-  };
-
-  const date = new Intl.DateTimeFormat(lang, { dateStyle: 'medium', timeStyle: 'short' });
 
   return (
     <div className="pg-dialog" role="dialog" aria-modal="true" aria-label={t('iv.title')} onClick={onClose}>
@@ -139,170 +123,221 @@ export function InterviewsDialog({
             <p className="pg-hint">{t('iv.empty')}</p>
           ) : (
             <ul className="pg-iv-list">
-              {items.map((item) => {
-                const open = item.status === 'scheduled' || item.status === 'live';
-                const pending = !item.candidate && open;
-                const expired = pending && item.inviteExpiresAt !== null && Date.parse(item.inviteExpiresAt) <= Date.now();
-                const when = formatSchedule({ at: item.scheduledAt, minutes: item.durationMinutes }, lang, t);
-                const notStarted = item.status === 'scheduled' && !item.startedAt;
-                // Сценарий правили после приглашения: до старта снимок можно подтянуть.
-                const stale =
-                  notStarted &&
-                  item.snapshotOf !== null &&
-                  scenarioUpdatedAt !== null &&
-                  Date.parse(scenarioUpdatedAt) > Date.parse(item.snapshotOf) + 1000;
-                const url = inviteUrl(item.inviteToken);
-                return (
-                  <li key={item.id} className={`pg-iv is-${item.status}`}>
-                    <div className="pg-iv__row">
-                    <span className="pg-iv__who">
-                      <strong>{item.candidate?.name ?? item.candidateEmail ?? t('iv.byLink')}</strong>
-                      <span className="pg-hint">
-                        {t(`iv.status.${item.status}`)} · {when ? `${t('when.on')} ${when}` : date.format(new Date(item.createdAt))}
-                        {pending ? ` · ${t('iv.notAccepted')}` : ''}
-                        {pending && item.inviteExpiresAt
-                          ? ` · ${expired ? t('link.expiredShort') : t('link.until', { date: date.format(new Date(item.inviteExpiresAt)) })}`
-                          : ''}
-                      </span>
-                    </span>
-                    {pending && !expired && (
-                      <button type="button" className="pg-button pg-button--small" onClick={() => copy(item)}>
-                        <i className={`codicon codicon-${copied === item.id ? 'check' : 'link'}`} aria-hidden="true" />{' '}
-                        {t(copied === item.id ? 'share.copied' : 'iv.copy')}
-                      </button>
-                    )}
-                    {notStarted && (
-                      <button
-                        type="button"
-                        className="pg-button pg-button--small"
-                        onClick={() =>
-                          setMoving(
-                            moving?.id === item.id
-                              ? null
-                              : { id: item.id, schedule: { at: item.scheduledAt, minutes: item.durationMinutes } },
-                          )
-                        }
-                      >
-                        <i className="codicon codicon-calendar" aria-hidden="true" /> {t(item.scheduledAt ? 'when.move' : 'when.set')}
-                      </button>
-                    )}
-                    {pending && (
-                      <button
-                        type="button"
-                        className="pg-button pg-button--small"
-                        title={t('iv.renewHint')}
-                        onClick={async () => {
-                          if (!expired && !confirm(t('iv.renewConfirm'))) return;
-                          try {
-                            await renewInvite(item.id);
-                            await refresh();
-                            setShown(item.id);
-                          } catch (reason) {
-                            setError((reason as Error).message);
-                          }
-                        }}
-                      >
-                        <i className="codicon codicon-refresh" aria-hidden="true" /> {t('iv.renew')}
-                      </button>
-                    )}
-                    {item.status !== 'cancelled' && (
-                      <button type="button" className="pg-button pg-button--small" onClick={() => onOpen(item.id)}>
-                        <i className="codicon codicon-play" aria-hidden="true" /> {t('iv.open')}
-                      </button>
-                    )}
-                    {open && (
-                      <button
-                        type="button"
-                        className="pg-icon-button"
-                        title={t('iv.cancel')}
-                        aria-label={t('iv.cancel')}
-                        onClick={async () => {
-                          if (!confirm(t('iv.cancelConfirm'))) return;
-                          try {
-                            await cancelInterview(item.id);
-                            await refresh();
-                          } catch (reason) {
-                            setError((reason as Error).message);
-                          }
-                        }}
-                      >
-                        <i className="codicon codicon-close" aria-hidden="true" />
-                      </button>
-                    )}
-                    </div>
-                    {stale && (
-                      <p className="pg-note pg-iv__stale">
-                        {t('iv.stale')}{' '}
-                        <button
-                          type="button"
-                          className="pg-link-button"
-                          onClick={async () => {
-                            try {
-                              await refreshSnapshot(item.id);
-                              await refresh();
-                            } catch (reason) {
-                              setError((reason as Error).message);
-                            }
-                          }}
-                        >
-                          {t('iv.refresh')}
-                        </button>
-                      </p>
-                    )}
-                    {moving?.id === item.id && (
-                      <form
-                        className="pg-iv__move"
-                        onSubmit={async (event) => {
-                          event.preventDefault();
-                          try {
-                            await reschedule(item.id, moving.schedule);
-                            setMoving(null);
-                            await refresh();
-                          } catch (reason) {
-                            setError((reason as Error).message);
-                          }
-                        }}
-                      >
-                        <ScheduleFields t={t} value={moving.schedule} onChange={(next) => setMoving({ id: item.id, schedule: next })} />
-                        <button type="submit" className="pg-button pg-button--small">
-                          {t('when.save')}
-                        </button>
-                      </form>
-                    )}
-                    {shown === item.id && pending && !expired && (
-                      <LinkBox
-                        t={t}
-                        url={url}
-                        expires={item.inviteExpiresAt ? t('link.until', { date: date.format(new Date(item.inviteExpiresAt)) }) : t('link.forever')}
-                        mail={mailtoUrl(
-                          item.candidateEmail ?? '',
-                          t('link.mail.subject.candidate', { title, workspace: workspace.name }),
-                          mailBody(t, 'candidate', title, workspace.name, url, when),
-                        )}
-                        extra={
-                          item.scheduledAt && (
-                            <CalendarButtons
-                              t={t}
-                              event={{
-                                title: t('when.eventTitle', { title }),
-                                details: t('when.eventDetails'),
-                                url,
-                                start: item.scheduledAt,
-                                minutes: item.durationMinutes,
-                                guest: item.candidateEmail ?? undefined,
-                              }}
-                            />
-                          )
-                        }
-                      />
-                    )}
-                  </li>
-                );
-              })}
+              {items.map((item) => (
+                <InterviewItem
+                  key={item.id}
+                  t={t}
+                  lang={lang}
+                  workspace={workspace}
+                  item={item}
+                  title={title}
+                  scenarioUpdatedAt={scenarioUpdatedAt}
+                  showLink={shown === item.id}
+                  onOpen={onOpen}
+                  onChanged={refresh}
+                  onError={setError}
+                />
+              ))}
             </ul>
           )}
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Одно собеседование в списке и всё, что с ним можно сделать: скопировать
+ * приглашение, перенести, выпустить новую ссылку, подтянуть снимок сценария,
+ * открыть, отменить. Одинаково в списке по сценарию и в кабинете.
+ */
+export function InterviewItem({
+  t,
+  lang,
+  workspace,
+  item,
+  title,
+  scenarioUpdatedAt,
+  showLink = false,
+  subtitle,
+  onOpen,
+  onChanged,
+  onError,
+}: {
+  t: T;
+  lang: string;
+  workspace: Workspace;
+  item: Interview;
+  /** Название сценария — для письма и события в календаре. */
+  title: string;
+  /** Когда сценарий правили последний раз: снимок старше — предложить обновить. */
+  scenarioUpdatedAt: string | null;
+  /** Раскрыть ссылку сразу — у только что созданного приглашения. */
+  showLink?: boolean;
+  /** Строка под именем: в кабинете — сценарий и кто назначил. */
+  subtitle?: ReactNode;
+  onOpen: (id: string) => void;
+  onChanged: () => Promise<void> | void;
+  onError: (message: string) => void;
+}) {
+  /** Что раскрыто под строкой: ссылка-приглашение или перенос. */
+  const [panel, setPanel] = useState<'link' | 'move' | null>(showLink ? 'link' : null);
+  const [moving, setMoving] = useState<Schedule>({ at: item.scheduledAt, minutes: item.durationMinutes });
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (showLink) setPanel('link');
+  }, [showLink]);
+
+  const date = new Intl.DateTimeFormat(lang, { dateStyle: 'medium', timeStyle: 'short' });
+  const now = Date.now();
+  const open = item.status === 'scheduled' || item.status === 'live';
+  const pending = !item.candidate && open;
+  const expired = pending && item.inviteExpiresAt !== null && Date.parse(item.inviteExpiresAt) <= now;
+  const when = formatSchedule({ at: item.scheduledAt, minutes: item.durationMinutes }, lang, t);
+  const notStarted = item.status === 'scheduled' && !item.startedAt;
+  const overdue = notStarted && item.scheduledAt !== null && Date.parse(item.scheduledAt) < now;
+  // Сценарий правили после приглашения: до старта снимок можно подтянуть.
+  const stale =
+    notStarted &&
+    item.snapshotOf !== null &&
+    scenarioUpdatedAt !== null &&
+    Date.parse(scenarioUpdatedAt) > Date.parse(item.snapshotOf) + 1000;
+  const url = inviteUrl(item.inviteToken);
+
+  const run = async (action: () => Promise<unknown>) => {
+    try {
+      await action();
+      await onChanged();
+    } catch (reason) {
+      onError((reason as Error).message);
+    }
+  };
+
+  const copy = async () => {
+    setPanel('link');
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* буфер недоступен — ссылка и так на экране */
+    }
+  };
+
+  return (
+    <li className={`pg-iv is-${item.status}`}>
+      <div className="pg-iv__row">
+        <span className="pg-iv__who">
+          <strong>{item.candidate?.name ?? item.candidateEmail ?? t('iv.byLink')}</strong>
+          <span className="pg-hint">
+            {t(`iv.status.${item.status}`)} · {when ? `${t('when.on')} ${when}` : date.format(new Date(item.createdAt))}
+            {overdue ? ` · ${t('iv.overdue')}` : ''}
+            {pending ? ` · ${t('iv.notAccepted')}` : ''}
+            {pending && item.inviteExpiresAt
+              ? ` · ${expired ? t('link.expiredShort') : t('link.until', { date: date.format(new Date(item.inviteExpiresAt)) })}`
+              : ''}
+          </span>
+          {subtitle && <span className="pg-hint">{subtitle}</span>}
+        </span>
+        {pending && !expired && (
+          <button type="button" className="pg-button pg-button--small" onClick={copy}>
+            <i className={`codicon codicon-${copied ? 'check' : 'link'}`} aria-hidden="true" /> {t(copied ? 'share.copied' : 'iv.copy')}
+          </button>
+        )}
+        {notStarted && (
+          <button
+            type="button"
+            className="pg-button pg-button--small"
+            onClick={() => {
+              setMoving({ at: item.scheduledAt, minutes: item.durationMinutes });
+              setPanel(panel === 'move' ? null : 'move');
+            }}
+          >
+            <i className="codicon codicon-calendar" aria-hidden="true" /> {t(item.scheduledAt ? 'when.move' : 'when.set')}
+          </button>
+        )}
+        {pending && (
+          <button
+            type="button"
+            className="pg-button pg-button--small"
+            title={t('iv.renewHint')}
+            onClick={() => {
+              if (!expired && !confirm(t('iv.renewConfirm'))) return;
+              run(() => renewInvite(item.id)).then(() => setPanel('link'));
+            }}
+          >
+            <i className="codicon codicon-refresh" aria-hidden="true" /> {t('iv.renew')}
+          </button>
+        )}
+        {item.status !== 'cancelled' && (
+          <button type="button" className="pg-button pg-button--small" onClick={() => onOpen(item.id)}>
+            <i className="codicon codicon-play" aria-hidden="true" /> {t('iv.open')}
+          </button>
+        )}
+        {open && (
+          <button
+            type="button"
+            className="pg-icon-button"
+            title={t('iv.cancel')}
+            aria-label={t('iv.cancel')}
+            onClick={() => {
+              if (confirm(t('iv.cancelConfirm'))) run(() => cancelInterview(item.id));
+            }}
+          >
+            <i className="codicon codicon-close" aria-hidden="true" />
+          </button>
+        )}
+      </div>
+      {stale && (
+        <p className="pg-note pg-iv__stale">
+          {t('iv.stale')}{' '}
+          <button type="button" className="pg-link-button" onClick={() => run(() => refreshSnapshot(item.id))}>
+            {t('iv.refresh')}
+          </button>
+        </p>
+      )}
+      {panel === 'move' && (
+        <form
+          className="pg-iv__move"
+          onSubmit={(event) => {
+            event.preventDefault();
+            run(() => reschedule(item.id, moving)).then(() => setPanel(null));
+          }}
+        >
+          <ScheduleFields t={t} value={moving} onChange={setMoving} />
+          <button type="submit" className="pg-button pg-button--small">
+            {t('when.save')}
+          </button>
+        </form>
+      )}
+      {panel === 'link' && pending && !expired && (
+        <LinkBox
+          t={t}
+          url={url}
+          expires={item.inviteExpiresAt ? t('link.until', { date: date.format(new Date(item.inviteExpiresAt)) }) : t('link.forever')}
+          mail={mailtoUrl(
+            item.candidateEmail ?? '',
+            t('link.mail.subject.candidate', { title, workspace: workspace.name }),
+            mailBody(t, 'candidate', title, workspace.name, url, when),
+          )}
+          extra={
+            item.scheduledAt && (
+              <CalendarButtons
+                t={t}
+                event={{
+                  title: t('when.eventTitle', { title }),
+                  details: t('when.eventDetails'),
+                  url,
+                  start: item.scheduledAt,
+                  minutes: item.durationMinutes,
+                  guest: item.candidateEmail ?? undefined,
+                }}
+              />
+            )
+          }
+        />
+      )}
+    </li>
   );
 }

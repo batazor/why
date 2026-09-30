@@ -162,10 +162,29 @@ export function setParams(params: Partial<Record<'invite' | 'interview' | 'join'
   history.replaceState(null, '', url);
 }
 
-export function inviteUrl(token: string, param: 'invite' | 'join' | 'share' = 'invite'): string {
+/**
+ * Адрес песочницы без параметров. У песочницы есть подстраницы (кабинет),
+ * а приглашения и собеседования открываются только в ней самой, поэтому
+ * ссылка строится от неё, откуда бы её ни выпустили.
+ */
+export function playgroundUrl(): URL {
   const url = new URL(location.href);
   url.search = '';
   url.hash = '';
+  url.pathname = url.pathname.replace(/cabinet\/?$/, '');
+  if (!url.pathname.endsWith('/')) url.pathname += '/';
+  return url;
+}
+
+/** Кабинет интервьюера — подстраница песочницы. */
+export function cabinetUrl(): string {
+  const url = playgroundUrl();
+  url.pathname += 'cabinet/';
+  return url.toString();
+}
+
+export function inviteUrl(token: string, param: 'invite' | 'join' | 'share' = 'invite'): string {
+  const url = playgroundUrl();
   url.searchParams.set(param, token);
   return url.toString();
 }
@@ -181,9 +200,7 @@ export function mailtoUrl(email: string, subject: string, body: string): string 
 
 /** Ссылка на само собеседование — коллегам по пространству: откроют отчёт и запись. */
 export function interviewUrl(id: string): string {
-  const url = new URL(location.href);
-  url.search = '';
-  url.hash = '';
+  const url = playgroundUrl();
   url.searchParams.set('interview', id);
   return url.toString();
 }

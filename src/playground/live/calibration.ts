@@ -1,6 +1,6 @@
 import { db, must, toPerson, type ProfileRow } from './db';
 import type { Person } from './auth';
-import type { InterviewRow, InterviewStatus } from './interviews';
+import { toInterview, type Interview, type InterviewRow, type InterviewStatus } from './interviews';
 import { signalsFrom, toEntry, type JournalEntry, type JournalRow } from './journal';
 import { migrate, totalScore, type Criterion, type Scenario, type Session, type Signal } from '../model';
 
@@ -13,12 +13,10 @@ export interface CalibrationRow {
   scenarioTitle: string;
   status: InterviewStatus;
   candidate: string;
-  /** Кандидат уже принял приглашение — есть кому проходить. */
-  accepted: boolean;
+  /** Само собеседование — приглашение, время, кандидат: кабинету нужны и действия над ним. */
+  interview: Interview;
   /** Кто назначил собеседование. */
   scheduledBy: Person;
-  scheduledAt: string | null;
-  durationMinutes: number;
   /** Кто оценивал; если никто — тот, кто назначил. */
   interviewers: Person[];
   /** Оценки каждого, кто вёл: итог по его баллам. */
@@ -117,10 +115,8 @@ async function collect(rows: InterviewRow[]): Promise<CalibrationRow[]> {
       scenarioTitle: row.brief?.title ?? titles.get(row.scenario_id) ?? '',
       status: row.status,
       candidate: (row.candidate_id && byId.get(row.candidate_id)?.name) || row.candidate_email || '',
-      accepted: Boolean(row.candidate_id),
+      interview: toInterview(row, row.candidate_id ? (byId.get(row.candidate_id) ?? null) : null),
       scheduledBy: person(row.interviewer_id),
-      scheduledAt: row.scheduled_at,
-      durationMinutes: row.duration_minutes,
       interviewers: own.length ? own.map((review) => review.reviewer) : [person(row.interviewer_id)],
       reviews: own,
       at: row.started_at ?? row.scheduled_at ?? row.created_at,

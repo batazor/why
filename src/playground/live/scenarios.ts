@@ -143,6 +143,20 @@ export class HybridRepository implements DesignRepository {
   }
 }
 
+export interface ScenarioSummary {
+  id: string;
+  title: string;
+  updatedAt: string;
+}
+
+/** Сценарии пространства — кабинету: кого звать на что, и не отстал ли снимок. */
+export async function listScenarios(workspaceId: string): Promise<ScenarioSummary[]> {
+  const rows = must(
+    await db().from('scenarios').select('id, title, updated_at').eq('workspace_id', workspaceId).order('updated_at', { ascending: false }),
+  ) as { id: string; title: string; updated_at: string }[];
+  return rows.map((row) => ({ id: row.id, title: row.title, updatedAt: row.updated_at }));
+}
+
 /** Когда сценарий на сервере меняли последний раз — сверить со снимками собеседований. */
 export async function scenarioUpdatedAt(id: string): Promise<string | null> {
   const row = must(await db().from('scenarios').select('updated_at').eq('id', id).maybeSingle()) as { updated_at: string } | null;

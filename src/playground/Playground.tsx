@@ -38,11 +38,10 @@ import { Gate, LiveBar, RemoteCursors, WelcomeGate } from './live/live-ui';
 import { useCloud } from './live/use-cloud';
 import { InterviewRepository } from './live/interviews';
 import { isCloudId } from './live/db';
-import { openShare, paramFromUrl, setParams } from './live/links';
+import { cabinetUrl, openShare, paramFromUrl, setParams } from './live/links';
 import { InterviewsDialog } from './live/interviews-dialog';
 import { TeamDialog } from './live/team-dialog';
 import { CalibrationDialog } from './live/calibration-dialog';
-import { CabinetDialog } from './live/cabinet-dialog';
 import { formatSchedule } from './live/calendar';
 import { CandidateEnd } from './live/candidate-end';
 import { ReportPanel } from './live/report-panel';
@@ -100,7 +99,7 @@ export default function Playground({ lang, repository }: Props) {
   /** Отчёт на пол-экрана: таблице оценок панели в узкой колонке тесно. */
   const [reportWide, setReportWide] = useState(false);
   /** Какое окно открыто поверх песочницы — одно за раз. */
-  const [dialog, setDialog] = useState<'share' | 'interviews' | 'team' | 'calibration' | 'cabinet' | null>(null);
+  const [dialog, setDialog] = useState<'share' | 'interviews' | 'team' | 'calibration' | null>(null);
   const closeDialog = useCallback(() => setDialog(null), []);
   /** Кандидат закрыл экран конца собеседования — смотрит свою доску. */
   const [endSeen, setEndSeen] = useState(false);
@@ -667,9 +666,9 @@ export default function Playground({ lang, repository }: Props) {
         />
 
         {inWorkspace && (role === 'interviewer' || role === 'author') && (
-          <button type="button" className="pg-button" onClick={() => setDialog('cabinet')} title={t('cab.hint')}>
+          <a className="pg-button" href={cabinetUrl()} title={t('cab.hint')}>
             <i className="codicon codicon-dashboard" aria-hidden="true" /> {t('cab.button')}
-          </button>
+          </a>
         )}
 
         {inWorkspace && isCloudId(design.id) && (
@@ -704,6 +703,7 @@ export default function Playground({ lang, repository }: Props) {
             finished={frozen}
             workspaceName={cloud.mode === 'workspace' ? cloud.workspace.name : undefined}
             onTeam={inWorkspace ? () => setDialog('team') : undefined}
+            onCabinet={inWorkspace ? () => location.assign(cabinetUrl()) : undefined}
             status={live.status}
             peers={live.peers}
             onSignIn={auth.signIn}
@@ -766,19 +766,6 @@ export default function Playground({ lang, repository }: Props) {
             switchWorkspace(next);
           }}
           onChanged={reloadWorkspace}
-          onClose={closeDialog}
-        />
-      )}
-      {dialog === 'cabinet' && cloud.mode === 'workspace' && auth.me && (
-        <CabinetDialog
-          t={t}
-          lang={lang}
-          me={auth.me}
-          workspaceId={cloud.workspace.id}
-          onOpen={(id) => {
-            closeDialog();
-            openInterview(id);
-          }}
           onClose={closeDialog}
         />
       )}

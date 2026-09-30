@@ -90,12 +90,17 @@ export async function listInterviews(scenarioId: string): Promise<Interview[]> {
     ? (must(await db().from('profiles').select('id, name, email, avatar_url').in('id', ids)) as ProfileRow[])
     : [];
   const byId = new Map(people.map((row) => [row.id, toPerson(row)]));
-  return rows.map((row) => ({
+  return rows.map((row) => toInterview(row, row.candidate_id ? (byId.get(row.candidate_id) ?? null) : null));
+}
+
+/** Строка собеседования — в то, с чем работают списки; кандидата подставляет вызывающий. */
+export function toInterview(row: InterviewRow, candidate: Person | null): Interview {
+  return {
     id: row.id,
     scenarioId: row.scenario_id,
     status: row.status,
     candidateEmail: row.candidate_email,
-    candidate: row.candidate_id ? (byId.get(row.candidate_id) ?? null) : null,
+    candidate,
     inviteToken: row.invite_token,
     inviteExpiresAt: row.invite_expires_at,
     scheduledAt: row.scheduled_at,
@@ -103,7 +108,7 @@ export async function listInterviews(scenarioId: string): Promise<Interview[]> {
     startedAt: row.started_at,
     snapshotOf: row.brief?.updated_at ?? null,
     createdAt: row.created_at,
-  }));
+  };
 }
 
 /**
