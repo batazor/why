@@ -19,7 +19,8 @@ import { createTeamInvite, listTeamInvites, type Workspace, type WorkspaceRole }
  * - копией — ссылка из базы с эталоном, другому автору.
  *
  * Любая ссылка отсюда — запись в базе: у неё есть срок, её можно отозвать, и
- * видно, открывали ли её. Внизу — все живые ссылки на этот сценарий.
+ * видно, открывали ли её. Внизу — все живые ссылки на этот сценарий. Сам
+ * проект в адрес не пакуется никогда: он уже в базе.
  */
 
 type Target = 'candidate' | 'trainee' | 'colleague' | 'copy';
@@ -41,7 +42,6 @@ export function CloudShare({
   t,
   lang,
   onInterviews,
-  onLegacy,
 }: {
   design: Design;
   workspace: Workspace;
@@ -49,8 +49,6 @@ export function CloudShare({
   lang: string;
   /** Открыть список собеседований по сценарию. */
   onInterviews: () => void;
-  /** Старый способ: проект в самой ссылке или файлом. */
-  onLegacy: () => void;
 }) {
   const [target, setTarget] = useState<Target>('candidate');
   const [email, setEmail] = useState('');
@@ -270,10 +268,6 @@ export function CloudShare({
         )}
         <p className="pg-hint">{t('link.invitesElsewhere')}</p>
       </div>
-
-      <button type="button" className="pg-link-button" onClick={onLegacy}>
-        {t('link.legacy')}
-      </button>
     </div>
   );
 }
