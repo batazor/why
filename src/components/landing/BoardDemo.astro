@@ -1,0 +1,472 @@
+---
+/**
+ * Живая доска на лендинге: макет, а не снимок экрана.
+ *
+ * Кандидат водит курсором по своей схеме, интервьюер дорисовывает кэш —
+ * блок с пунктиром и значком, как в песочнице. Снимок экрана устарел бы с
+ * первой правкой интерфейса, а здесь те же цвета и та же разметка блоков,
+ * что у настоящего полотна, и всё идёт по кругу за 12 секунд. При reduced
+ * motion — сразу конечный кадр: кэш уже на месте.
+ */
+import type { Locale } from '../../i18n/ui';
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+
+const text = {
+  ru: {
+    live: 'Идёт · 12:48',
+    title: 'Сокращатель ссылок',
+    you: 'Вы',
+    candidate: 'Алекс',
+    colleague: 'Мира',
+    blocks: {
+      client: ['Браузер', 'клиент'],
+      gateway: ['API Gateway', 'вход'],
+      service: ['Сервис ссылок', 'вычисления'],
+      kafka: ['Kafka', 'очередь'],
+      postgres: ['Postgres', 'хранилище'],
+      redis: ['Redis', 'кэш'],
+    },
+    legend: ['курсор кандидата', 'курсор интервьюера', 'дорисовал интервьюер'],
+    label: 'Макет общей доски: кандидат рисует схему, интервьюер дорисовывает кэш',
+  },
+  en: {
+    live: 'Live · 12:48',
+    title: 'URL shortener',
+    you: 'You',
+    candidate: 'Alex',
+    colleague: 'Mira',
+    blocks: {
+      client: ['Browser', 'client'],
+      gateway: ['API Gateway', 'edge'],
+      service: ['Link service', 'compute'],
+      kafka: ['Kafka', 'queue'],
+      postgres: ['Postgres', 'storage'],
+      redis: ['Redis', 'cache'],
+    },
+    legend: ['candidate’s cursor', 'interviewer’s cursor', 'drawn by the interviewer'],
+    label: 'A mock of the shared board: the candidate draws, the interviewer adds a cache',
+  },
+}[lang];
+
+/** Блок как на полотне: полоса цвета группы сверху, значок, название и тип. */
+const blocks = [
+  { id: 'client', x: 20, y: 135, tint: '#6b7280' },
+  { id: 'gateway', x: 205, y: 135, tint: '#0e8a8a' },
+  { id: 'service', x: 390, y: 135, tint: '#2f5fd0' },
+  { id: 'kafka', x: 590, y: 35, tint: '#8b4fc9' },
+  { id: 'postgres', x: 590, y: 235, tint: '#b7621b' },
+] as const;
+
+const W = 150;
+const H = 50;
+---
+
+<figure class="board" role="img" aria-label={text.label}>
+  <div class="board__bar">
+    <span class="board__live"><span class="board__dot"></span>{text.live}</span>
+    <span class="board__title">{text.title}</span>
+    <span class="board__people" aria-hidden="true">
+      <span class="board__avatar board__avatar--candidate">{text.candidate[0]}</span>
+      <span class="board__avatar board__avatar--interviewer">{text.you}</span>
+      <span class="board__avatar board__avatar--interviewer">{text.colleague[0]}</span>
+    </span>
+  </div>
+
+  <svg class="board__canvas" viewBox="0 0 760 320" aria-hidden="true">
+    <defs>
+      <pattern id="board-dots" width="18" height="18" patternUnits="userSpaceOnUse">
+        <circle cx="1" cy="1" r="1" class="board__grid" />
+      </pattern>
+      <marker id="board-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0 10 5 0 10z" class="board__arrowhead" />
+      </marker>
+      <marker id="board-arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0 10 5 0 10z" class="board__arrowhead board__arrowhead--accent" />
+      </marker>
+    </defs>
+    <rect width="760" height="320" fill="url(#board-dots)" />
+
+    <g class="board__edges">
+      <path d="M170 160H203" marker-end="url(#board-arrow)" />
+      <path d="M355 160H388" marker-end="url(#board-arrow)" />
+      <path class="is-async" d="M540 148C565 148 560 60 588 60" marker-end="url(#board-arrow)" />
+      <path d="M540 172C565 172 560 260 588 260" marker-end="url(#board-arrow)" />
+    </g>
+
+    {
+      blocks.map((block) => (
+        <g class="board__block" transform={`translate(${block.x} ${block.y})`} style={`--tint: ${block.tint}`}>
+          <rect class="board__body" width={W} height={H} rx="8" />
+          <path class="board__stripe" d={`M8 1.5H${W - 8}`} />
+          <rect class="board__icon" x="12" y="17" width="16" height="16" rx="4" />
+          <text class="board__name" x="38" y="23">{text.blocks[block.id][0]}</text>
+          <text class="board__kind" x="38" y="38">{text.blocks[block.id][1]}</text>
+        </g>
+      ))
+    }
+
+    {/* Кэш рисует интервьюер: появляется, связь дотягивается, потом круг заново. */}
+    <g class="board__added">
+      <path class="board__new-edge" d="M540 160H588" marker-end="url(#board-arrow-accent)" />
+      <g class="board__block board__block--by" transform="translate(590 135)" style="--tint: #b7621b">
+        <rect class="board__outline" x="-4" y="-4" width={W + 8} height={H + 8} rx="11" />
+        <rect class="board__body" width={W} height={H} rx="8" />
+        <path class="board__stripe" d={`M8 1.5H${W - 8}`} />
+        <rect class="board__icon" x="12" y="17" width="16" height="16" rx="4" />
+        <text class="board__name" x="38" y="23">{text.blocks.redis[0]}</text>
+        <text class="board__kind" x="38" y="38">{text.blocks.redis[1]}</text>
+        <g transform={`translate(${W} 0)`}>
+          <circle class="board__badge" r="9" />
+          <circle class="board__badge-icon" cy="-2.2" r="2.4" />
+          <path class="board__badge-icon" d="M-4.2 4.6c.6-2.3 2.3-3.4 4.2-3.4s3.6 1.1 4.2 3.4" />
+        </g>
+      </g>
+    </g>
+
+    <g class="board__cursor board__cursor--candidate">
+      <path d="M0 0v17l4.6-4.3 3 6.8 3-1.3-3-6.6H14z" />
+      <rect x="12" y="17" width={text.candidate.length * 7.4 + 12} height="18" rx="4" />
+      <text x="18" y="30">{text.candidate}</text>
+    </g>
+    <g class="board__cursor board__cursor--interviewer">
+      <path d="M0 0v17l4.6-4.3 3 6.8 3-1.3-3-6.6H14z" />
+      <rect x="12" y="17" width={text.you.length * 7.4 + 12} height="18" rx="4" />
+      <text x="18" y="30">{text.you}</text>
+    </g>
+  </svg>
+
+  <figcaption class="board__legend">
+    <span><i class="board__swatch board__swatch--candidate"></i>{text.legend[0]}</span>
+    <span><i class="board__swatch board__swatch--interviewer"></i>{text.legend[1]}</span>
+    <span><i class="board__swatch board__swatch--by"></i>{text.legend[2]}</span>
+  </figcaption>
+</figure>
+
+<style>
+  .board {
+    --candidate: #d9480f;
+    --interviewer: var(--accent);
+    margin: 0 0 1.2rem;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--panel);
+    box-shadow: 0 10px 40px var(--shadow);
+    overflow: hidden;
+  }
+
+  .board__bar {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0.55rem 0.85rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.8rem;
+  }
+
+  .board__live {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, #2f9e44 12%, var(--panel));
+    color: color-mix(in srgb, #2f9e44 80%, var(--fg));
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .board__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #2f9e44;
+    animation: board-pulse 1.6s ease-in-out infinite;
+  }
+
+  .board__title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .board__people {
+    display: flex;
+    gap: 0.35rem;
+  }
+
+  .board__avatar {
+    display: grid;
+    place-items: center;
+    min-width: 1.6rem;
+    height: 1.6rem;
+    padding: 0 0.3rem;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--fg);
+    font-size: 0.68rem;
+    font-weight: 600;
+  }
+
+  .board__avatar--candidate {
+    box-shadow: 0 0 0 2px var(--candidate);
+  }
+
+  .board__avatar--interviewer {
+    box-shadow: 0 0 0 2px var(--interviewer);
+  }
+
+  .board__canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    background: color-mix(in srgb, var(--bg) 60%, var(--panel));
+  }
+
+  .board__grid {
+    fill: color-mix(in srgb, var(--muted) 35%, transparent);
+  }
+
+  .board__edges path,
+  .board__new-edge {
+    fill: none;
+    stroke: color-mix(in srgb, var(--muted) 70%, transparent);
+    stroke-width: 1.6;
+  }
+
+  .board__edges .is-async {
+    stroke-dasharray: 5 4;
+  }
+
+  .board__arrowhead {
+    fill: color-mix(in srgb, var(--muted) 70%, transparent);
+  }
+
+  .board__arrowhead--accent {
+    fill: var(--interviewer);
+  }
+
+  .board__body {
+    fill: var(--panel);
+    stroke: var(--border);
+  }
+
+  .board__stripe {
+    stroke: var(--tint);
+    stroke-width: 3;
+    stroke-linecap: round;
+  }
+
+  .board__icon {
+    fill: color-mix(in srgb, var(--tint) 18%, var(--panel));
+    stroke: var(--tint);
+  }
+
+  .board__name {
+    fill: var(--fg);
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .board__kind {
+    fill: var(--muted);
+    font-size: 11px;
+  }
+
+  .board__outline {
+    fill: none;
+    stroke: var(--interviewer);
+    stroke-width: 1.6;
+    stroke-dasharray: 5 4;
+  }
+
+  .board__badge {
+    fill: var(--interviewer);
+  }
+
+  .board__badge-icon {
+    fill: none;
+    stroke: #fff;
+    stroke-width: 1.4;
+    stroke-linecap: round;
+  }
+
+  .board__new-edge {
+    stroke: var(--interviewer);
+    stroke-dasharray: 48;
+    stroke-dashoffset: 0;
+  }
+
+  .board__cursor path {
+    stroke: #fff;
+    stroke-width: 1.2;
+  }
+
+  .board__cursor text {
+    fill: #fff;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .board__cursor--candidate path,
+  .board__cursor--candidate rect {
+    fill: var(--candidate);
+  }
+
+  .board__cursor--interviewer path,
+  .board__cursor--interviewer rect {
+    fill: var(--interviewer);
+  }
+
+  /* Конечный кадр — он же кадр без анимации: кэш на месте, курсоры у своих блоков. */
+  .board__cursor--candidate {
+    transform: translate(300px, 112px);
+  }
+
+  .board__cursor--interviewer {
+    transform: translate(690px, 175px);
+  }
+
+  .board__legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.1rem;
+    padding: 0.55rem 0.85rem;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 0.78rem;
+  }
+
+  .board__legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .board__swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+  }
+
+  .board__swatch--candidate {
+    background: var(--candidate);
+  }
+
+  .board__swatch--interviewer {
+    background: var(--interviewer);
+  }
+
+  .board__swatch--by {
+    border: 1.5px dashed var(--interviewer);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .board__cursor--candidate {
+      animation: board-candidate 12s ease-in-out infinite;
+    }
+
+    .board__cursor--interviewer {
+      animation: board-interviewer 12s ease-in-out infinite;
+    }
+
+    .board__block--by {
+      animation: board-appear 12s ease-out infinite;
+    }
+
+    .board__new-edge {
+      animation: board-edge 12s ease-out infinite;
+    }
+  }
+
+  /* Кандидат рассуждает над схемой: от входа к сервису, к базе и обратно. */
+  @keyframes board-candidate {
+    0%,
+    100% {
+      transform: translate(300px, 112px);
+    }
+    18% {
+      transform: translate(470px, 118px);
+    }
+    32% {
+      transform: translate(520px, 250px);
+    }
+    50% {
+      transform: translate(455px, 205px);
+    }
+    72% {
+      transform: translate(270px, 205px);
+    }
+  }
+
+  /* Интервьюер приходит справа, ставит кэш и отходит в сторону. */
+  @keyframes board-interviewer {
+    0%,
+    12% {
+      transform: translate(735px, 300px);
+    }
+    30%,
+    40% {
+      transform: translate(640px, 165px);
+    }
+    58%,
+    100% {
+      transform: translate(690px, 175px);
+    }
+  }
+
+  @keyframes board-appear {
+    0%,
+    32% {
+      opacity: 0;
+      transform: translate(590px, 141px) scale(0.96);
+    }
+    38%,
+    92% {
+      opacity: 1;
+      transform: translate(590px, 135px);
+    }
+    98%,
+    100% {
+      opacity: 0;
+      transform: translate(590px, 135px);
+    }
+  }
+
+  @keyframes board-edge {
+    0%,
+    40% {
+      stroke-dashoffset: 48;
+      opacity: 1;
+    }
+    50%,
+    92% {
+      stroke-dashoffset: 0;
+      opacity: 1;
+    }
+    98%,
+    100% {
+      stroke-dashoffset: 0;
+      opacity: 0;
+    }
+  }
+
+  @keyframes board-pulse {
+    50% {
+      opacity: 0.35;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .board__dot {
+      animation: none;
+    }
+  }
+</style>

@@ -3,6 +3,9 @@ import Base from '../../../layouts/Base.astro';
 import { locales, localePath, assetPath, type Locale } from '../../../i18n/ui';
 import FeatureGrid from '../../../components/landing/FeatureGrid.astro';
 import Icon from '../../../components/landing/Icon.astro';
+import BoardDemo from '../../../components/landing/BoardDemo.astro';
+import AssistantDemo from '../../../components/landing/AssistantDemo.astro';
+import ReportDemo from '../../../components/landing/ReportDemo.astro';
 
 export function getStaticPaths() {
   return locales.map((lang) => ({ params: { lang } }));
@@ -423,12 +426,15 @@ const playground = localePath(lang, 'playground');
 
     <section class="features" data-reveal>
       <h2>{copy.liveTitle}</h2>
+      <BoardDemo lang={lang} />
       <FeatureGrid cards={copy.live} />
     </section>
 
     <section class="ai" data-reveal>
       <h2>{copy.aiTitle}</h2>
-      <div class="ai__grid">
+      <div class="ai__layout">
+        <AssistantDemo lang={lang} />
+        <div class="ai__grid">
         {
           copy.ai.map((card) => (
             <article class="ai__card" data-reveal-item>
@@ -442,6 +448,7 @@ const playground = localePath(lang, 'playground');
             </article>
           ))
         }
+        </div>
       </div>
       <p class="ai__keys">{copy.aiKeys}</p>
     </section>
@@ -457,8 +464,9 @@ const playground = localePath(lang, 'playground');
       <ul class="practice__list">{copy.practice.map((item) => <li data-reveal-item>{item}</li>)}</ul>
     </section>
 
-    <section class="flow" id="flow" data-reveal>
+    <section class="steps" id="flow" data-reveal>
       <h2>{copy.flowTitle}</h2>
+      <div class="flow__layout">
       <ol class="flow__list">
         {
           copy.flow.map(([name, text], i) => (
@@ -472,6 +480,10 @@ const playground = localePath(lang, 'playground');
           ))
         }
       </ol>
+        <div class="flow__demo">
+          <ReportDemo lang={lang} />
+        </div>
+      </div>
     </section>
 
     <section class="aside-pair" data-reveal>
@@ -688,9 +700,16 @@ const playground = localePath(lang, 'playground');
 
   /* ---------- ИИ ---------- */
 
+  /* Слева — макет помощника, справа — что он умеет и ИИ-интервьюер. */
+  .ai__layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    gap: 1rem;
+    align-items: start;
+  }
+
   .ai__grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 1rem;
   }
 
@@ -768,6 +787,20 @@ const playground = localePath(lang, 'playground');
   }
 
   /* ---------- ход собеседования ---------- */
+
+  /* Шаги слева, справа — отчёт, которым они заканчиваются; он держится на
+     экране, пока шаги прокручиваются. */
+  .flow__layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 24rem);
+    gap: 2rem;
+    align-items: start;
+  }
+
+  .flow__demo {
+    position: sticky;
+    top: 5rem;
+  }
 
   .flow__list {
     display: grid;
@@ -865,8 +898,13 @@ const playground = localePath(lang, 'playground');
     }
 
     .roles__grid,
-    .ai__grid {
+    .ai__layout,
+    .flow__layout {
       grid-template-columns: minmax(0, 1fr);
+    }
+
+    .flow__demo {
+      position: static;
     }
   }
 </style>

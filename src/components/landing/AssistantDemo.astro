@@ -1,0 +1,292 @@
+---
+/**
+ * ИИ-помощник на лендинге: макет вкладки, как её видит интервьюер.
+ *
+ * Когда до макета доскроллили, вопросы появляются по одному, будто модель
+ * их дописывает, потом — черновик оценки с кнопками «Принять». Один раз, без
+ * круга: ответ, который пропадает, пока его читают, только раздражает.
+ * Вопросы — про ту же схему, что на доске выше: сокращатель ссылок без кэша.
+ * Без JS и при reduced motion всё видно сразу.
+ */
+import type { Locale } from '../../i18n/ui';
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+
+const text = {
+  ru: {
+    tab: 'ИИ-помощник',
+    model: 'Claude Opus 5',
+    ask: 'Что спросить сейчас',
+    draft: 'Черновик оценки',
+    questions: 'Вопросы',
+    items: [
+      ['Что будет с редиректами, если Postgres минуту недоступен?', 'В эталоне перед базой кэш, у кандидата его нет.'],
+      ['Как сервис выдаёт короткий код, чтобы два экземпляра не выдали один?', 'Критерий «ключи и хранение» ещё не затронут.'],
+      ['Сколько чтений в секунду на пике — хватит ли одной базы?', 'Оценки нагрузки пока пустые.'],
+    ],
+    draftTitle: 'Черновик оценки',
+    criteria: [
+      ['Требования и API', 2, 'accepted'],
+      ['Ключи и хранение', 1, 'accept'],
+      ['Отказоустойчивость', null, 'none'],
+    ],
+    accept: 'Принять',
+    accepted: 'принято',
+    label: 'Макет ИИ-помощника: три вопроса для кандидата и черновик оценки по критериям',
+  },
+  en: {
+    tab: 'AI assistant',
+    model: 'Claude Opus 5',
+    ask: 'What to ask now',
+    draft: 'Draft score',
+    questions: 'Questions',
+    items: [
+      ['What happens to redirects if Postgres is down for a minute?', 'The reference has a cache in front of the database; the candidate has none.'],
+      ['How does the service issue a short code so two instances never hand out the same one?', 'The “keys and storage” criterion is not covered yet.'],
+      ['How many reads per second at peak — is one database enough?', 'The load estimates are still empty.'],
+    ],
+    draftTitle: 'Draft score',
+    criteria: [
+      ['Requirements and API', 2, 'accepted'],
+      ['Keys and storage', 1, 'accept'],
+      ['Fault tolerance', null, 'none'],
+    ],
+    accept: 'Accept',
+    accepted: 'accepted',
+    label: 'A mock of the AI assistant: three questions for the candidate and a draft score per criterion',
+  },
+}[lang];
+---
+
+<figure class="assist" role="img" aria-label={text.label}>
+  <div class="assist__bar">
+    <span class="assist__tab">{text.tab}</span>
+    <span class="assist__model">✦ {text.model}</span>
+  </div>
+  <div class="assist__body" aria-hidden="true">
+    <div class="assist__actions">
+      <span class="assist__button assist__button--primary">{text.ask}</span>
+      <span class="assist__button">{text.draft}</span>
+    </div>
+
+    <p class="assist__heading">{text.questions}</p>
+    <ol class="assist__questions">
+      {
+        text.items.map(([question, why], i) => (
+          <li style={`--i: ${i}`}>
+            <span class="assist__q">{question}</span>
+            <span class="assist__why">{why}</span>
+          </li>
+        ))
+      }
+    </ol>
+
+    <p class="assist__heading">{text.draftTitle}</p>
+    <ul class="assist__draft">
+      {
+        text.criteria.map(([name, level, state], i) => (
+          <li style={`--i: ${i + 3}`}>
+            <span class="assist__criterion">{name}</span>
+            <span class:list={['assist__level', level === null ? 'is-empty' : `is-${level}`]}>{level ?? '—'}</span>
+            {state === 'accept' && <span class="assist__button assist__button--small">{text.accept}</span>}
+            {state === 'accepted' && <span class="assist__done">{text.accepted}</span>}
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+</figure>
+
+<script>
+  import { inView } from 'motion';
+
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    document.querySelectorAll<HTMLElement>('.assist').forEach((demo) => {
+      demo.classList.add('is-waiting');
+      inView(
+        demo,
+        () => {
+          demo.classList.replace('is-waiting', 'is-playing');
+        },
+        { amount: 0.4 },
+      );
+    });
+  }
+</script>
+
+<style>
+  .assist {
+    --tone: #8a70c9;
+    margin: 0;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--panel);
+    box-shadow: 0 10px 40px var(--shadow);
+    overflow: hidden;
+    font-size: 0.85rem;
+  }
+
+  .assist__bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8rem;
+    padding: 0.55rem 0.85rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .assist__tab {
+    font-weight: 600;
+  }
+
+  .assist__model {
+    color: var(--muted);
+    font-size: 0.78rem;
+  }
+
+  .assist__body {
+    display: grid;
+    gap: 0.55rem;
+    padding: 0.85rem;
+  }
+
+  .assist__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .assist__button {
+    display: inline-block;
+    padding: 0.25rem 0.65rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--panel);
+    font-size: 0.78rem;
+    white-space: nowrap;
+  }
+
+  .assist__button--primary {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--panel);
+  }
+
+  .assist__button--small {
+    padding: 0.1rem 0.5rem;
+    font-size: 0.72rem;
+  }
+
+  .assist__heading {
+    margin: 0.35rem 0 0;
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .assist__questions {
+    display: grid;
+    gap: 0.45rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .assist__questions li {
+    display: grid;
+    gap: 0.15rem;
+    padding: 0.5rem 0.65rem;
+    border-left: 3px solid var(--tone);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--tone) 7%, var(--panel));
+  }
+
+  .assist__q {
+    line-height: 1.4;
+  }
+
+  .assist__why {
+    color: var(--muted);
+    font-size: 0.78rem;
+    line-height: 1.4;
+  }
+
+  .assist__draft {
+    display: grid;
+    gap: 0.3rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .assist__draft li {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .assist__draft li:last-child {
+    border-bottom: 0;
+  }
+
+  .assist__criterion {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Уровни 0–3 — те же цвета, что у баллов в песочнице: от красного к зелёному. */
+  .assist__level {
+    display: grid;
+    place-items: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 6px;
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.78rem;
+  }
+
+  .assist__level.is-1 {
+    background: #d98a1c;
+  }
+
+  .assist__level.is-2 {
+    background: #5b9b3a;
+  }
+
+  .assist__level.is-empty {
+    border: 1px dashed var(--border);
+    color: var(--muted);
+  }
+
+  .assist__done {
+    color: var(--muted);
+    font-size: 0.75rem;
+  }
+
+  /* Ответ модели приходит по частям: строки проявляются одна за другой.
+     Прячет их скрипт, а не CSS, — без него всё видно. */
+  .assist.is-waiting li {
+    opacity: 0;
+  }
+
+  .assist.is-playing li {
+    animation: assist-in 0.45s ease-out backwards;
+    animation-delay: calc(0.3s + var(--i) * 0.8s);
+  }
+
+  @keyframes assist-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+  }
+</style>

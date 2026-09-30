@@ -1,0 +1,393 @@
+---
+/**
+ * Отчёт на лендинге: макет страницы, которую получает тот, кто решает о найме.
+ *
+ * Баллы двух интервьюеров панели по критериям, итог, открытые подсказки,
+ * сигналы и запись доски: ползунок едет по времени, и миниатюра доски
+ * растёт от одного блока до схемы с кэшем. При reduced motion — последний
+ * кадр записи.
+ */
+import type { Locale } from '../../i18n/ui';
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+
+const text = {
+  ru: {
+    title: 'Отчёт',
+    who: 'Алекс · 58 мин · подсказок 2 из 5',
+    panel: ['Вы', 'Мира'],
+    criteria: [
+      ['Требования и API', 2, 3],
+      ['Ключи и хранение', 2, 1],
+      ['Отказоустойчивость', 1, 1],
+      ['Оценки нагрузки', 3, 2],
+    ],
+    total: 'Итог',
+    replay: 'Запись доски',
+    times: ['0:00', '58:00'],
+    signals: ['ушёл с вкладки · 42 с', 'вставка · 380 символов'],
+    label: 'Макет отчёта: баллы панели по критериям, итог, сигналы и запись того, как росла доска',
+  },
+  en: {
+    title: 'Report',
+    who: 'Alex · 58 min · 2 of 5 hints',
+    panel: ['You', 'Mira'],
+    criteria: [
+      ['Requirements and API', 2, 3],
+      ['Keys and storage', 2, 1],
+      ['Fault tolerance', 1, 1],
+      ['Load estimates', 3, 2],
+    ],
+    total: 'Total',
+    replay: 'Board replay',
+    times: ['0:00', '58:00'],
+    signals: ['left the tab · 42 s', 'paste · 380 chars'],
+    label: 'A mock of the report: the panel’s scores per criterion, the total, signals and a replay of how the board grew',
+  },
+}[lang];
+
+/** Итог — как в песочнице: средний балл панели к максимуму 3, в процентах. */
+const scores = text.criteria.flatMap(([, a, b]) => [a as number, b as number]);
+const total = Math.round((scores.reduce((sum, value) => sum + value, 0) / (scores.length * 3)) * 100);
+---
+
+<figure class="report" role="img" aria-label={text.label}>
+  <div class="report__bar">
+    <span class="report__title">{text.title}</span>
+    <span class="report__who">{text.who}</span>
+  </div>
+  <div class="report__body" aria-hidden="true">
+    <table class="report__table">
+      <thead>
+        <tr>
+          <th></th>
+          {text.panel.map((name) => <th>{name}</th>)}
+        </tr>
+      </thead>
+      <tbody>
+        {
+          text.criteria.map(([name, a, b]) => (
+            <tr>
+              <td>{name}</td>
+              <td><span class={`report__level is-${a}`}>{a}</span></td>
+              <td><span class={`report__level is-${b}`}>{b}</span></td>
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+
+    <div class="report__total">
+      <span>{text.total}</span>
+      <strong>{total}</strong>
+      <span class="report__meter"><span style={`width: ${total}%`}></span></span>
+    </div>
+
+    <p class="report__heading">{text.replay}</p>
+    {/* Три кадра записи: один блок, связка из трёх, схема с кэшем. */}
+    <svg class="report__thumb" viewBox="0 0 240 90">
+      <g class="report__frame report__frame--1">
+        <rect x="10" y="35" width="50" height="20" rx="4" />
+      </g>
+      <g class="report__frame report__frame--2">
+        <rect x="10" y="35" width="50" height="20" rx="4" />
+        <rect x="95" y="35" width="50" height="20" rx="4" />
+        <rect x="180" y="62" width="50" height="20" rx="4" />
+        <path d="M60 45h35M145 45c18 0 16 27 35 27" />
+      </g>
+      <g class="report__frame report__frame--3">
+        <rect x="10" y="35" width="50" height="20" rx="4" />
+        <rect x="95" y="35" width="50" height="20" rx="4" />
+        <rect x="180" y="62" width="50" height="20" rx="4" />
+        <rect x="180" y="8" width="50" height="20" rx="4" />
+        <rect class="is-by" x="180" y="35" width="50" height="20" rx="4" />
+        <path d="M60 45h35M145 45c18 0 16 27 35 27M145 45c18 0 16-27 35-27M145 45h35" />
+      </g>
+    </svg>
+    <div class="report__track">
+      <span class="report__tick" style="left: 12%"></span>
+      <span class="report__tick report__tick--signal" style="left: 37%"></span>
+      <span class="report__tick" style="left: 55%"></span>
+      <span class="report__tick report__tick--signal" style="left: 71%"></span>
+      <span class="report__knob"></span>
+    </div>
+    <div class="report__times">
+      <span>{text.times[0]}</span><span>{text.times[1]}</span>
+    </div>
+
+    <div class="report__signals">
+      {text.signals.map((signal) => <span>{signal}</span>)}
+    </div>
+  </div>
+</figure>
+
+<style>
+  .report {
+    margin: 0;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--panel);
+    box-shadow: 0 10px 40px var(--shadow);
+    overflow: hidden;
+    font-size: 0.85rem;
+  }
+
+  .report__bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.3rem 0.8rem;
+    padding: 0.55rem 0.85rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .report__title {
+    font-weight: 600;
+  }
+
+  .report__who {
+    color: var(--muted);
+    font-size: 0.78rem;
+  }
+
+  .report__body {
+    display: grid;
+    gap: 0.55rem;
+    padding: 0.85rem;
+  }
+
+  .report__table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .report__table th {
+    padding: 0 0 0.3rem;
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-align: center;
+  }
+
+  .report__table td {
+    padding: 0.28rem 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .report__table td + td {
+    width: 3.2rem;
+    text-align: center;
+  }
+
+  .report__level {
+    display: inline-grid;
+    place-items: center;
+    width: 1.45rem;
+    height: 1.45rem;
+    border-radius: 6px;
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.75rem;
+  }
+
+  .report__level.is-1 {
+    background: #d98a1c;
+  }
+
+  .report__level.is-2 {
+    background: #5b9b3a;
+  }
+
+  .report__level.is-3 {
+    background: #2f7d4f;
+  }
+
+  .report__total {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .report__total strong {
+    font-size: 1.3rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .report__meter {
+    height: 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+    overflow: hidden;
+  }
+
+  .report__meter span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--accent);
+  }
+
+  .report__heading {
+    margin: 0.3rem 0 0;
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .report__thumb {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--bg) 60%, var(--panel));
+  }
+
+  .report__thumb rect {
+    fill: var(--panel);
+    stroke: color-mix(in srgb, var(--muted) 60%, transparent);
+  }
+
+  .report__thumb rect.is-by {
+    stroke: var(--accent);
+    stroke-dasharray: 3 2;
+  }
+
+  .report__thumb path {
+    fill: none;
+    stroke: color-mix(in srgb, var(--muted) 60%, transparent);
+  }
+
+  /* Без анимации — последний кадр: схема целиком. */
+  .report__frame--1,
+  .report__frame--2 {
+    opacity: 0;
+  }
+
+  .report__track {
+    position: relative;
+    height: 6px;
+    margin: 0.2rem 0;
+    border-radius: 999px;
+    background: var(--border);
+  }
+
+  .report__tick {
+    position: absolute;
+    top: -3px;
+    width: 2px;
+    height: 12px;
+    border-radius: 1px;
+    background: var(--muted);
+  }
+
+  .report__tick--signal {
+    background: #c7707a;
+  }
+
+  .report__knob {
+    position: absolute;
+    top: 50%;
+    left: 100%;
+    width: 14px;
+    height: 14px;
+    margin: -7px 0 0 -7px;
+    border: 2px solid var(--panel);
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 1px 4px var(--shadow);
+  }
+
+  .report__times {
+    display: flex;
+    justify-content: space-between;
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .report__signals {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+  }
+
+  .report__signals span {
+    padding: 0.12rem 0.5rem;
+    border: 1px solid color-mix(in srgb, #c7707a 30%, var(--border));
+    border-radius: 999px;
+    background: color-mix(in srgb, #c7707a 7%, var(--panel));
+    color: color-mix(in srgb, #c7707a 75%, var(--fg));
+    font-size: 0.72rem;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .report__knob {
+      animation: report-knob 9s linear infinite;
+    }
+
+    .report__frame--1 {
+      animation: report-frame-1 9s steps(1) infinite;
+    }
+
+    .report__frame--2 {
+      animation: report-frame-2 9s steps(1) infinite;
+    }
+
+    .report__frame--3 {
+      animation: report-frame-3 9s steps(1) infinite;
+    }
+  }
+
+  /* Ползунок едет по записи и на конце стоит, пока смотрят на готовую схему. */
+  @keyframes report-knob {
+    0% {
+      left: 0%;
+    }
+    70%,
+    100% {
+      left: 100%;
+    }
+  }
+
+  @keyframes report-frame-1 {
+    0% {
+      opacity: 1;
+    }
+    25%,
+    100% {
+      opacity: 0;
+    }
+  }
+
+  @keyframes report-frame-2 {
+    0% {
+      opacity: 0;
+    }
+    25% {
+      opacity: 1;
+    }
+    50%,
+    100% {
+      opacity: 0;
+    }
+  }
+
+  @keyframes report-frame-3 {
+    0% {
+      opacity: 0;
+    }
+    50%,
+    100% {
+      opacity: 1;
+    }
+  }
+</style>
