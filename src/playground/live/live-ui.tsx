@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ViewportPortal, useViewport } from '@xyflow/react';
 import type { Person } from './auth';
 import type { Peer, Point, RoomStatus } from './room';
+import type { InvitePreview } from './cloud';
 import type { Role } from '../roles';
 import type { T } from '../i18n';
 
@@ -169,10 +170,16 @@ export function LiveBar({ t, role, me, ready, inRoom, status, peers, onSignIn, o
 /**
  * Заставка вместо песочницы: пришли по приглашению или в собеседование, а
  * войти ещё не вошли — или сервер приглашение не принял.
+ *
+ * Что за приглашение, видно до входа: кто зовёт, куда и до какого числа.
+ * Мёртвое — принятое, истёкшее, отменённое — не предлагает войти: входить
+ * незачем, нужна новая ссылка.
  */
 export function Gate({
   t,
+  lang,
   kind = 'interview',
+  preview,
   me,
   error,
   onSignIn,
@@ -181,8 +188,11 @@ export function Gate({
   onLeave,
 }: {
   t: T;
+  lang: string;
   /** Куда звали: на собеседование или в команду. */
   kind?: 'interview' | 'team';
+  /** undefined — ещё не загружено (или не приглашение), null — такого приглашения нет. */
+  preview?: InvitePreview | null;
   me: Person | null;
   error?: string;
   onSignIn: () => void;
@@ -190,27 +200,52 @@ export function Gate({
   onSignOut: () => void;
   onLeave: () => void;
 }) {
-  const reason = error ? explain(error) : null;
+  const dead: Reason | null =
+    preview === null ? 'missing' : preview && preview.state !== 'open' ? (preview.state as Reason) : null;
+  const reason = error ? explain(error) : dead;
+  const team = kind === 'team';
+  const date = new Intl.DateTimeFormat(lang, { dateStyle: 'long' });
+  // Приглашение на почту гость принять не может: почты у него нет.
+  const guestAllowed = onGuest && !preview?.email;
+
   return (
     <div className="pg pg-gate">
       <div className="pg-gate__box">
         <i className="codicon codicon-organization pg-gate__icon" aria-hidden="true" />
-        <h2>{t(error ? (kind === 'team' ? 'gate.team.failed' : 'gate.failed') : kind === 'team' ? 'gate.team.title' : 'gate.title')}</h2>
-        <p>{error ? t(`gate.error.${reason}`, { name: me?.name ?? '' }) : t(kind === 'team' ? 'gate.team.body' : 'gate.body')}</p>
-        {!me && (
+        <h2>{t(reason ? (team ? 'gate.team.failed' : 'gate.failed') : team ? 'gate.team.title' : 'gate.title')}</h2>
+
+        {preview && (
+          <div className="pg-gate__invite">
+            <p>
+              {team
+                ? t('gate.preview.team', { inviter: preview.inviter, workspace: preview.workspace, role: t(`team.role.${preview.role}`) })
+                : t('gate.preview.interview', { inviter: preview.inviter, title: preview.title ?? '', workspace: preview.workspace })}
+            </p>
+            {preview.state === 'open' && preview.expiresAt && (
+              <p className="pg-hint">{t('gate.preview.until', { date: date.format(new Date(preview.expiresAt)) })}</p>
+            )}
+            {preview.state === 'open' && preview.email && (
+              <p className="pg-hint">{t('gate.preview.email', { email: preview.email })}</p>
+            )}
+          </div>
+        )}
+
+        <p>{reason ? t(`gate.error.${reason}`, { name: me?.name ?? '' }) : t(team ? 'gate.team.body' : 'gate.body')}</p>
+
+        {!me && !reason && (
           <button type="button" className="pg-button pg-button--primary" onClick={onSignIn}>
             <i className="codicon codicon-account" aria-hidden="true" /> {t('live.signIn')}
           </button>
         )}
-        {!me && onGuest && (
+        {!me && !reason && guestAllowed && (
           <>
             <span className="pg-hint">{t('guest.or')}</span>
             <GuestForm t={t} onSubmit={onGuest} />
           </>
         )}
-        {me && error && (
+        {reason && (
           <div className="pg-actions">
-            {reason === 'email' && (
+            {me && reason === 'email' && (
               <button type="button" className="pg-button" onClick={onSignOut}>
                 <i className="codicon codicon-account" aria-hidden="true" /> {t('gate.switch')}
               </button>
@@ -226,11 +261,14 @@ export function Gate({
   );
 }
 
-/** Сообщение сервера из claim_interview — в понятную причину. */
-function explain(message: string): 'email' | 'taken' | 'over' | 'staff' | 'missing' | 'other' {
+type Reason = 'email' | 'taken' | 'over' | 'expired' | 'staff' | 'missing' | 'other';
+
+/** Сообщение сервера из claim_interview / accept_workspace_invite — в понятную причину. */
+function explain(message: string): Reason {
   if (message.includes('another email')) return 'email';
   if (message.includes('already accepted')) return 'taken';
   if (message.includes('is over')) return 'over';
+  if (message.includes('expired')) return 'expired';
   if (message.includes('staff')) return 'staff';
   if (message.includes('not found')) return 'missing';
   return 'other';

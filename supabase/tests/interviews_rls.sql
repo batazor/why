@@ -93,6 +93,61 @@ do $$ begin
   end;
 end $$;
 
+-- ─── Предпросмотр приглашения — до входа ────────────────────────────────────
+reset role;
+set role anon;
+do $$
+declare
+  preview jsonb;
+begin
+  preview := public.invite_preview('interview', current_setting('test.token'));
+  assert preview ->> 'state' = 'open', 'a fresh invitation is open';
+  assert preview ->> 'inviter' = 'Bob', 'the preview names who invites';
+  assert preview ->> 'title' = 'URL shortener', 'and to which scenario';
+  assert preview ->> 'email' = 'D***@Mail.test' or preview ->> 'email' = 'd***@mail.test', 'the email is masked';
+  assert public.invite_preview('interview', 'nope') is null, 'an unknown token previews nothing';
+end $$;
+
+-- ─── Срок жизни и перевыпуск приглашения ──────────────────────────────────
+reset role;
+select set_config('request.jwt.claims', '{"sub": "00000000-0000-4000-8000-00000000000b", "email": "bob@corp.test", "role": "authenticated"}', false);
+set role authenticated;
+do $$
+declare
+  iv uuid;
+  tok text;
+  fresh text;
+begin
+  insert into public.interviews (workspace_id, scenario_id, invite_expires_at)
+  values (current_setting('test.ws')::uuid, current_setting('test.scenario')::uuid, now() - interval '1 day')
+  returning invite_token into tok;
+  perform set_config('test.expired', tok, false);
+
+  insert into public.interviews (workspace_id, scenario_id)
+  values (current_setting('test.ws')::uuid, current_setting('test.scenario')::uuid)
+  returning id, invite_token into iv, tok;
+  fresh := public.renew_interview_invite(iv);
+  assert fresh <> tok, 'renewing issues a new token';
+  perform set_config('test.stale', tok, false);
+end $$;
+
+reset role;
+select set_config('request.jwt.claims', '{"sub": "00000000-0000-4000-8000-00000000000e", "email": "eve@mail.test", "role": "authenticated"}', false);
+set role authenticated;
+do $$ begin
+  assert public.invite_preview('interview', current_setting('test.expired')) ->> 'state' = 'expired', 'the preview tells an expired invitation';
+  begin
+    perform public.claim_interview(current_setting('test.expired'));
+    raise exception 'FAIL: an expired invitation was accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    perform public.claim_interview(current_setting('test.stale'));
+    raise exception 'FAIL: the token replaced by renewal still works';
+  exception when no_data_found then null;
+  end;
+end $$;
+
 -- ─── dana: принимает приглашение, видит задание, но не эталон ──────────────
 reset role;
 select set_config('request.jwt.claims', '{"sub": "00000000-0000-4000-8000-00000000000d", "email": "dana@mail.test", "role": "authenticated"}', false);
@@ -212,7 +267,7 @@ do $$ begin
   values (current_setting('test.interview')::uuid, '{"revealed": [], "asked": [], "scores": {"r1": 3}, "notes": "strong"}');
   assert (select count(*) from public.profiles) = 3, 'interviewer sees colleagues and the candidate';
 
-  update public.interviews set status = 'finished', finished_at = now();
+  update public.interviews set status = 'finished', finished_at = now() where id = current_setting('test.interview')::uuid;
 end $$;
 
 -- ─── dana: после конца собеседования доска заморожена ──────────────────────
@@ -242,16 +297,85 @@ set role authenticated;
 
 do $$ begin
   begin
-    update public.interviews set status = 'live', finished_at = null;
+    update public.interviews set status = 'live', finished_at = null where id = current_setting('test.interview')::uuid;
     raise exception 'FAIL: a finished interview was restarted';
   exception when check_violation then null;
   end;
   begin
-    update public.interviews set calc_unlocked_at = now();
+    update public.interviews set calc_unlocked_at = now() where id = current_setting('test.interview')::uuid;
     raise exception 'FAIL: a finished interview changed its timing';
   exception when check_violation then null;
   end;
-  assert (select status from public.interviews) = 'finished', 'the interview stays finished';
+  assert (select status from public.interviews where id = current_setting('test.interview')::uuid) = 'finished', 'the interview stays finished';
+end $$;
+
+-- ─── Ссылки из базы: открыть без входа, отозвать, срок ─────────────────────
+reset role;
+select set_config('request.jwt.claims', '{"sub": "00000000-0000-4000-8000-00000000000a", "email": "alice@corp.test", "role": "authenticated"}', false);
+set role authenticated;
+do $$
+declare
+  tok text;
+begin
+  insert into public.shares (workspace_id, scenario_id, role, title, payload)
+  values (current_setting('test.ws')::uuid, current_setting('test.scenario')::uuid, 'trainee', 'URL shortener', '{"id": "x"}')
+  returning token into tok;
+  perform set_config('test.share', tok, false);
+  insert into public.shares (workspace_id, scenario_id, role, payload, expires_at)
+  values (current_setting('test.ws')::uuid, current_setting('test.scenario')::uuid, 'trainee', '{}', now() - interval '1 hour')
+  returning token into tok;
+  perform set_config('test.deadshare', tok, false);
+end $$;
+
+reset role;
+set role anon;
+do $$ begin
+  assert public.open_share(current_setting('test.share')) ->> 'role' = 'trainee', 'anyone with the link opens it, signed in or not';
+  begin
+    perform public.open_share(current_setting('test.deadshare'));
+    raise exception 'FAIL: an expired link opened';
+  exception when check_violation then null;
+  end;
+  begin
+    perform count(*) from public.shares;
+    raise exception 'FAIL: anonymous listed the links';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+
+reset role;
+select set_config('request.jwt.claims', '{"sub": "00000000-0000-4000-8000-00000000000d", "email": "dana@mail.test", "role": "authenticated"}', false);
+set role authenticated;
+do $$ begin
+  assert (select count(*) from public.shares) = 0, 'an outsider does not see the links of a workspace';
+  begin
+    insert into public.shares (workspace_id, role, payload) values (current_setting('test.ws')::uuid, 'author', '{}');
+    raise exception 'FAIL: an outsider created a link in someone else''s workspace';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+
+reset role;
+select set_config('request.jwt.claims', '{"sub": "00000000-0000-4000-8000-00000000000a", "email": "alice@corp.test", "role": "authenticated"}', false);
+set role authenticated;
+do $$ begin
+  assert (select opens from public.shares where token = current_setting('test.share')) = 1, 'opens are counted';
+  update public.shares set revoked_at = now() where token = current_setting('test.share');
+  begin
+    update public.shares set payload = '{}' where token = current_setting('test.share');
+    raise exception 'FAIL: a sent link was rewritten';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+
+reset role;
+set role anon;
+do $$ begin
+  begin
+    perform public.open_share(current_setting('test.share'));
+    raise exception 'FAIL: a revoked link opened';
+  exception when check_violation then null;
+  end;
 end $$;
 
 -- ─── Команда: приглашение ссылкой, владелец остаётся всегда ────────────────
@@ -267,6 +391,10 @@ begin
   values (current_setting('test.ws')::uuid, 'author')
   returning token into tok;
   perform set_config('test.team', tok, false);
+  insert into public.workspace_invites (workspace_id, role, expires_at)
+  values (current_setting('test.ws')::uuid, 'owner', now() - interval '1 day')
+  returning token into tok;
+  perform set_config('test.oldteam', tok, false);
 
   begin
     update public.workspace_members set role = 'interviewer' where user_id = auth.uid();
@@ -298,6 +426,12 @@ reset role;
 select set_config('request.jwt.claims', '{"sub": "00000000-0000-4000-8000-00000000000e", "email": "eve@mail.test", "role": "authenticated"}', false);
 set role authenticated;
 do $$ begin
+  assert public.invite_preview('team', current_setting('test.team')) ->> 'role' = 'author', 'the team preview names the role';
+  begin
+    perform public.accept_workspace_invite(current_setting('test.oldteam'));
+    raise exception 'FAIL: an expired team invitation was accepted';
+  exception when check_violation then null;
+  end;
   assert public.accept_workspace_invite(current_setting('test.team')) = current_setting('test.ws')::uuid, 'eve joins the workspace';
   assert (select role from public.workspace_members where user_id = auth.uid()) = 'author', 'with the role from the invitation';
   assert (select count(*) from public.scenarios) = 1, 'and now sees the scenarios';

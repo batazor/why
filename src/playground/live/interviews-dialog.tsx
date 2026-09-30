@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
-import { cancelInterview, createInterview, inviteUrl, listInterviews, type Interview, type Workspace } from './cloud';
+import {
+  cancelInterview,
+  createInterview,
+  inviteUrl,
+  listInterviews,
+  mailtoUrl,
+  renewInvite,
+  type Interview,
+  type Workspace,
+} from './cloud';
+import { LinkBox } from './cloud-share';
 import type { T } from '../i18n';
 
 /**
@@ -14,6 +24,7 @@ export function InterviewsDialog({
   lang,
   workspace,
   scenarioId,
+  title,
   onOpen,
   onClose,
 }: {
@@ -21,6 +32,8 @@ export function InterviewsDialog({
   lang: string;
   workspace: Workspace;
   scenarioId: string;
+  /** Название сценария — для письма с приглашением. */
+  title: string;
   onOpen: (id: string) => void;
   onClose: () => void;
 }) {
@@ -123,6 +136,8 @@ export function InterviewsDialog({
             <ul className="pg-iv-list">
               {items.map((item) => {
                 const open = item.status === 'scheduled' || item.status === 'live';
+                const pending = !item.candidate && open;
+                const expired = pending && item.inviteExpiresAt !== null && Date.parse(item.inviteExpiresAt) <= Date.now();
                 return (
                   <li key={item.id} className={`pg-iv is-${item.status}`}>
                     <div className="pg-iv__row">
@@ -130,13 +145,35 @@ export function InterviewsDialog({
                       <strong>{item.candidate?.name ?? item.candidateEmail ?? t('iv.byLink')}</strong>
                       <span className="pg-hint">
                         {t(`iv.status.${item.status}`)} · {date.format(new Date(item.createdAt))}
-                        {!item.candidate && open ? ` · ${t('iv.notAccepted')}` : ''}
+                        {pending ? ` · ${t('iv.notAccepted')}` : ''}
+                        {pending && item.inviteExpiresAt
+                          ? ` · ${expired ? t('link.expiredShort') : t('link.until', { date: date.format(new Date(item.inviteExpiresAt)) })}`
+                          : ''}
                       </span>
                     </span>
-                    {!item.candidate && open && (
+                    {pending && !expired && (
                       <button type="button" className="pg-button pg-button--small" onClick={() => copy(item)}>
                         <i className={`codicon codicon-${copied === item.id ? 'check' : 'link'}`} aria-hidden="true" />{' '}
                         {t(copied === item.id ? 'share.copied' : 'iv.copy')}
+                      </button>
+                    )}
+                    {pending && (
+                      <button
+                        type="button"
+                        className="pg-button pg-button--small"
+                        title={t('iv.renewHint')}
+                        onClick={async () => {
+                          if (!expired && !confirm(t('iv.renewConfirm'))) return;
+                          try {
+                            await renewInvite(item.id);
+                            await refresh();
+                            setShown(item.id);
+                          } catch (reason) {
+                            setError((reason as Error).message);
+                          }
+                        }}
+                      >
+                        <i className="codicon codicon-refresh" aria-hidden="true" /> {t('iv.renew')}
                       </button>
                     )}
                     {item.status !== 'cancelled' && (
@@ -164,13 +201,16 @@ export function InterviewsDialog({
                       </button>
                     )}
                     </div>
-                    {shown === item.id && !item.candidate && open && (
-                      <input
-                        className="pg-input pg-iv__link"
-                        readOnly
-                        value={inviteUrl(item.inviteToken)}
-                        aria-label={t('iv.link')}
-                        onFocus={(event) => event.currentTarget.select()}
+                    {shown === item.id && pending && !expired && (
+                      <LinkBox
+                        t={t}
+                        url={inviteUrl(item.inviteToken)}
+                        expires={item.inviteExpiresAt ? t('link.until', { date: date.format(new Date(item.inviteExpiresAt)) }) : t('link.forever')}
+                        mail={mailtoUrl(
+                          item.candidateEmail ?? '',
+                          t('link.mail.subject.candidate', { title, workspace: workspace.name }),
+                          t('link.mail.body.candidate', { title, workspace: workspace.name, url: inviteUrl(item.inviteToken) }),
+                        )}
                       />
                     )}
                   </li>

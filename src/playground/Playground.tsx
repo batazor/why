@@ -36,7 +36,7 @@ import { useAuth } from './live/auth';
 import { useRoom } from './live/room';
 import { Gate, LiveBar, RemoteCursors } from './live/live-ui';
 import { useCloud } from './live/use-cloud';
-import { InterviewRepository, isCloudId, type Timing } from './live/cloud';
+import { InterviewRepository, isCloudId, openShare, paramFromUrl, setParams, type Timing } from './live/cloud';
 import { InterviewsDialog } from './live/interviews-dialog';
 import { TeamDialog } from './live/team-dialog';
 import { ReportPanel } from './live/report-panel';
@@ -96,6 +96,8 @@ export default function Playground({ lang, repository }: Props) {
   const [journal, setJournal] = useState<JournalEntry[]>([]);
   const [replay, setReplay] = useState<number | null>(null);
   const [loadError, setLoadError] = useState('');
+  /** Сообщение над полотном: например, что присланная ссылка отозвана. */
+  const [notice, setNotice] = useState('');
   /** Требования таблицей или списком на правку. Выбор — удобство смотрящего, живёт в браузере. */
   const [reqView, setReqView] = useState<'table' | 'edit'>(() => {
     try {
@@ -217,16 +219,43 @@ export default function Playground({ lang, repository }: Props) {
       /**
        * Присланная ссылка сильнее всего: её открыли, чтобы посмотреть именно
        * этот сценарий. Но если по нему уже есть работа, она важнее ссылки.
+       *
+       * Присланное — копия, и живёт она в этом браузере под своим id, даже
+       * если прислали сценарий из пространства: с id оригинала копия у
+       * коллеги из той же команды легла бы поверх самого сценария.
        */
+      const receive = async (incoming: Design) => {
+        const copy = isCloudId(incoming.id) ? { ...incoming, id: `d_${incoming.id.slice(0, 8)}` } : incoming;
+        const mine = await repo.load(copy.id);
+        if (!mine || isUntouched(mine)) await repo.save(copy);
+        setProjects(await repo.list());
+        return show(mine && !isUntouched(mine) ? mine : copy);
+      };
+
+      // Ссылка из базы: `?share=<токен>`. Роль — та, что выбрал отправивший.
+      const shareToken = auth.enabled ? paramFromUrl('share') : null;
+      if (shareToken) {
+        setParams({ share: null });
+        try {
+          const opened = await openShare(shareToken);
+          if (!alive) return;
+          setRole(opened.role);
+          rememberRole(opened.role);
+          setTab(PERMISSIONS[opened.role].tabs[0]);
+          return receive(opened.design);
+        } catch (reason) {
+          const message = (reason as Error).message;
+          if (alive)
+            setNotice(t(message.includes('revoked') ? 'link.revoked' : message.includes('expired') ? 'link.expired' : 'link.missing'));
+        }
+      }
+
       const payload = payloadFromUrl();
       if (payload) {
         try {
           const incoming = await decodeDesign(payload);
           clearPayload();
-          const mine = await repo.load(incoming.id);
-          if (!mine || isUntouched(mine)) await repo.save(incoming);
-          setProjects(await repo.list());
-          return show(mine && !isUntouched(mine) ? mine : incoming);
+          return receive(incoming);
         } catch {
           // Ссылка битая или обрезанная — открываем песочницу как обычно.
           clearPayload();
@@ -248,7 +277,7 @@ export default function Playground({ lang, repository }: Props) {
     return () => {
       alive = false;
     };
-  }, [repo, settled, lang, open, t]);
+  }, [repo, settled, lang, open, t, auth.enabled]);
 
   /**
    * Полотно, требования и калькулятор работают с «доской» — верхними полями
@@ -384,6 +413,8 @@ export default function Playground({ lang, repository }: Props) {
       <Gate
         t={t}
         kind={cloud.mode === 'gate' ? cloud.kind : 'interview'}
+        preview={cloud.mode === 'gate' ? cloud.preview : undefined}
+        lang={lang}
         me={auth.me}
         error={cloud.mode === 'gate' ? cloud.error : loadError}
         onSignIn={auth.signIn}
@@ -757,7 +788,34 @@ export default function Playground({ lang, repository }: Props) {
         )}
       </div>
 
-      {sharing && <ShareDialog design={design} t={t} lang={lang} onClose={() => setSharing(false)} />}
+      {notice && (
+        <p className="pg-notice" role="status">
+          <i className="codicon codicon-warning" aria-hidden="true" /> {notice}
+          <button type="button" className="pg-icon-button" aria-label={t('comp.close')} onClick={() => setNotice('')}>
+            <i className="codicon codicon-close" aria-hidden="true" />
+          </button>
+        </p>
+      )}
+
+      {sharing && (
+        <ShareDialog
+          design={design}
+          t={t}
+          lang={lang}
+          cloud={
+            cloud.mode === 'workspace' && isCloudId(design.id)
+              ? {
+                  workspace: cloud.workspace,
+                  onInterviews: () => {
+                    setSharing(false);
+                    setInterviewsOpen(true);
+                  },
+                }
+              : undefined
+          }
+          onClose={() => setSharing(false)}
+        />
+      )}
       {teamOpen && cloud.mode === 'workspace' && auth.me && (
         <TeamDialog
           t={t}
@@ -778,6 +836,7 @@ export default function Playground({ lang, repository }: Props) {
           lang={lang}
           workspace={cloud.workspace}
           scenarioId={design.id}
+          title={design.title}
           onOpen={(id) => {
             setInterviewsOpen(false);
             openInterview(id);

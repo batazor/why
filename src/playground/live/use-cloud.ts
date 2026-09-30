@@ -7,9 +7,11 @@ import {
   acceptTeamInvite,
   claimInvite,
   ensureWorkspace,
+  invitePreview,
   paramFromUrl,
   preferredWorkspace,
   setParams,
+  type InvitePreview,
   type Workspace,
 } from './cloud';
 import type { DesignRepository } from '../storage';
@@ -27,7 +29,7 @@ import type { DesignRepository } from '../storage';
 export type Cloud =
   | { mode: 'local' }
   | { mode: 'loading' }
-  | { mode: 'gate'; kind: 'interview' | 'team'; error?: string }
+  | { mode: 'gate'; kind: 'interview' | 'team'; error?: string; preview?: InvitePreview | null }
   | { mode: 'workspace'; workspace: Workspace; repo: HybridRepository }
   | { mode: 'interview'; repo: InterviewRepository };
 
@@ -48,6 +50,23 @@ export function useCloud(auth: Auth, local: DesignRepository, workspaceName: str
   const [error, setError] = useState<string>();
 
   const meId = auth.me?.id;
+
+  /**
+   * Что за приглашение — ещё до входа. undefined — не загружено, null —
+   * такого нет. Мёртвое приглашение показывается сразу, без входа впустую.
+   */
+  const [preview, setPreview] = useState<InvitePreview | null | undefined>(undefined);
+  useEffect(() => {
+    const token = invite ?? join;
+    if (!token || !auth.enabled) return;
+    let alive = true;
+    invitePreview(invite ? 'interview' : 'team', token)
+      .then((found) => alive && setPreview(found))
+      .catch(() => alive && setPreview(undefined));
+    return () => {
+      alive = false;
+    };
+  }, [invite, join, auth.enabled]);
 
   // Приглашение принимается один раз, сразу после входа; дальше в адресе уже собеседование.
   useEffect(() => {
@@ -131,14 +150,14 @@ export function useCloud(auth: Auth, local: DesignRepository, workspaceName: str
     if (!auth.ready) return { mode: 'loading' };
     if (invite || interview || join) {
       const kind = join ? 'team' : 'interview';
-      if (!meId || error) return { mode: 'gate', kind, error };
+      if (!meId || error) return { mode: 'gate', kind, error, preview };
       if (invite || join) return { mode: 'loading' };
       return { mode: 'interview', repo: interviewRepo! };
     }
     if (!meId) return { mode: 'local' };
     if (!workspace || !repo) return offline ? { mode: 'local' } : { mode: 'loading' };
     return { mode: 'workspace', workspace, repo };
-  }, [auth.enabled, auth.ready, meId, invite, interview, join, error, workspace, repo, interviewRepo, offline]);
+  }, [auth.enabled, auth.ready, meId, invite, interview, join, error, preview, workspace, repo, interviewRepo, offline]);
 
   const openInterview = useCallback((id: string) => {
     setParams({ interview: id, role: null });

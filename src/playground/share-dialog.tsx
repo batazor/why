@@ -4,6 +4,8 @@ import { exportFile } from './storage';
 import { ROLES, type Role } from './roles';
 import type { Design } from './model';
 import type { T } from './i18n';
+import { CloudShare } from './live/cloud-share';
+import type { Workspace } from './live/cloud';
 
 /**
  * Поделиться сценарием: роль, в которой откроется ссылка, и что в неё уедет.
@@ -21,7 +23,22 @@ const DEFAULTS: Record<Role, Pick<ShareOptions, 'scenario' | 'board'>> = {
   author: { scenario: true, board: true },
 };
 
-export function ShareDialog({ design, t, lang, onClose }: { design: Design; t: T; lang: string; onClose: () => void }) {
+export function ShareDialog({
+  design,
+  t,
+  lang,
+  cloud,
+  onClose,
+}: {
+  design: Design;
+  t: T;
+  lang: string;
+  /** Сценарий из пространства: ссылки и приглашения — записями в базе. */
+  cloud?: { workspace: Workspace; onInterviews: () => void };
+  onClose: () => void;
+}) {
+  /** Старый способ — проект в самой ссылке — остаётся запасным и для работы без сервера. */
+  const [legacy, setLegacy] = useState(!cloud);
   const [role, setRole] = useState<Role>('candidate');
   const [options, setOptions] = useState<ShareOptions>({ role: 'candidate', ...DEFAULTS.candidate });
   const [link, setLink] = useState('');
@@ -74,7 +91,22 @@ export function ShareDialog({ design, t, lang, onClose }: { design: Design; t: T
           </button>
         </header>
 
+        {cloud && !legacy ? (
+          <CloudShare
+            design={design}
+            workspace={cloud.workspace}
+            t={t}
+            lang={lang}
+            onInterviews={cloud.onInterviews}
+            onLegacy={() => setLegacy(true)}
+          />
+        ) : (
         <div className="pg-share__body">
+          {cloud && (
+            <button type="button" className="pg-link-button" onClick={() => setLegacy(false)}>
+              {t('link.back')}
+            </button>
+          )}
           <div className="pg-field">
             <span className="pg-field__label">{t('share.openAs')}</span>
             <div className="pg-switch">
@@ -133,6 +165,7 @@ export function ShareDialog({ design, t, lang, onClose }: { design: Design; t: T
           </div>
           <p className="pg-hint">{t('share.note')}</p>
         </div>
+        )}
       </div>
     </div>
   );

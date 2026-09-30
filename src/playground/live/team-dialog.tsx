@@ -5,6 +5,7 @@ import {
   listMembers,
   listTeamInvites,
   listWorkspaces,
+  mailtoUrl,
   removeMember,
   renameWorkspace,
   revokeTeamInvite,
@@ -15,6 +16,7 @@ import {
   type WorkspaceRole,
 } from './cloud';
 import type { Person } from './auth';
+import { LinkBox } from './cloud-share';
 import type { T } from '../i18n';
 
 /**
@@ -287,7 +289,15 @@ export function TeamDialog({
                           <strong>{invite.email ?? t('iv.byLink')}</strong>
                           <span className="pg-hint">
                             {t(`team.role.${invite.role}`)} · {date.format(new Date(invite.createdAt))}
-                            {invite.accepted ? ` · ${t('team.accepted')}` : ''}
+                            {invite.accepted
+                              ? ` · ${t('team.accepted')}`
+                              : invite.expiresAt
+                                ? ` · ${
+                                    Date.parse(invite.expiresAt) <= Date.now()
+                                      ? t('link.expiredShort')
+                                      : t('link.until', { date: date.format(new Date(invite.expiresAt)) })
+                                  }`
+                                : ''}
                           </span>
                         </span>
                         {!invite.accepted && (
@@ -307,12 +317,15 @@ export function TeamDialog({
                         </button>
                       </div>
                       {shown === invite.id && !invite.accepted && (
-                        <input
-                          className="pg-input pg-iv__link"
-                          readOnly
-                          value={inviteUrl(invite.token, 'join')}
-                          aria-label={t('iv.link')}
-                          onFocus={(event) => event.currentTarget.select()}
+                        <LinkBox
+                          t={t}
+                          url={inviteUrl(invite.token, 'join')}
+                          expires={invite.expiresAt ? t('link.until', { date: date.format(new Date(invite.expiresAt)) }) : t('link.forever')}
+                          mail={mailtoUrl(
+                            invite.email ?? '',
+                            t('link.mail.subject.colleague', { title: '', workspace: workspace.name }),
+                            t('link.mail.body.colleague', { title: '', workspace: workspace.name, url: inviteUrl(invite.token, 'join') }),
+                          )}
                         />
                       )}
                     </li>
