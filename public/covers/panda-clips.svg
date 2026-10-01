@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 300" width="640" height="300">
   <!--
-    Обложка «panda-clips»: Плёнка с одной пандой: клипы — скобки таймкодов на ней, справа карточки с тегами.
+    Обложка «panda-clips»: Панда с бамбуком; плёнка со скобками таймкодов и карточки клипов с тегами.
     Сгенерировано scripts/covers/build.py.
   -->
   <defs>
@@ -42,88 +42,111 @@
     </filter>
   </defs>
   <g filter="url(#bloom)" opacity="0.5">
-    <ellipse cx="190" cy="150" rx="170" ry="80" fill="#d3e3ee" />
-    <ellipse cx="500" cy="140" rx="110" ry="110" fill="#d4e6dc" />
-    <ellipse cx="90" cy="250" rx="70" ry="50" fill="#f3e8cc" />
+    <ellipse cx="160" cy="170" rx="120" ry="120" fill="#d4e6dc" />
+    <ellipse cx="470" cy="90" rx="150" ry="70" fill="#d3e3ee" />
+    <ellipse cx="540" cy="210" rx="90" ry="80" fill="#f3e8cc" />
   </g>
   <g filter="url(#wash)">
-    <rect x="40" y="110" width="300" height="80" rx="6" fill="#b9d3e6" opacity="0.85" />
+    <ellipse cx="160" cy="206" rx="76" ry="60" fill="#f7eacb" opacity="0.95" />
+    <ellipse cx="104" cy="196" rx="22" ry="36" fill="#8792a3" opacity="0.85" transform="rotate(18 104 196)" />
+    <ellipse cx="216" cy="196" rx="22" ry="36" fill="#8792a3" opacity="0.85" transform="rotate(-18 216 196)" />
+    <ellipse cx="124" cy="254" rx="28" ry="17" fill="#8792a3" opacity="0.85" />
+    <ellipse cx="198" cy="254" rx="28" ry="17" fill="#8792a3" opacity="0.85" />
   </g>
   <g filter="url(#wash)">
-    <rect x="52" y="116" width="12" height="8" rx="2" fill="#f7eacb" opacity="0.95" />
-    <rect x="88" y="116" width="12" height="8" rx="2" fill="#f7eacb" opacity="0.95" />
-    <rect x="124" y="116" width="12" height="8" rx="2" fill="#f7eacb" opacity="0.95" />
-    <rect x="160" y="116" width="12" height="8" rx="2" fill="#f7eacb" opacity="0.95" />
-    <rect x="196" y="116" width="12" height="8" rx="2" fill="#f7eacb" opacity="0.95" />
-    <rect x="232" y="116" width="12" height="8" rx="2" fill="#f7eacb" opacity="0.95" />
-    <rect x="268" y="116" width="12" height="8" rx="2" fill="#f7eacb" opacity="0.95" />
-    <rect x="304" y="116" width="12" height="8" rx="2" fill="#f7eacb" opacity="0.95" />
-    <rect x="52" y="176" width="12" height="8" rx="2" fill="#f7eacb" opacity="0.95" />
-    <rect x="88" y="176" width="12" height="8" rx="2" fill="#f7eacb" opacity="0.95" />
-    <rect x="124" y="176" width="12" height="8" rx="2" fill="#f7eacb" opacity="0.95" />
-    <rect x="160" y="176" width="12" height="8" rx="2" fill="#f7eacb" opacity="0.95" />
-    <rect x="196" y="176" width="12" height="8" rx="2" fill="#f7eacb" opacity="0.95" />
-    <rect x="232" y="176" width="12" height="8" rx="2" fill="#f7eacb" opacity="0.95" />
-    <rect x="268" y="176" width="12" height="8" rx="2" fill="#f7eacb" opacity="0.95" />
-    <rect x="304" y="176" width="12" height="8" rx="2" fill="#f7eacb" opacity="0.95" />
-    <rect x="50" y="130" width="50" height="40" rx="3" fill="#f7eacb" opacity="0.9" />
-    <rect x="108" y="130" width="50" height="40" rx="3" fill="#f7eacb" opacity="0.9" />
-    <rect x="166" y="130" width="50" height="40" rx="3" fill="#f4dca8" opacity="0.9" />
-    <rect x="224" y="130" width="50" height="40" rx="3" fill="#f7eacb" opacity="0.9" />
-    <rect x="282" y="130" width="50" height="40" rx="3" fill="#f7eacb" opacity="0.9" />
+    <circle cx="160" cy="112" r="52" fill="#f7eacb" opacity="0.97" />
+    <circle cx="120" cy="74" r="17" fill="#8792a3" opacity="0.9" />
+    <circle cx="200" cy="74" r="17" fill="#8792a3" opacity="0.9" />
+    <ellipse cx="142" cy="110" rx="13" ry="17" fill="#8792a3" opacity="0.88" transform="rotate(-18 142 110)" />
+    <ellipse cx="178" cy="110" rx="13" ry="17" fill="#8792a3" opacity="0.88" transform="rotate(18 178 110)" />
+    <circle cx="144" cy="112" r="3.6" fill="#f7eacb" opacity="1" />
+    <circle cx="176" cy="112" r="3.6" fill="#f7eacb" opacity="1" />
+    <circle cx="160" cy="131" r="5" fill="#8792a3" opacity="0.9" />
+  </g>
+  <g filter="url(#brush)" stroke="#8792a3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.7">
+    <path d="M152 138 q8 7 16 0" />
+  </g>
+  <g filter="url(#brush)" stroke="#6f8a74" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.8">
+    <path d="M232 168 L264 44" />
+  </g>
+  <g filter="url(#brush)" stroke="#6f8a74" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.8">
+    <path d="M243 128 h10 M251 98 h10 M258 70 h10" />
   </g>
   <g filter="url(#wash)">
-    <circle cx="191" cy="152" r="13" fill="#f7eacb" opacity="1" />
-    <circle cx="181" cy="142" r="5" fill="#8792a3" opacity="0.9" />
-    <circle cx="201" cy="142" r="5" fill="#8792a3" opacity="0.9" />
-    <circle cx="186" cy="152" r="3.5" fill="#8792a3" opacity="0.85" />
-    <circle cx="196" cy="152" r="3.5" fill="#8792a3" opacity="0.85" />
-    <circle cx="191" cy="158" r="1.8" fill="#8792a3" opacity="0.9" />
-  </g>
-  <g filter="url(#brush)" stroke="#6f8a74" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.8">
-    <path d="M172 98 h-8 v104 h8" />
-    <path d="M216 98 h8 v104 h-8" />
-  </g>
-  <g filter="url(#brush)" stroke="#6f8a74" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.6">
-    <path d="M150 224 h20" />
-    <path d="M226 224 h20" />
-  </g>
-  <g filter="url(#brush)" stroke="#8792a3" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.55">
-    <path d="M230 140 Q317.6 87.1 420 84" />
-    <path d="M411.9 80.0 L420 84 L412.2 88.5" />
-    <path d="M230 150 Q325.0 150.0 420 150" />
-    <path d="M412.1 145.8 L420 150 L412.1 154.2" />
-    <path d="M230 160 Q317.4 213.9 420 218" />
-    <path d="M412.2 213.5 L420 218 L411.9 221.9" />
+    <ellipse cx="262" cy="70" rx="16" ry="6" fill="#a9c7a1" opacity="0.9" transform="rotate(-35 262 70)" />
+    <ellipse cx="248" cy="56" rx="15" ry="6" fill="#a9c7a1" opacity="0.9" transform="rotate(30 248 56)" />
+    <ellipse cx="274" cy="92" rx="14" ry="5" fill="#bcd4b4" opacity="0.9" transform="rotate(-10 274 92)" />
   </g>
   <g filter="url(#wash)">
-    <rect x="430" y="58" width="120" height="50" rx="6" fill="#bcd4b4" opacity="0.85" />
-    <rect x="430" y="126" width="120" height="50" rx="6" fill="#a9c7a1" opacity="0.85" />
-    <rect x="430" y="194" width="120" height="50" rx="6" fill="#bcd4b4" opacity="0.85" />
-    <rect x="560" y="72" width="44" height="20" rx="10" fill="#f4dca8" opacity="0.95" />
-    <rect x="560" y="140" width="44" height="20" rx="10" fill="#f4dca8" opacity="0.95" />
-    <rect x="560" y="208" width="44" height="20" rx="10" fill="#f4dca8" opacity="0.95" />
+    <rect x="326" y="48" width="280" height="70" rx="6" fill="#b9d3e6" opacity="0.85" />
   </g>
-  <g filter="url(#brush)" stroke="#6f8a74" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.6">
-    <path d="M442 76 h40" />
-    <path d="M442 88 h28" />
-    <path d="M442 144 h40" />
-    <path d="M442 156 h28" />
-    <path d="M442 212 h40" />
-    <path d="M442 224 h28" />
+  <g filter="url(#wash)">
+    <rect x="338" y="54" width="10" height="7" rx="2" fill="#f7eacb" opacity="0.95" />
+    <rect x="372" y="54" width="10" height="7" rx="2" fill="#f7eacb" opacity="0.95" />
+    <rect x="406" y="54" width="10" height="7" rx="2" fill="#f7eacb" opacity="0.95" />
+    <rect x="440" y="54" width="10" height="7" rx="2" fill="#f7eacb" opacity="0.95" />
+    <rect x="474" y="54" width="10" height="7" rx="2" fill="#f7eacb" opacity="0.95" />
+    <rect x="508" y="54" width="10" height="7" rx="2" fill="#f7eacb" opacity="0.95" />
+    <rect x="542" y="54" width="10" height="7" rx="2" fill="#f7eacb" opacity="0.95" />
+    <rect x="576" y="54" width="10" height="7" rx="2" fill="#f7eacb" opacity="0.95" />
+    <rect x="338" y="108" width="10" height="7" rx="2" fill="#f7eacb" opacity="0.95" />
+    <rect x="372" y="108" width="10" height="7" rx="2" fill="#f7eacb" opacity="0.95" />
+    <rect x="406" y="108" width="10" height="7" rx="2" fill="#f7eacb" opacity="0.95" />
+    <rect x="440" y="108" width="10" height="7" rx="2" fill="#f7eacb" opacity="0.95" />
+    <rect x="474" y="108" width="10" height="7" rx="2" fill="#f7eacb" opacity="0.95" />
+    <rect x="508" y="108" width="10" height="7" rx="2" fill="#f7eacb" opacity="0.95" />
+    <rect x="542" y="108" width="10" height="7" rx="2" fill="#f7eacb" opacity="0.95" />
+    <rect x="576" y="108" width="10" height="7" rx="2" fill="#f7eacb" opacity="0.95" />
+    <rect x="336" y="66" width="46" height="36" rx="3" fill="#f7eacb" opacity="0.9" />
+    <rect x="392" y="66" width="46" height="36" rx="3" fill="#f7eacb" opacity="0.9" />
+    <rect x="448" y="66" width="46" height="36" rx="3" fill="#f4dca8" opacity="0.9" />
+    <rect x="504" y="66" width="46" height="36" rx="3" fill="#f7eacb" opacity="0.9" />
+    <rect x="560" y="66" width="46" height="36" rx="3" fill="#f7eacb" opacity="0.9" />
   </g>
-  <g filter="url(#brush)" stroke="#9a8b7a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.6">
-    <path d="M568 24 h28" />
-    <path d="M568 92 h28" />
-    <path d="M568 160 h28" />
+  <g filter="url(#wash)">
+    <circle cx="471" cy="86" r="11" fill="#f7eacb" opacity="1" />
+    <circle cx="463" cy="78" r="4" fill="#8792a3" opacity="0.9" />
+    <circle cx="479" cy="78" r="4" fill="#8792a3" opacity="0.9" />
+    <circle cx="467" cy="86" r="3" fill="#8792a3" opacity="0.85" />
+    <circle cx="475" cy="86" r="3" fill="#8792a3" opacity="0.85" />
   </g>
-  <g filter="url(#brush)" stroke="#9a8b7a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.5">
-    <path d="M60 246 h26 M94 246 h6 M108 246 h26" />
-    <path d="M300 246 h26 M334 246 h6 M348 246 h26" />
+  <g filter="url(#brush)" stroke="#6f8a74" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.85">
+    <path d="M452 40 h-8 v86 h8" />
+    <path d="M490 40 h8 v86 h-8" />
+  </g>
+  <g filter="url(#brush)" stroke="#8792a3" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.7">
+    <path d="M471 124 Q483.4 140.6 476 160" />
+    <path d="M482.8 154.1 L476 160 L474.9 151.1" />
+    <path d="M471 124 Q495.5 166.8 476 212" />
+    <path d="M483.0 206.4 L476 212 L475.3 203.0" />
+    <path d="M471 124 Q507.5 192.8 476 264" />
+    <path d="M483.1 258.4 L476 264 L475.3 255.0" />
+  </g>
+  <g filter="url(#wash)">
+    <rect x="480" y="146" width="110" height="40" rx="6" fill="#bcd4b4" opacity="0.85" />
+    <rect x="480" y="196" width="110" height="40" rx="6" fill="#a9c7a1" opacity="0.85" />
+    <rect x="480" y="246" width="110" height="40" rx="6" fill="#bcd4b4" opacity="0.85" />
+    <rect x="548" y="156" width="34" height="18" rx="9" fill="#f4dca8" opacity="0.95" />
+    <rect x="548" y="206" width="34" height="18" rx="9" fill="#f4dca8" opacity="0.95" />
+    <rect x="548" y="256" width="34" height="18" rx="9" fill="#f4dca8" opacity="0.95" />
+  </g>
+  <g filter="url(#brush)" stroke="#6f8a74" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.6">
+    <path d="M490 158 h34" />
+    <path d="M490 168 h24" />
+    <path d="M490 208 h34" />
+    <path d="M490 218 h24" />
+    <path d="M490 258 h34" />
+    <path d="M490 268 h24" />
+  </g>
+  <g filter="url(#brush)" stroke="#9a8b7a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.6">
+    <path d="M554 158 h22" />
+    <path d="M554 208 h22" />
+    <path d="M554 258 h22" />
   </g>
   <g filter="url(#wash)" opacity="0.5">
-    <circle cx="360" cy="50" r="3" fill="#bcd4b4" opacity="1" />
-    <circle cx="620" cy="250" r="3" fill="#b9d3e6" opacity="1" />
-    <circle cx="30" cy="60" r="4" fill="#f4dca8" opacity="1" />
+    <circle cx="300" cy="250" r="3" fill="#bcd4b4" opacity="1" />
+    <circle cx="620" cy="40" r="3" fill="#b9d3e6" opacity="1" />
+    <circle cx="40" cy="60" r="4" fill="#f4dca8" opacity="1" />
+    <circle cx="610" cy="290" r="3" fill="#f2c9a9" opacity="1" />
   </g>
 </svg>

@@ -407,41 +407,71 @@ def dictionaries():
 
 
 def panda_clips():
-    """Длинная плёнка с одной пандой; клипы — скобки таймкодов на ней, справа карточки с тегами."""
-    # Плёнка: кадры с перфорацией, панда в одном из них.
-    holes = [rect(52 + i * 36, 116, 12, 8, CREAM, r=2, op=0.95) for i in range(8)]
-    holes += [rect(52 + i * 36, 176, 12, 8, CREAM, r=2, op=0.95) for i in range(8)]
-    frames = [rect(50 + i * 58, 130, 50, 40, BUTTER if i == 2 else CREAM, r=3, op=0.9) for i in range(5)]
-    panda = [
-        circle(191, 152, 13, CREAM, 1),
-        circle(181, 142, 5, INK, 0.9), circle(201, 142, 5, INK, 0.9),
-        circle(186, 152, 3.5, INK, 0.85), circle(196, 152, 3.5, INK, 0.85),
-        circle(191, 158, 1.8, INK, 0.9),
+    """Панда с бамбуком; рядом плёнка, на ней скобки таймкодов, справа карточки клипов с тегами."""
+    def ellipse(cx, cy, rx, ry, fill, op=0.9, rot=None):
+        t = f' transform="rotate({rot} {cx} {cy})"' if rot else ''
+        return f'<ellipse cx="{cx}" cy="{cy}" rx="{rx}" ry="{ry}" fill="{fill}" opacity="{op}"{t} />'
+
+    # Панда: тело, голова, уши, пятна вокруг глаз, лапы. Чёрное — кистевой
+    # серый INK, чтобы пятна легли на бумагу так же матово, как остальное.
+    body = [
+        ellipse(160, 206, 76, 60, CREAM, 0.95),
+        ellipse(104, 196, 22, 36, INK, 0.85, rot=18),
+        ellipse(216, 196, 22, 36, INK, 0.85, rot=-18),
+        ellipse(124, 254, 28, 17, INK, 0.85),
+        ellipse(198, 254, 28, 17, INK, 0.85),
     ]
-    # Клипы справа: три карточки, у каждой ярлык тега и строка таймкодов.
-    clips = []
-    tags = []
-    for i, y in enumerate((58, 126, 194)):
-        clips += [rect(430, y, 120, 50, SAGE if i != 1 else SAGE_D, r=6, op=0.85)]
-        tags += [rect(560, y + 14, 44, 20, BUTTER, r=10, op=0.95)]
+    head = [
+        circle(160, 112, 52, CREAM, 0.97),
+        circle(120, 74, 17, INK, 0.9), circle(200, 74, 17, INK, 0.9),
+        ellipse(142, 110, 13, 17, INK, 0.88, rot=-18),
+        ellipse(178, 110, 13, 17, INK, 0.88, rot=18),
+        circle(144, 112, 3.6, CREAM, 1), circle(176, 112, 3.6, CREAM, 1),
+        circle(160, 131, 5, INK, 0.9),
+    ]
+    # Бамбук в правой лапе: стебель с коленцами и три листа.
+    leaves = [
+        ellipse(262, 70, 16, 6, SAGE_D, 0.9, rot=-35),
+        ellipse(248, 56, 15, 6, SAGE_D, 0.9, rot=30),
+        ellipse(274, 92, 14, 5, SAGE, 0.9, rot=-10),
+    ]
+    # Плёнка справа сверху: кадры, перфорация, панда в одном кадре.
+    holes = [rect(338 + i * 34, 54, 10, 7, CREAM, r=2, op=0.95) for i in range(8)]
+    holes += [rect(338 + i * 34, 108, 10, 7, CREAM, r=2, op=0.95) for i in range(8)]
+    frames = [rect(336 + i * 56, 66, 46, 36, BUTTER if i == 2 else CREAM, r=3, op=0.9) for i in range(5)]
+    mini = [
+        circle(471, 86, 11, CREAM, 1),
+        circle(463, 78, 4, INK, 0.9), circle(479, 78, 4, INK, 0.9),
+        circle(467, 86, 3, INK, 0.85), circle(475, 86, 3, INK, 0.85),
+    ]
+    # Карточки клипов с ярлыками тегов.
+    cards, tags = [], []
+    for i, y in enumerate((146, 196, 246)):
+        cards += [rect(480, y, 110, 40, SAGE if i != 1 else SAGE_D, r=6, op=0.85)]
+        tags += [rect(548, y + 10, 34, 18, BUTTER, r=9, op=0.95)]
     return (
-        bloom((190, 150, 170, 80, '#d3e3ee'), (500, 140, 110, 110, '#d4e6dc'), (90, 250, 70, 50, '#f3e8cc'))
-        + wash(rect(40, 110, 300, 80, SKY, r=6, op=0.85))
+        bloom((160, 170, 120, 120, '#d4e6dc'), (470, 90, 150, 70, '#d3e3ee'), (540, 210, 90, 80, '#f3e8cc'))
+        + wash(*body)
+        + wash(*head)
+        + brush('M152 138 q8 7 16 0', color=INK, width=2, opacity=0.7)
+        # Стебель бамбука кистью, коленца — поперечные штрихи.
+        + brush('M232 168 L264 44', color=INK_SAGE, width=5, opacity=0.8)
+        + brush('M243 128 h10 M251 98 h10 M258 70 h10', color=INK_SAGE, width=2, opacity=0.8)
+        + wash(*leaves)
+        # Плёнка.
+        + wash(rect(326, 48, 280, 70, SKY, r=6, op=0.85))
         + wash(*holes, *frames)
-        + wash(*panda)
-        # Скобки таймкодов вокруг кадра с пандой: ничего не вырезано, плёнка цела.
-        + brush('M172 98 h-8 v104 h8', 'M216 98 h8 v104 h-8', color=INK_SAGE, width=2.6, opacity=0.8)
-        + brush('M150 224 h20', 'M226 224 h20', color=INK_SAGE, width=2, opacity=0.6)
-        # Из кадра — в клипы: карточки указывают на плёнку, а не копируют её.
-        + brush(*arrow(230, 140, 420, 84, bend=-26), *arrow(230, 150, 420, 150), *arrow(230, 160, 420, 218, bend=26),
-                color=INK, width=2.2, opacity=0.55)
-        + wash(*clips, *tags)
-        + brush(*lines(442, 76, [40, 28], 12), *lines(442, 144, [40, 28], 12), *lines(442, 212, [40, 28], 12),
-                color=INK_SAGE, width=1.8, opacity=0.6)
-        + brush('M568 24 h28', 'M568 92 h28', 'M568 160 h28', color=INK_WARM, width=2, opacity=0.6)
-        # Таймкоды под плёнкой.
-        + brush('M60 246 h26 M94 246 h6 M108 246 h26', 'M300 246 h26 M334 246 h6 M348 246 h26', color=INK_WARM, width=1.8, opacity=0.5)
-        + splashes((360, 50, 3, SAGE), (620, 250, 3, SKY), (30, 60, 4, BUTTER))
+        + wash(*mini)
+        # Скобки таймкодов: плёнка цела, вырезано ничего не было.
+        + brush('M452 40 h-8 v86 h8', 'M490 40 h8 v86 h-8', color=INK_SAGE, width=2.6, opacity=0.85)
+        # Из кадра — в карточки.
+        + brush(*arrow(471, 124, 476, 160, bend=-10), *arrow(471, 124, 476, 212, bend=-22), *arrow(471, 124, 476, 264, bend=-34),
+                color=INK, width=2.4, opacity=0.7)
+        + wash(*cards, *tags)
+        + brush(*lines(490, 158, [34, 24], 10), *lines(490, 208, [34, 24], 10), *lines(490, 258, [34, 24], 10),
+                color=INK_SAGE, width=1.6, opacity=0.6)
+        + brush('M554 158 h22', 'M554 208 h22', 'M554 258 h22', color=INK_WARM, width=1.8, opacity=0.6)
+        + splashes((300, 250, 3, SAGE), (620, 40, 3, SKY), (40, 60, 4, BUTTER), (610, 290, 3, PEACH))
     )
 
 COVERS = {
@@ -460,7 +490,7 @@ COVERS = {
     'p2p-network': (p2p_network, 'Слева все тянут с одного сервера, справа узлы раздают куски друг другу.'),
     'littles-law': (littles_law, 'Интенсивность и время пребывания измерены, число заявок в системе — оценено.'),
     'why-dictionaries': (dictionaries, 'Строку словаря дописывают в админке, сервис читает свою копию.'),
-    'panda-clips': (panda_clips, 'Плёнка с одной пандой: клипы — скобки таймкодов на ней, справа карточки с тегами.'),
+    'panda-clips': (panda_clips, 'Панда с бамбуком; плёнка со скобками таймкодов и карточки клипов с тегами.'),
 }
 
 if __name__ == '__main__':
