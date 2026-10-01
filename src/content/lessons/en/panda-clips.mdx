@@ -862,8 +862,22 @@ steps:
       `GET /clips/{id}` returns a `playback_url`, and it points not at our
       service but at the [[CDN]]. The player fetches the playlist and the
       segments from there; on a miss the CDN node pulls them from `clips-s3`
-      and keeps them. A clip watched a hundred thousand times leaves storage a
-      handful of times, once per node.
+      and keeps them.
+
+      Why a CDN, if there is already S3? Storage can serve files on its own,
+      by link, and at a small traffic that is the right answer; the delivery
+      calculator says so. A CDN in front of it is there for three things.
+
+      - **Distance.** The bucket lives in one region, and a viewer from the
+        other hemisphere would cross an ocean for every segment. A CDN node
+        stands next to the viewer.
+      - **Repeats.** A good clip is watched a hundred thousand times. Without
+        a CDN that is a hundred thousand reads from the bucket; with one, the
+        bucket serves a segment once per node, and the rest comes from the
+        edge cache.
+      - **Money.** Egress from storage to the internet is billed higher than
+        egress from a CDN, and HLS is many small segments, each request to
+        the bucket billed too.
 
       Two requirements close at once. NFR-12: 3.4 TB a day pass through
       neither `video-api` nor `api-gateway`. NFR-5: the first frame comes from
