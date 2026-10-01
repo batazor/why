@@ -2,8 +2,9 @@
 title: 'System design: panda clips'
 description: >-
   An interview task from the brief to the diagram: upload a video, find the
-  panda, cut the clips, let people tag, search and watch them. Why there is no
-  broker here, and why every decision is about bytes.
+  panda, mark the clips with timecodes, let people tag, search and watch them.
+  Why there is no broker and no cutting here, and why every decision is about
+  bytes.
 problem: 'A video task gets solved as a queue task: Kafka, workers, arrows. But the flow here is a fraction of a video per second, and the queue is not the problem. The problem is that one video weighs hundreds of megabytes and a minute of GPU, and until that is counted nobody knows where the bytes should go, what to keep, or where to serve from.'
 brief:
   label: Task description
@@ -51,7 +52,7 @@ labels:
   clips.pipeline.line.2: "Little's law: {peak} videos/s × {jobTime} on a GPU = {inFlight} videos in flight at once, and that is how many GPUs you need."
   clips.pipeline.verdict.single: 'One machine with a GPU is enough. The queue is there so upload does not wait for processing; there is nothing to scale yet.'
   clips.pipeline.verdict.pool: 'This needs a pool of GPU workers that grows with the queue, separately from the API. A task table handles this flow; a broker is not needed.'
-  clips.pipeline.verdict.split: 'Dozens of GPUs: detection and cutting should live in separate pools so expensive GPUs do not wait for ffmpeg, and the queue should be split by region.'
+  clips.pipeline.verdict.split: 'Dozens of GPUs: decoding and detection should live in separate pools so expensive GPUs do not wait for frames to be unpacked, and the queue should be split by region.'
   clips.storage.uploadsPerDay: Videos per day
   clips.storage.uploadsPerDay.unit: videos
   clips.storage.videoMinutes: Video length
@@ -62,24 +63,24 @@ labels:
   clips.storage.pandaShare.unit: '%'
   clips.storage.clipSeconds: Clip length
   clips.storage.clipSeconds.unit: s
-  clips.storage.clipMbps: Clip bitrate
+  clips.storage.clipMbps: Clip bitrate, if we cut
   clips.storage.clipMbps.unit: Mbit/s
-  clips.storage.keepDays: Keep the original for
-  clips.storage.keepDays.unit: days
+  clips.storage.hotDays: Hot tier for the first
+  clips.storage.hotDays.unit: days
   clips.storage.out.perVideo: One original
   clips.storage.out.uploadBytes: Uploaded per day
   clips.storage.out.clipsPerDay: Clips per day
   clips.storage.out.clipsPerDay.unit: clips
-  clips.storage.out.clipBytes: Clips per day, bytes
-  clips.storage.out.ratio: An original outweighs its clips by
-  clips.storage.out.originals: Originals in storage
-  clips.storage.out.clipsYear: Clips per year
-  clips.storage.out.total: Total after a year
-  clips.storage.line.1: 'An original: {videoMinutes} min × {mbps} Mbit/s = {perVideo}; its clips weigh {ratio} less.'
-  clips.storage.line.2: 'Keeping originals for {keepDays} days adds {originals} on top of {clipsYear} of clips a year.'
+  clips.storage.out.storedYear: Originals per year
+  clips.storage.out.hot: In the hot tier
+  clips.storage.out.cold: In the infrequent-access tier
+  clips.storage.out.cutAlternative: If we cut clips, per year
+  clips.storage.out.ratio: Timecodes cost more than cutting by
+  clips.storage.line.1: 'An original: {videoMinutes} min × {mbps} Mbit/s = {perVideo}; {uploadsPerDay} a day is {uploadBytes} per day and {storedYear} per year.'
+  clips.storage.line.2: 'Cutting would store {cutAlternative} a year, {ratio} less. Timecodes are paid for in storage, not in GPU and a second copy.'
   clips.storage.verdict.bucket: 'Tens of terabytes a year: one bucket, standard tier, no tricks.'
-  clips.storage.verdict.tiers: 'Hundreds of terabytes: old data goes to a cold tier, and originals are deleted on schedule rather than kept just in case.'
-  clips.storage.verdict.budget: 'Petabytes: storage is the main cost line, and how long an original and a clip live is a product decision, not an engineering one.'
+  clips.storage.verdict.tiers: 'Hundreds of terabytes: recent videos stay hot, the rest moves to an infrequent-access tier by a storage rule. Cutting would save several times over, but would take reprocessing away.'
+  clips.storage.verdict.budget: 'Petabytes: storage is the main cost line, and how long a video lives is a product decision, not an engineering one. Here cutting into separate files comes back to the table.'
   clips.delivery.uploadsPerDay: Videos per day
   clips.delivery.uploadsPerDay.unit: videos
   clips.delivery.clipsPerVideo: Clips from one video
@@ -88,8 +89,8 @@ labels:
   clips.delivery.watchRatio.unit: views
   clips.delivery.clipSeconds: Clip length
   clips.delivery.clipSeconds.unit: s
-  clips.delivery.clipMbps: Clip bitrate
-  clips.delivery.clipMbps.unit: Mbit/s
+  clips.delivery.playMbps: Bitrate while watching
+  clips.delivery.playMbps.unit: Mbit/s
   clips.delivery.peakFactor: Peak above average by
   clips.delivery.peakFactor.unit: ×
   clips.delivery.searchesPerView: Searches per view
@@ -107,10 +108,10 @@ labels:
   clips.delivery.out.writesPeak: Clip writes at peak
   clips.delivery.out.writesPeak.unit: /s
   clips.delivery.out.readWrite: Reads per write
-  clips.delivery.line.1: 'Bytes: {views} views × {clipSeconds} s × {clipMbps} Mbit/s = {egressDay} a day, {egressMonth} a month. That is CDN traffic, not API traffic.'
+  clips.delivery.line.1: 'Bytes: {views} views × {clipSeconds} s × {playMbps} Mbit/s = {egressDay} a day, {egressMonth} a month. That is CDN traffic, not API traffic.'
   clips.delivery.line.2: 'Metadata: {readsPeak} reads/s at peak against {writesPeak} writes: one database with a tag index.'
-  clips.delivery.verdict.direct: 'Few bytes: clips can be served straight from storage by link. A CDN is needed once viewers spread across the world.'
-  clips.delivery.verdict.cdn: 'Terabytes a day: bytes come from the CDN, the API returns only metadata, and the database takes the reads without a cache.'
+  clips.delivery.verdict.direct: 'Few bytes: a range of the original can be served straight from storage by link. A CDN is needed once viewers spread across the world.'
+  clips.delivery.verdict.cdn: 'Terabytes a day: bytes come from the CDN as ranges of the original, the API returns metadata and timecodes, and the database takes the reads without a cache.'
   clips.delivery.verdict.cluster: 'Thousands of searches a second: search moves to a dedicated engine, and a cache goes in front of the clip page.'
   sort.prompt: >-
     Ten statements from the conversation with the interviewer. Sort them: what
@@ -203,17 +204,17 @@ labels:
   req.note.NFR-9: 'the peak piles up in the queue and breaks NFR-4'
   req.goal.NFR-9: '0.23 videos/s at peak, 14 GPUs at once; the pool grows with the age of the oldest task'
   req.text.NFR-10: 'Storage grows within budget'
-  req.note.NFR-10: 'after a year the originals weigh more than everything else together'
-  req.goal.NFR-10: 'the original is deleted after the clips commit; clips are about 37 TB a year'
+  req.note.NFR-10: 'after a year there are hundreds of terabytes, and nobody decided what can go cold'
+  req.goal.NFR-10: 'the original lives as long as the video: about 622 TB a year; after 30 days, an infrequent-access tier'
   req.text.NFR-11: 'A temporary failure does not fail the video'
   req.note.NFR-11: 'the model ran out of memory on one frame, and the video is failed'
   req.goal.NFR-11: 'up to 3 attempts with a pause; a 10-minute lease, extended while working'
   req.text.NFR-12: 'Watching a clip does not load our API with bytes'
   req.note.NFR-12: 'every view pulls megabytes through our server'
-  req.goal.NFR-12: 'bytes come from the CDN; the API returns only metadata and an address'
+  req.goal.NFR-12: 'bytes come from the CDN as ranges of the original; the API returns metadata and timecodes'
   req.text.NFR-13: 'A clip without a panda can be removed, and a panda is not missed'
   req.note.NFR-13: 'a gallery of empty frames nobody trusts'
-  req.goal.NFR-13: 'threshold 0.7 and clips no shorter than 5 s; the uploader deletes a false clip'
+  req.goal.NFR-13: 'threshold 0.7 and clips no shorter than 5 s; the uploader deletes a false clip; a rerun fixes a miss'
   req.text.NFR-14: 'For every video it is visible what stage it is at and why it is stuck'
   req.note.NFR-14: 'only "processing" is visible, with no reason and no deadline'
   req.goal.NFR-14: 'stage and attempts on the video page; age of the oldest task on the dashboard'
@@ -264,7 +265,7 @@ labels:
   bm.cell.growth.kafka: 'millions'
   bm.cell.growth.sqs: 'practically unlimited'
   er.table.videos: 'A video and its processing task: status, attempt and lease in one row.'
-  er.table.clips: 'A clip: a range of the original, file keys in storage and tags for search.'
+  er.table.clips: 'A clip: two timecodes in the original, the detector confidence, a thumbnail and tags for search. A clip has no file.'
   er.table.tags: 'The tag dictionary: one normalised word, one row.'
   er.table.clip_tags: 'Who added which tag: this table lets a tag be removed.'
   api.request: 'request'
@@ -274,9 +275,9 @@ labels:
   api.complete: 'The upload is finished. A repeat with the same id gets the same answer: processing starts once.'
   api.video: 'What is happening to the video: stage, attempts, finished clips.'
   api.search: 'Clips by tag, paged by cursor.'
-  api.clip: 'The clip page: description, tags and the player address on the CDN.'
+  api.clip: 'The clip page: description, tags, the original address on the CDN and two timecodes. The player asks for the range itself.'
   api.tag: 'Add a tag. The word is normalised; the same tag is not added twice.'
-  api.remove: 'Remove a clip: a false positive, or your own video. Files are deleted after it, the CDN is purged.'
+  api.remove: 'Remove a clip: a false positive, or your own video. The row and the thumbnail go; the original goes only with the video.'
   lc.hint: 'Click a state to see where it can go from there'
   lc.out: 'Where next'
   lc.terminal: 'final'
@@ -287,14 +288,14 @@ labels:
   lc.actor.scheduler: 'poller by lease'
   lc.state.uploading: 'The row exists, the URLs are issued, parts are flying into storage. The pipeline does not see such rows.'
   lc.state.uploaded: 'The upload is confirmed. This is the task in the queue: the first free worker takes it.'
-  lc.state.processing: 'A worker holds the lease: downloads the original, finds the panda, cuts. If the lease expires, the video goes back to uploaded.'
-  lc.state.ready: 'Clips are in storage, rows are in the database, the original is deleted. The status is set only after the clips commit.'
-  lc.state.empty: 'The detector found no panda. Also final: the uploader is told, the original is deleted.'
+  lc.state.processing: 'A worker holds the lease: downloads the original, finds the panda, writes timecodes. If the lease expires, the video goes back to uploaded.'
+  lc.state.ready: 'Clip timecodes are in the database, thumbnails in storage, the original in place, and that is what gets watched. The status is set only after the commit.'
+  lc.state.empty: 'The detector found no panda. Also final: the uploader is told, and the original stays, so it can be run again.'
   lc.state.failed: 'Attempts ran out, or the upload was never completed. The poller decides by the attempt history.'
   lc.tr.create: 'POST /videos'
   lc.tr.complete: 'POST /complete'
   lc.tr.take: 'taken, lease'
-  lc.tr.done: 'clips written'
+  lc.tr.done: 'timecodes written'
   lc.tr.none: 'no pandas'
   lc.tr.retry: 'lease expired or error, backoff'
   lc.tr.exhausted: 'three attempts'
@@ -336,7 +337,7 @@ labels:
   match.reset: 'Start over'
   match.open: 'Show the answer'
   match.card.directUpload: 'Bytes past the API'
-  match.card.directUpload.text: 'POST /videos issues presigned part URLs; the phone sends the parts to raw-s3 itself'
+  match.card.directUpload.text: 'POST /videos issues presigned part URLs; the phone sends the parts to videos-s3 itself'
   match.why.directUpload: 'This is about upload: an hour-long video hits neither a body limit nor a timeout, and the API does not proxy terabytes.'
   match.card.completeKey: 'Conditional move to uploaded'
   match.card.completeKey.text: 'UPDATE videos SET status = uploaded WHERE id = ? AND status = uploading'
@@ -353,11 +354,11 @@ labels:
   match.card.fairPoll: 'Task choice by owner'
   match.card.fairPoll.text: 'The poller takes the next task from the owner with the fewest in flight: an ORDER BY in the same query'
   match.why.fairPoll: 'This is uploader isolation: a zoo archive does not take the whole pool.'
-  match.card.deleteOriginal: 'The original is deleted after commit'
-  match.card.deleteOriginal.text: 'Once clips and status are committed, the poller deletes the raw object; raw-s3 holds only what is not cut yet'
-  match.why.deleteOriginal: 'About the storage budget: an original weighs 17 times its clips, and there is no reason to keep it.'
-  match.card.cdn: 'HLS from the CDN'
-  match.card.cdn.text: 'playback_url points at the CDN; the CDN pulls segments from clips-s3 on a miss'
+  match.card.keepOriginal: 'One file per video'
+  match.card.keepOriginal.text: 'A clip is timecodes in the clips row; a range of the original gets watched; after 30 days the original moves to an infrequent-access tier'
+  match.why.keepOriginal: 'About the storage budget: we pay for originals rather than for cutting and a second copy, and any video can be run again.'
+  match.card.cdn: 'A range of the original from the CDN'
+  match.card.cdn.text: 'video_url points at the CDN; the player asks for the clip bytes with a Range header; the CDN pulls them from videos-s3 on a miss'
   match.why.cdn: 'About watching and its speed: bytes do not pass through the API, the first frame comes from the nearest edge.'
   match.card.gin: 'Tags in an array with GIN'
   match.card.gin.text: 'clips.tags text[] and a GIN index; search is tags @> ARRAY[…]; a tag is visible right after commit'
@@ -372,10 +373,10 @@ labels:
   match.card.shareLink.text: 'GET /clips/{id} is a public page with a player and a thumbnail'
   match.why.shareLink: 'This is sharing: the clip address is permanent, the bytes come from the CDN.'
   match.card.deleteClip: 'Deleting a clip and a video'
-  match.card.deleteClip.text: 'DELETE /clips/{id}, and deleting a video together with its clips; files and the CDN are cleaned up after'
+  match.card.deleteClip.text: 'DELETE /clips/{id} removes the row and the thumbnail; deleting a video takes the original with its clips and purges the CDN'
   match.why.deleteClip: 'This is the delete function and the way to remove a false positive by hand.'
-  match.card.threshold: 'Threshold and cutting rules'
-  match.card.threshold.text: 'Confidence threshold 0.7, clips no shorter than 5 s, a second of padding at the edges, an empty video → empty'
+  match.card.threshold: 'Threshold and merging rules'
+  match.card.threshold.text: 'Confidence threshold 0.7, clips no shorter than 5 s, a second of padding at the edges, an empty video → empty; a rerun fixes a miss'
   match.why.threshold: 'This is detection quality: less junk in the gallery, and "no pandas" is an honest state rather than an empty page.'
 terms:
   Postgres:
@@ -394,7 +395,7 @@ terms:
     text: 'A search engine with full-text search, typo tolerance and ranking. A separate cluster with its own operations.'
     url: 'https://opensearch.org/'
   ffmpeg:
-    text: 'A tool for decoding, cutting and transcoding video. Cuts the original by the second and assembles HLS.'
+    text: 'A tool for decoding and transcoding video. Here it only extracts frames for the detector and the thumbnail; it cuts nothing.'
     url: 'https://ffmpeg.org/'
   C1: >-
     The whole system as one block, and everything that talks to it: people
@@ -411,10 +412,11 @@ terms:
   presigned: >-
     An address of an object in storage, signed for a period and an action: it
     lets a file be put or fetched directly, bypassing our service.
-  HLS: >-
-    HTTP Live Streaming: the video is cut into short segments, and a playlist
-    tells the player in what order to fetch them. Served over plain HTTP, so
-    through a CDN too.
+  Range: >-
+    An HTTP request header: the client asks for bytes from here to there, and
+    the server returns only those. That is how a player starts at the right
+    second without downloading the file from the start, and a CDN caches
+    ranges separately.
   CDN: >-
     A network of edge caches: the viewer gets the file from the nearest node,
     and the node goes to our storage only on a miss.
@@ -442,11 +444,12 @@ terms:
     wanted class is in it and with what confidence.
   false positive: >-
     The detector saw a panda where there is none: a raccoon, a plush toy, a
-    stain on the wall. The opposite error, a miss, costs more: without the
-    original it cannot be fixed.
-  transcoding: >-
-    Re-encoding video into another format or bitrate. Clips are encoded at the
-    delivery bitrate, not the one the phone recorded at.
+    stain on the wall. The opposite error is a miss: there is a panda, but no
+    clip.
+  moov: >-
+    The index part of an MP4 file. Phones often write it at the end of the
+    file; moving it to the front once (faststart) lets a player begin at any
+    second without reading the file to the end.
 steps:
   - id: overview
     title: What is actually being asked
@@ -461,20 +464,22 @@ steps:
       - **Find the panda on its own.** Nobody labels videos by hand. So there is
         a neural [[detector]] inside, and it has confidence, errors and a GPU
         price.
-      - **Store the clips and let people watch them.** A clip is a file that
-        sits somewhere for a long time and is watched many times. That is
-        about bytes, not about states.
+      - **Store the clips and let people watch them.** The brief says "cuts
+        out", but that does not mean "creates a file". A clip can be stored as
+        a pair of timecodes and shown as a piece of the original. This is one
+        of the main decisions of the write-up, and it is made with numbers,
+        not with the wording of the brief.
       - **Tag and search.** People add words, other people search by words. We
         need a tag dictionary and a search that sees a fresh tag.
 
       The interviewer's YouTube analogy sets the proportion: few upload, many
       watch. Everything asked fits in one word, video, and that word decides
-      what the system will be: a clip weighs hundreds of megabytes, while a
+      what the system will be: a video weighs hundreds of megabytes, while a
       request to the scraping service weighed kilobytes.
 
       What the brief lacks: how many videos, how long, from what device, how
-      soon the clips are needed, and whether the original is needed after
-      cutting. That is the next step.
+      soon the clips are needed, and what a clip is, a file or a mark. That is
+      the next step.
   - id: questions
     title: The questions without which there is nothing to calculate
     narration: |-
@@ -487,9 +492,13 @@ steps:
         apart in GPU and in disk. Without this number no estimate adds up.
       - **What are they shot with?** A phone records 1080p at about 10 Mbit/s:
         five minutes is 375 MB, an hour is four and a half gigabytes. One
-        request of that size will not go through an API.
-      - **Is the original needed after cutting?** If not, storage shrinks by an
-        order of magnitude. If yes, it is the main cost line.
+        request of that size will not go through an API. And if the phone
+        records HEVC, a browser may not play it; that is a question about a
+        one-time transcode on upload.
+      - **Is a clip a separate file, or timecodes in the original?** The whole
+        storage design hangs on this: cutting and keeping only the pieces is
+        cheap on disk, but the original is gone; keeping the original and
+        marking the pieces costs more disk, but any video can be run again.
       - **How soon are the clips needed?** Minutes: a normal pool. Seconds:
         processing starts before the upload ends, and that is a different
         system.
@@ -542,7 +551,9 @@ steps:
       requirement: from the uploader's point of view the system "finds the
       panda", and they do not see with what. Likewise there is no queue, no
       GPU and no CDN: those are decisions, and they appear on the diagram once
-      the numbers justify them.
+      the numbers justify them. And a "clip" in the table is what a viewer
+      watches and tags; whether it is a file or timecodes is decided in the
+      estimate.
 
       FR-8 stands apart: delete a clip with no panda in it. It looks minor, but
       it is the only way to fix a detector mistake without a human on our
@@ -561,9 +572,9 @@ steps:
         "Pick by taste" is a separate product with its own data.
       - **Other animals.** There is one detector and it looks for a panda. A
         model per animal is a different pipeline and a different budget.
-      - **Manual editing.** Moving a clip boundary by a second is handy, but it
-        requires keeping the original, and we delete it. If product wants it,
-        that changes the storage decision.
+      - **Manual editing.** Moving a clip boundary by a second. If a clip is
+        timecodes, that is cheap: two numbers in a row. We still do not do it
+        in the first version, but the door stays open, unlike with cutting.
       - **Live streams.** Processing a stream rather than a file is a different
         system.
 
@@ -617,8 +628,8 @@ steps:
 
       The targets go into the column next to the rows already in the table.
       Decisions are made by these numbers later: the third one broken, we
-      grow the pool; the fourth one broken, we look at the CDN and the segment
-      length.
+      grow the pool; the fourth one broken, we look at the CDN and at where
+      the index sits in the file.
   - id: calc-pipeline
     title: 'Estimate: how many GPUs'
     narration: |-
@@ -631,7 +642,8 @@ steps:
 
       Each video costs GPU time. Not every frame: the model looks at two frames
       a second, and a five-minute video takes about a minute, 0.2 seconds of
-      GPU per second of video. That is 83 GPU hours a day.
+      GPU per second of video. That is 83 GPU hours a day. Processing does
+      nothing else: there is nothing to cut or transcode, a clip is timecodes.
 
       How many GPUs to keep is given by [[Little's law]]: the flow at peak
       multiplied by the time of one processing run. 0.23 videos a second at 60
@@ -659,32 +671,48 @@ steps:
       our API; that is already requirement NFR-2, and on the diagram it
       becomes the first decision.
 
-      Clips weigh differently. A panda is in frame for a fifth of the video, a
-      minute per video, three clips of twenty seconds. A clip is encoded at the
-      delivery bitrate, 3 Mbit/s, not the one the phone recorded at. That is
-      22 MB of clips from one video against 358 MB of original: 17 times less.
-      Per day, 105 GB; per year, 37 TB.
+      A clip is timecodes, so the original stays: it is what gets watched. 1.7
+      TB a day is 622 TB a year, and storage grows at that rate for as long as
+      the videos live. The first thirty days, while a video is being watched,
+      it stays hot, in a tier for frequent reads; after that it moves to an
+      infrequent-access tier by a storage rule. In numbers that is 51 TB hot
+      and 571 TB cold after a year.
 
-      This gives the decision that shapes the whole storage design: **the
-      original is deleted after cutting**. Push "keep the original" to thirty
-      days and 51 TB is added, more than a year of clips. The user keeps the
-      original on their phone; we need it only until the clips are written.
+      The calculator also counts the alternative. If clips were cut into
+      separate files and only those were kept, with a panda in frame for a
+      fifth of the video and a clip encoded at 3 Mbit/s, that would be 37 TB a
+      year, 17 times less. That is the price of "timecodes instead of
+      cutting", and it has to be said out loud.
 
-      This decision has a price too: a missed panda cannot be recovered
-      without the original, and a newer, more accurate model applies only to
-      new uploads. More in the detection step. The storage budget row goes
-      into the table; its number comes in the retention step.
+      What it buys. No cutting and no transcoding: no CPU, no second store, no
+      files that can drift away from the rows in the database. A clip boundary
+      moves by changing two numbers. A missed panda can be found by a rerun,
+      and a new model can be applied to the archive. With cutting, none of
+      that is possible: the original is gone.
+
+      Push the video length to an hour or the bitrate to 50 Mbit/s, and the
+      storage bill becomes the biggest in the system. Then cutting comes back
+      to the table, and that is the calculator's honest answer. The storage
+      budget row goes into the table; its number comes in the retention step.
   - id: calc-delivery
     title: 'Estimate: how much is watched'
     narration: |-
       The third calculator is about viewers. If every uploaded video collects a
       hundred clip views, that is 500 thousand views a day and 23 a second at
-      peak. Each view is 20 seconds at 3 Mbit/s, seven and a half megabytes.
-      In total 3.4 TB a day and 102 TB a month.
+      peak. Each view is 20 seconds of the original at 10 Mbit/s, 25
+      megabytes: the clip is not transcoded, it is watched at the bitrate the
+      phone recorded. In total 11 TB a day and 341 TB a month.
 
       That is traffic that cannot pass through our service: a [[CDN]] serves
-      it, and our API serves only the address. Row NFR-12 goes into the table;
-      its number comes on the playback frame.
+      it, and our API serves only the address and two timecodes. Row NFR-12
+      goes into the table; its number comes on the playback frame.
+
+      The bitrate while watching is a slider. Push it to three megabits: the
+      traffic drops threefold, to 102 TB a month. That is what a one-time
+      transcode on upload would give, one file per video at the delivery
+      bitrate, still no cutting. The first version does not do it: it is CPU
+      per video and a second copy. When the traffic bill outgrows the storage
+      bill, the slider shows how much it would save.
 
       The second half of the calculator is metadata. Each view is one read of
       the clip page from the database, and every fifth viewer also searches.
@@ -695,7 +723,7 @@ steps:
       views grow a hundredfold, and the road is known:
       [the chapter on CQRS](../why-cqrs/).
 
-      Push views to a thousand per video: bytes grow to a petabyte a month,
+      Push views to a thousand per video: bytes grow to petabytes a month,
       while database reads are still under three hundred a second. Bytes grow
       faster than requests, and that is the main proportion of the task.
   - id: c1
@@ -716,27 +744,32 @@ steps:
     title: 'The way in: bytes past the API'
     narration: |-
       The first elements inside the boundary are `api-gateway`, `video-api`,
-      the `clips-pg` database and the `raw-s3` store for originals.
+      the `clips-pg` database and the `videos-s3` store.
 
       Upload takes three moves. `POST /videos` creates a video row in the
       `uploading` state and returns [[presigned]] URLs for the parts. The phone
-      sends the parts straight to `raw-s3`: in parts, re-uploading a dropped
-      part, with no request body limit on our side. `POST /videos/{id}/complete`
-      says everything has arrived and moves the video to `uploaded`.
+      sends the parts straight to `videos-s3`: in parts, re-uploading a
+      dropped part, with no request body limit on our side.
+      `POST /videos/{id}/complete` says everything has arrived and moves the
+      video to `uploaded`.
 
       Two small requests pass through `video-api`, and of the 358 MB of video,
       not a single byte. That is NFR-2 on the diagram. A service that proxied
       terabytes a day would have to scale by traffic rather than by requests,
       and it would do nothing with those bytes except pass them along.
+
+      The file that landed here is the only copy of the video for its whole
+      life. The detector will take frames from it, and the viewer will watch
+      clips from it.
     added:
       - element: pandas.gateway
         role: 'The entry point: checks who came, holds the shared limits and routes the request inside. Knows nothing about videos.'
       - element: pandas.api
         role: 'The only service with endpoints: starts an upload, accepts complete, writes tags, serves the gallery and search. Video bytes do not pass through it.'
       - element: pandas.db
-        role: 'Videos, clips, tags. The video row is also the processing task.'
+        role: 'Videos, clips, tags. The video row is also the processing task; the clip row is two timecodes.'
       - element: pandas.raw
-        role: 'Originals. The user sends the bytes here directly, the pipeline takes them from here, and they live here only until cutting.'
+        role: 'The video as uploaded, the only copy. The user sends the bytes here directly, the detector reads them from here, the CDN pulls them from here.'
   - id: c2-queue
     title: The queue is a table
     note: 'The queue is the status, attempt and lease_until columns of the videos row'
@@ -765,7 +798,7 @@ steps:
       in the task: there is one consumer, and it is heavy.
     added:
       - element: pandas.pipeline
-        role: 'A scheduler with the processing inside: takes the next video from the table under a lease, downloads the original, finds the panda, cuts the clips, stores them, deletes the original.'
+        role: 'A scheduler with the processing inside: takes the next video from the table under a lease, downloads the original, finds the panda and writes the clip timecodes. Cuts nothing.'
   - id: queue-choice
     title: Table or broker
     narration: |-
@@ -792,29 +825,28 @@ steps:
       at thousands of videos a second we would have a different problem, and
       it would not be about the queue but about petabytes.
   - id: c2-pipeline
-    title: From the original to the clips
-    note: 'The original is deleted after the clips commit, and never before it'
+    title: From the original to the timecodes
+    note: 'No second store: a clip is a row in the database, the bytes are the original'
     narration: |-
-      The pipeline took the task. Four actions follow, and the order matters.
+      The pipeline took the task. Three actions follow, and none of them
+      creates a new video.
 
-      The original is downloaded from `raw-s3` once, to the worker's local
-      disk. The detector samples frames from it, the cutter cuts from the same
-      file: there is no reason to go to storage twice. The cut clips, [[HLS]]
-      segments and a thumbnail, go to `clips-s3`, a separate store: it has a
-      different lifetime and different delivery.
+      The original is downloaded from `videos-s3` once, to the worker's local
+      disk. The detector samples frames from it, runs them through the model
+      and merges the hits into ranges: start and end in milliseconds, and a
+      confidence. From the frame with the most confident panda it makes a
+      thumbnail, the only file processing puts back into `videos-s3`, next to
+      the video.
 
-      Then one transaction in `clips-pg`: the clip rows and the video status
-      `ready`. Until it commits, the video is still processing for the whole
-      system, and the files in `clips-s3` are just files nobody refers to.
+      Then one transaction in `clips-pg`: the clip rows with their timecodes
+      and the video status `ready`. Until it commits, the video is still
+      processing for the whole system, and it has no clips.
 
-      Only after the commit does the pipeline delete the original. Delete it
-      earlier and the commit fails, and the retry cuts thin air. Crash between
-      the commit and the delete, and the original stays and gets picked up by
-      the scheduled cleanup. So `raw-s3` holds only what is not cut yet: at
-      1.7 TB a day and six minutes per video that is a few gigabytes.
-    added:
-      - element: pandas.media
-        role: 'Clips: HLS segments and thumbnails. Kept forever, served through the CDN. Files appear here before the rows in the database and become clips only after the commit.'
+      What the frame does not show: a second store. In the scraper the result
+      of a job went to a separate bucket; here the result is rows in the
+      database, and the clip's bytes are the bytes of the original, which
+      already sits where the user put it. The pipeline cuts and transcodes
+      nothing: [[ffmpeg]] here only extracts frames.
   - id: c2-lease
     title: A worker died holding a video
     note: 'The lease is extended every minute of work; expired, the task goes to another'
@@ -832,9 +864,10 @@ steps:
       third, `failed` with the text of the last error.
 
       A retry must be safe. Clips are written with the key `(video_id,
-      start_ms)`, files in `clips-s3` with deterministic names: half the clips
-      from the previous attempt get overwritten, not doubled. That is the same
-      [[idempotency]] as at intake, only inside the pipeline.
+      start_ms)`, thumbnails with deterministic names: half the clips from the
+      previous attempt get overwritten, not doubled. That is the same
+      [[idempotency]] as at intake, only inside the pipeline. The original is
+      not touched by a retry at all; it is only read.
 
       Permanent errors, a corrupt file, not a video at all, are not worth
       retrying: those go straight to `failed`. The line runs not by error
@@ -852,58 +885,65 @@ steps:
       is still processing; that is FR-2 and half of NFR-14. Search: clips by
       tags, with a step of its own.
 
-      What the API returns in each of them: metadata and a player address. Not
-      a single byte of video is in the responses. Where those bytes are is the
-      next frame.
+      What the API returns in each of them: metadata, the address of the
+      original and two timecodes. Not a single byte of video is in the
+      responses. Where those bytes are is the next frame.
   - id: c2-delivery
-    title: 'Playback: bytes from the CDN'
-    note: 'Clip bytes come from the CDN; video-api returns only the address'
+    title: 'Playback: a range of the original from the CDN'
+    note: 'Clip bytes: a range of the original via the CDN; the API returns timecodes'
     narration: |-
-      `GET /clips/{id}` returns a `playback_url`, and it points not at our
-      service but at the [[CDN]]. The player fetches the playlist and the
-      segments from there; on a miss the CDN node pulls them from `clips-s3`
-      and keeps them.
+      `GET /clips/{id}` returns a `video_url`, `start_ms` and `end_ms`. The
+      address points not at our service but at the [[CDN]], with `videos-s3`
+      behind it. The player opens the original at the right second: with a
+      request carrying the [[Range]] header it asks the CDN only for the bytes
+      of the clip, not the whole file. On a miss the CDN node pulls that range
+      from storage and keeps it.
 
-      Why a CDN, if there is already S3? Storage can serve files on its own,
+      One detail makes this possible. A phone often writes the frame index,
+      the [[moov]] atom, at the end of the MP4, and a player cannot start in
+      the middle without reading the file to the end. Moving the index to the
+      front once, on upload, solves this without transcoding: the bytes are
+      copied as they are.
+
+      Why a CDN, if there is already S3? Storage can serve ranges on its own,
       by link, and at a small traffic that is the right answer; the delivery
       calculator says so. A CDN in front of it is there for three things.
 
       - **Distance.** The bucket lives in one region, and a viewer from the
-        other hemisphere would cross an ocean for every segment. A CDN node
+        other hemisphere would cross an ocean for every chunk. A CDN node
         stands next to the viewer.
       - **Repeats.** A good clip is watched a hundred thousand times. Without
         a CDN that is a hundred thousand reads from the bucket; with one, the
-        bucket serves a segment once per node, and the rest comes from the
-        edge cache.
+        bucket serves a range once per node, and the rest comes from the edge
+        cache.
       - **Money.** Egress from storage to the internet is billed higher than
-        egress from a CDN, and HLS is many small segments, each request to
-        the bucket billed too.
+        egress from a CDN, and every request to the bucket is billed too.
 
-      Two requirements close at once. NFR-12: 3.4 TB a day pass through
+      Two requirements close at once. NFR-12: 11 TB a day pass through
       neither `video-api` nor `api-gateway`. NFR-5: the first frame comes from
-      the nearest edge, not from one region. For it to arrive within two
-      seconds, segments are kept short, 2 to 4 seconds, and the clip has a
-      thumbnail shown while the first segment loads.
+      the nearest edge, not from one region. The clip has a thumbnail shown
+      while the first chunk loads.
 
       Clips are public, as on YouTube, so the links are plain. If product
       wants private videos, signed CDN URLs appear in this same place, and it
       is the only place that changes.
   - id: c2-full
     title: C2 as a whole
-    note: 'One database: videos, tasks, clips, tags, and search lives here too'
+    note: 'One database and one store: clips are rows, the bytes are the original'
     narration: |-
       The service is assembled. Only the connections here; an arrow at both
       ends is a connection in both directions.
 
       Two byte paths bypass our services: the original goes from the user
-      straight into `raw-s3`, the clip goes from `clips-s3` through the CDN to
-      the viewer. Our services touch the bytes exactly once, inside the
-      pipeline, and that is where the original disappears.
+      straight into `videos-s3`, and the same original goes from `videos-s3`
+      through the CDN to the viewer, by range. Our services touch the bytes
+      exactly once, inside the pipeline, and only read them.
 
-      In the middle is one database. It holds the videos with their tasks, the
-      clips with their tags, and search. No broker, no separate read side, no
-      cache: the numbers do not justify any of those yet, and each would add a
-      component that can break.
+      In the middle are one database and one store. The database holds the
+      videos with their tasks, the clips with their timecodes and tags, and
+      search. The store holds originals and thumbnails. No broker, no second
+      store, no separate read side, no cache: the numbers do not justify any
+      of those yet, and each would add a component that can break.
 
       What the diagram does not show yet: how the detector decides there is a
       panda in the frame, how the pool is shared between uploaders, and where
@@ -916,74 +956,75 @@ steps:
 
       Start: `POST /videos`, a row in the database, presigned URLs in the
       answer. Between the first and the second frame the user sends the parts
-      to `raw-s3` themselves, for minutes, sometimes hours, and none of our
+      to `videos-s3` themselves, for minutes, sometimes hours, and none of our
       services takes part.
 
       Completion: `complete`, the `uploaded` status, `202`. At this moment the
       video has not gone anywhere yet; it is a row in a table that the first
       free worker will take.
 
-      Processing: taking under a lease, the original, clips to storage, the
-      commit, deleting the original. The user takes no part in this frame and
-      learns the result from the video page.
+      Processing: taking under a lease, the original to the local disk, a
+      thumbnail to storage, timecodes and status to the database in one
+      transaction. The original stays in place, and no new video file has
+      appeared. The user takes no part in this frame and learns the result
+      from the video page.
   - id: seq-watch
     title: Watching step by step
     narration: |-
       The viewer's request is shorter. Search by tag is one query to the
-      database over the index; the answer is a list of clips with CDN
-      addresses.
+      database over the index; the answer is a list of clips, each with the
+      original's CDN address and two timecodes.
 
-      From then on the player talks only to the CDN: the playlist, the
-      segments. A CDN node goes to `clips-s3` on a miss, once per segment, and
-      serves the next viewers from its cache. Our services are absent from
-      the second half of the sequence entirely, and counted in bytes that is
-      almost the whole sequence.
+      From then on the player talks only to the CDN: it asks for the byte
+      range where the clip starts, and more as it plays. A CDN node goes to
+      `videos-s3` on a miss, once per range, and serves the next viewers from
+      its cache. Our services are absent from the second half of the sequence
+      entirely, and counted in bytes that is almost the whole sequence.
   - id: c3-pipeline
     title: 'C3: inside clip-pipeline'
     narration: |-
       We go one level down. [[C3]] shows the modules of a single service.
-      `clip-pipeline` was one box on C2; inside there are four.
+      `clip-pipeline` was one box on C2; inside there are three.
 
-      - **task-poller** takes the next task under a lease, extends the lease,
-        returns expired ones and deletes the original after the commit.
-        Everything that belongs to the queue lives here.
+      - **task-poller** takes the next task under a lease, extends the lease
+        and returns expired ones. Everything that belongs to the queue lives
+        here.
       - **panda-detector** decodes the original at two frames a second, runs
         the frames through the [[detector]] in batches and merges the hits into
         ranges: with a confidence threshold, a minimum length and padding at
-        the edges.
-      - **clip-cutter** is [[ffmpeg]]: it cuts the ranges, encodes HLS with
-        short segments, makes a thumbnail from the frame with the most
-        confident panda.
+        the edges. From the best frame it makes a thumbnail and puts it next
+        to the video.
       - **videos-repository** is the only module that goes to the database:
-        clips and status in one transaction.
+        timecodes and status in one transaction.
 
-      The detector and the cutter are separate modules not only for tidiness.
-      The detector needs a GPU, the cutter only a CPU, and once the pool
-      grows they get separated onto different machines: an expensive graphics
-      card should not wait while ffmpeg encodes.
+      There is no cutter here, and that is not a simplification of the
+      diagram: a clip is a row, there is nothing to cut. If a one-time
+      transcode of the original to the delivery bitrate is ever needed, it
+      becomes a separate module on a CPU, not a GPU, and it too makes one file
+      per video, not per clip.
     added:
       - element: pandas.pipeline.poller
-        role: 'The whole queue: the next task under a lease, extension, returning expired ones, deleting the original after the commit.'
+        role: 'The whole queue: the next task under a lease, extension, returning expired ones.'
       - element: pandas.pipeline.detector
-        role: 'Frames through the network, hits into ranges with a threshold, a minimum length and padding at the edges.'
-      - element: pandas.pipeline.cutter
-        role: 'ffmpeg: cuts the ranges, encodes HLS, makes thumbnails.'
+        role: 'Frames through the network, hits into ranges with a threshold, a minimum length and padding at the edges; a thumbnail from the best frame.'
       - element: pandas.pipeline.repo
-        role: 'The only module that goes to clips-pg: clips and status in one transaction.'
+        role: 'The only module that goes to clips-pg: timecodes and status in one transaction.'
   - id: data
     title: Data
     narration: |-
       Four tables, and the first of them is also the queue.
 
-      **videos.** Who owns it, where the original is, what status it is in.
-      The `attempt`, `lease_until`, `next_run_at` and `error` columns are the
+      **videos.** Who owns it, where the file is, what status it is in. The
+      `attempt`, `lease_until`, `next_run_at` and `error` columns are the
       task: until the video is in a final state, the row lives in the queue.
       An index on `(status, next_run_at)` is the whole broker.
 
-      **clips.** A range of the original in milliseconds, the detector's
-      confidence, the keys of the segments and the thumbnail in `clips-s3`, a
-      title and a description. And a `tags text[]` column, a copy of the tags
-      for search: the index is built on it, and that is the search step.
+      **clips.** Two timecodes in the original, the detector's confidence, the
+      thumbnail key in `videos-s3`, a title and a description. A clip has no
+      file: the bytes are the original by range from `start_ms` to `end_ms`.
+      So moving a boundary is updating two numbers, and deleting a clip is
+      deleting a row. And a `tags text[]` column, a copy of the tags for
+      search: the index is built on it, and that is the search step.
 
       **tags** and **clip_tags.** The dictionary of normalised words, and who
       added which tag. The second is needed to remove your own tag and so one
@@ -991,9 +1032,9 @@ steps:
       `clips.tags` in one transaction; two copies are the price of search
       without a separate engine.
 
-      What is not in the data: the original after cutting, and ranges without
-      a clip. If the detector found something, it is a clip; if not, the video
-      has the `empty` status.
+      What is not in the data: clip files, and ranges without a clip. If the
+      detector found something, it is a clip; if not, the video has the
+      `empty` status.
   - id: api
     title: 'The contract: a receipt and addresses'
     narration: |-
@@ -1011,9 +1052,10 @@ steps:
       and gets the same `202`: processing starts once. That is NFR-8, and the
       idempotency key here is the video id itself.
 
-      The remaining cards are reads and tags. The `playback_url` in the answer
-      points at the CDN. `DELETE /clips/{id}` closes FR-8: the files are
-      deleted after it, the CDN is purged by address.
+      The remaining cards are reads and tags. `GET /clips/{id}` returns a
+      `video_url` on the CDN and the pair `start_ms`, `end_ms`: the player
+      asks for the range itself. `DELETE /clips/{id}` closes FR-8: the row and
+      the thumbnail go, the original only together with the video.
   - id: lifecycle
     title: The life of a video
     narration: |-
@@ -1025,14 +1067,15 @@ steps:
 
       Who moves it is shown by colour. Into `uploaded`: `video-api` on
       `complete`. Into `processing` and on to `ready` or `empty`: the
-      pipeline, and only after the clips commit. Back to `uploaded` and into
-      `failed`: the poller by lease and attempts, not the detector itself. A
-      crashed worker moves nothing; whoever notices the expired lease does it
-      for it.
+      pipeline, and only after the timecodes commit. Back to `uploaded` and
+      into `failed`: the poller by lease and attempts, not the detector
+      itself. A crashed worker moves nothing; whoever notices the expired
+      lease does it for it.
 
       `empty` is an honest state, not an error. Half the videos from a zoo
       will be of an enclosure with no panda, and the user is told so in words,
-      not with an empty page.
+      not with an empty page. And the original stays: if the detector was
+      wrong, the video can be queued again, with the same move to `uploaded`.
   - id: detection
     title: 'Detection: threshold, length, errors'
     narration: |-
@@ -1047,17 +1090,18 @@ steps:
       **Length and merging.** Hits are merged into a range if the pause between
       them is under two seconds; a range shorter than five seconds is dropped;
       a second is added at each edge so the panda does not walk into the frame
-      on the clip's first frame.
+      on the clip's first frame. All of this is arithmetic over timecodes, and
+      the rules can change without touching a single file.
 
       **Two kinds of errors.** A [[false positive]], a clip with a raccoon, is
-      fixed by the uploader through FR-8, and that is cheap. A miss, a panda
-      with no clip, cannot be fixed at all without the original: we deleted
-      it. That is the price of the storage decision, and it has to be named to
-      product explicitly. If misses are expensive, originals are kept for a
-      day or two, at 1.7 TB a day, and the uploader can ask for another pass.
+      fixed by the uploader through FR-8, and that is cheap: a row goes. A
+      miss, a panda with no clip, is fixed by a rerun: the original is in
+      place, and "run it again" is an ordinary task in the same queue, with a
+      new threshold or a new model. The cutting design has no such path.
 
-      **A new model.** Applies to new uploads. The archive cannot be
-      reprocessed for the same reason.
+      **A new model.** Applies to new uploads immediately, and to the archive
+      through the same queue, one video at a time, in the background and
+      without hurry. That is the second thing bought by keeping the originals.
   - id: fairness
     title: A noisy neighbour on the GPUs
     narration: |-
@@ -1109,16 +1153,19 @@ steps:
     narration: |-
       Three classes of data with different fates.
 
-      **Originals.** Deleted after the clips commit, and a scheduled cleanup
-      picks up what crashed workers and abandoned uploads left behind: a day,
-      and the object is gone. `raw-s3` permanently holds a few gigabytes,
-      although 1.7 TB a day pass through it.
+      **Originals.** They live as long as the video does: they are the clips.
+      622 TB a year at the current flow is the main cost line, and it is
+      managed by a storage rule rather than by code. For the first thirty
+      days, while a video is being watched, it sits in a tier for frequent
+      reads; then it moves to an infrequent-access tier, where storage is
+      cheaper and each read costs more. Repeated reads are covered by the CDN:
+      a cold original comes up from storage once per node. Deleting a video
+      takes the original, the thumbnails and the clip rows, and purges the CDN
+      by address. Abandoned uploads, a row without `complete` for a day, are
+      picked up by a scheduled cleanup.
 
-      **Clips.** Kept while the video exists: 37 TB a year at the current
-      flow. That is a budget, not a storage problem; after a year or two old
-      clips with no views go to a cold storage tier, and that is a storage
-      rule, not our code. Deleting a video deletes its clips with the files
-      and purges the CDN by address.
+      **Thumbnails.** Kilobytes per clip; their volume does not show on the
+      bill.
 
       **Rows in the database.** Millions of clips a year is a table Postgres
       barely notices. `videos` needs attention of its own: the status changes
@@ -1126,8 +1173,9 @@ steps:
       copes, but it has to be watched, because the queue runs on this same
       table.
 
-      The number for NFR-10 goes into the table: the original after the
-      commit, clips about 37 TB a year.
+      The number for NFR-10 goes into the table: the original lives as long as
+      the video, about 622 TB a year, an infrequent-access tier after thirty
+      days.
   - id: observability
     title: What to measure
     narration: |-
@@ -1142,9 +1190,9 @@ steps:
         mixed into one failure rate.
       - **The share of `empty`.** Doubled in a day means the threshold drifted
         or the model degraded, and users have not complained yet.
-      - **CDN hit ratio and egress from `clips-s3`.** If storage egress grows
-        with views, the CDN is not caching, and the storage bill will say so
-        later than the metric.
+      - **CDN hit ratio and egress from `videos-s3`.** If storage egress grows
+        with views, the CDN is not caching ranges, and the storage bill will
+        say so later than the metric.
 
       And stage with attempts on the video page: the on-call engineer should
       not need the database to see "attempt 2 of 3, crashed on frame 1,840".
@@ -1154,10 +1202,17 @@ steps:
       The system keeps all four promises from the brief. Here is what was
       given up for that.
 
-      **There is no original.** A missed panda cannot be recovered, a new
-      model will not reprocess the archive, manual editing is impossible. This
-      is a decision for the sake of storage, and it should be written down so
-      nobody looks for the originals in a year.
+      **Storage is the main line on the bill.** A clip is timecodes, so the
+      original is kept whole: 622 TB a year against 37 if clips were cut into
+      files. This is a decision for the sake of reprocessing and simplicity,
+      and it should be written down with the number, so nobody asks in a year
+      why so much.
+
+      **Traffic at the phone's bitrate.** The viewer gets a piece of the
+      original as it is: 341 TB a month instead of 102 with a one-time
+      transcode to the delivery bitrate. When the traffic bill overtakes the
+      storage bill, a transcode on upload becomes a separate module, one file
+      per video, still without cutting.
 
       **The queue lives in the database.** One database is one failure
       domain: Postgres down means intake, processing and the gallery are down.
@@ -1168,17 +1223,14 @@ steps:
       up two orders of magnitude, the read side will have to be split out with
       a cache in front of it.
 
-      **The CDN is the main line on the bill.** The bytes left our services,
-      but they did not disappear: 102 TB a month cost money, and product pays
-      for them.
-
       **Product quality is bounded by the model.** The threshold and merging
-      rules can be tuned, but "the wrong panda" is solved only by a better
-      model, and it applies to new videos.
+      rules can be tuned and the archive rerun, but "the wrong panda" is
+      solved only by a better model.
 
       The decision gets revisited if private videos appear (signed CDN URLs),
-      live streams (different processing), or a flow of hundreds of videos a
-      second (a broker, and the pipeline split into GPU and CPU pools).
+      live streams (different processing), hour-long 4K videos (cutting comes
+      back to the table), or a flow of hundreds of videos a second (a broker,
+      and the pipeline split into pools).
   - id: answer
     title: 'The answer: decisions against requirements'
     narration: |-
@@ -1207,17 +1259,18 @@ quiz:
       videos a second at peak, one heavy consumer, and a videos row that
       doubles as the task: no dual write, a visible queue, and retry and
       fairness are SQL.
-  - question: When does the pipeline delete the original?
+  - question: What is stored for a clip?
     options:
-      - After the transaction with the clips and the ready status commits
-      - Right after downloading it to the local disk
-      - As soon as the detector has found all the ranges
-      - Never, the original is kept with the clips
+      - 'Two timecodes in the clips row and a thumbnail; the clip bytes are a range of the original'
+      - A separate clip file in a second store
+      - A copy of the original at the delivery bitrate
+      - 'Nothing: the clip is cut again on every view'
     answer: 0
     explanation: >-
-      Deleting before the commit leaves a retry without its source. Deleting
-      after is safe: if the worker crashes between the commit and the delete,
-      the scheduled cleanup picks the original up.
+      A clip is a row with start_ms and end_ms. The player asks the CDN for a
+      byte range of the original, and no new video file ever appears. We pay
+      for that in stored originals, and get reprocessing, editable boundaries
+      and no cutting.
   - question: Why do video bytes not pass through video-api?
     options:
       - The API is written in a language that cannot handle files
@@ -1265,8 +1318,8 @@ The problem is the unit of work. One video is hundreds of megabytes on the
 way in, a minute of GPU inside, and clips watched thousands of times. So the
 write-up, following the same order of understand, ask, write down, estimate,
 draw, arrives at different decisions: bytes flow past the API, the queue
-lives in a table, the original is deleted, and a <span data-term="CDN">CDN</span>
-does the serving.
+lives in a table, a clip is two timecodes in the original, and a
+<span data-term="CDN">CDN</span> serves it by range.
 
 The order is the same:
 

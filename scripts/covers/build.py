@@ -407,7 +407,7 @@ def dictionaries():
 
 
 def panda_clips():
-    """Длинная плёнка с одной пандой; из неё вырезаны клипы с тегами, остальное — в корзину."""
+    """Длинная плёнка с одной пандой; клипы — скобки таймкодов на ней, справа карточки с тегами."""
     # Плёнка: кадры с перфорацией, панда в одном из них.
     holes = [rect(52 + i * 36, 116, 12, 8, CREAM, r=2, op=0.95) for i in range(8)]
     holes += [rect(52 + i * 36, 176, 12, 8, CREAM, r=2, op=0.95) for i in range(8)]
@@ -418,34 +418,31 @@ def panda_clips():
         circle(186, 152, 3.5, INK, 0.85), circle(196, 152, 3.5, INK, 0.85),
         circle(191, 158, 1.8, INK, 0.9),
     ]
-    # Клипы справа: три карточки, у каждой ярлык тега.
+    # Клипы справа: три карточки, у каждой ярлык тега и строка таймкодов.
     clips = []
     tags = []
     for i, y in enumerate((58, 126, 194)):
         clips += [rect(430, y, 120, 50, SAGE if i != 1 else SAGE_D, r=6, op=0.85)]
         tags += [rect(560, y + 14, 44, 20, BUTTER, r=10, op=0.95)]
     return (
-        bloom((190, 150, 170, 80, '#d3e3ee'), (500, 140, 110, 110, '#d4e6dc'), (90, 250, 70, 50, '#f3d6d6'))
+        bloom((190, 150, 170, 80, '#d3e3ee'), (500, 140, 110, 110, '#d4e6dc'), (90, 250, 70, 50, '#f3e8cc'))
         + wash(rect(40, 110, 300, 80, SKY, r=6, op=0.85))
         + wash(*holes, *frames)
         + wash(*panda)
-        # Линии реза вокруг кадра с пандой.
-        + brush('M166 98 v104', 'M222 98 v104', color=INK_WARM, width=2, opacity=0.7, dash='6 6')
-        + brush('M172 92 l-6 6 l6 6', 'M216 92 l6 6 l-6 6', color=INK_WARM, width=2, opacity=0.7)
-        # Из кадра — в клипы.
+        # Скобки таймкодов вокруг кадра с пандой: ничего не вырезано, плёнка цела.
+        + brush('M172 98 h-8 v104 h8', 'M216 98 h8 v104 h-8', color=INK_SAGE, width=2.6, opacity=0.8)
+        + brush('M150 224 h20', 'M226 224 h20', color=INK_SAGE, width=2, opacity=0.6)
+        # Из кадра — в клипы: карточки указывают на плёнку, а не копируют её.
         + brush(*arrow(230, 140, 420, 84, bend=-26), *arrow(230, 150, 420, 150), *arrow(230, 160, 420, 218, bend=26),
                 color=INK, width=2.2, opacity=0.55)
         + wash(*clips, *tags)
         + brush(*lines(442, 76, [40, 28], 12), *lines(442, 144, [40, 28], 12), *lines(442, 212, [40, 28], 12),
                 color=INK_SAGE, width=1.8, opacity=0.6)
         + brush('M568 24 h28', 'M568 92 h28', 'M568 160 h28', color=INK_WARM, width=2, opacity=0.6)
-        # Остаток плёнки — в корзину.
-        + wash(rect(78, 226, 44, 42, ROSE, r=5, op=0.8), rect(72, 220, 56, 8, ROSE, r=3, op=0.95))
-        + brush('M90 236 v24 M100 236 v24 M110 236 v24', color=INK_ROSE, width=1.6, opacity=0.6)
-        + brush(*arrow(100, 194, 100, 216), color=INK_ROSE, width=2, opacity=0.55, dash='4 6')
+        # Таймкоды под плёнкой.
+        + brush('M60 246 h26 M94 246 h6 M108 246 h26', 'M300 246 h26 M334 246 h6 M348 246 h26', color=INK_WARM, width=1.8, opacity=0.5)
         + splashes((360, 50, 3, SAGE), (620, 250, 3, SKY), (30, 60, 4, BUTTER))
     )
-
 
 COVERS = {
     'circuit-breaker': (circuit_breaker, 'Ретраи долбят упавший сервис, рубильник между ними разомкнут.'),
@@ -463,7 +460,7 @@ COVERS = {
     'p2p-network': (p2p_network, 'Слева все тянут с одного сервера, справа узлы раздают куски друг другу.'),
     'littles-law': (littles_law, 'Интенсивность и время пребывания измерены, число заявок в системе — оценено.'),
     'why-dictionaries': (dictionaries, 'Строку словаря дописывают в админке, сервис читает свою копию.'),
-    'panda-clips': (panda_clips, 'Плёнка с одной пандой: клипы с тегами направо, остаток — в корзину.'),
+    'panda-clips': (panda_clips, 'Плёнка с одной пандой: клипы — скобки таймкодов на ней, справа карточки с тегами.'),
 }
 
 if __name__ == '__main__':

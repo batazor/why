@@ -10,6 +10,7 @@ import type { ClipsModel } from './widgets';
 
 const MBIT = 1_000_000;
 const DAY = 86_400;
+const TIB = 1024 ** 4;
 
 export type ClipsResult = { out: Record<string, number>; verdict: string };
 
@@ -37,27 +38,28 @@ function pipeline(v: Record<string, number>): ClipsResult {
 }
 
 /**
- * Хранилище: оригиналы против клипов.
+ * Хранилище: клип — таймкоды, поэтому хранится оригинал целиком.
  *
- * Оригинал весит столько, сколько снял телефон: минуты на битрейт. Клипы —
- * только та доля видео, где есть панда, и в битрейте раздачи. Разница в
- * десятки раз — и это ответ на вопрос, хранить ли оригинал.
+ * Оригинал весит столько, сколько снял телефон: минуты на битрейт, и живёт,
+ * пока живёт видео. Рядом считается альтернатива — нарезать клипы в
+ * отдельные файлы и хранить только их: разница в десятки раз, и это цена
+ * решения «таймкоды вместо нарезки». Горячий класс — первые дни, пока видео
+ * смотрят; дальше оно уходит в класс с редким доступом.
  */
 function storage(v: Record<string, number>): ClipsResult {
   const perVideo = (v.videoMinutes * 60 * v.mbps * MBIT) / 8;
   const uploadBytes = v.uploadsPerDay * perVideo;
   const pandaSeconds = (v.videoMinutes * 60 * v.pandaShare) / 100;
   const clipsPerDay = (v.uploadsPerDay * pandaSeconds) / v.clipSeconds;
-  const clipBytes = (v.uploadsPerDay * pandaSeconds * v.clipMbps * MBIT) / 8;
-  const originals = uploadBytes * v.keepDays;
-  const clipsYear = clipBytes * 365;
-  const total = clipsYear + originals;
+  const storedYear = uploadBytes * 365;
+  const hot = uploadBytes * Math.min(v.hotDays, 365);
+  const cold = storedYear - hot;
+  const cutAlternative = ((v.uploadsPerDay * pandaSeconds * v.clipMbps * MBIT) / 8) * 365;
 
-  const TIB = 1024 ** 4;
-  const verdict = total <= 50 * TIB ? 'bucket' : total <= 1024 * TIB ? 'tiers' : 'budget';
+  const verdict = storedYear <= 50 * TIB ? 'bucket' : storedYear <= 1024 * TIB ? 'tiers' : 'budget';
 
   return {
-    out: { perVideo, uploadBytes, clipsPerDay, clipBytes, ratio: perVideo / (clipBytes / v.uploadsPerDay), originals, clipsYear, total },
+    out: { perVideo, uploadBytes, clipsPerDay, storedYear, hot, cold, cutAlternative, ratio: storedYear / cutAlternative },
     verdict,
   };
 }
@@ -65,14 +67,15 @@ function storage(v: Record<string, number>): ClipsResult {
 /**
  * Раздача: сколько смотрят и что из этого — байты, а что — метаданные.
  *
- * Байты просмотра идут с CDN, а в нашу базу приходит по одному чтению на
- * страницу клипа и на поиск. Рядом с ними поток записи — клипы, которые
- * нарезал пайплайн, — и отношение между ними говорит, какая база нужна.
+ * Байты просмотра идут с CDN — кусок оригинала по диапазону, в том битрейте,
+ * в котором видео лежит. В нашу базу приходит по одному чтению на страницу
+ * клипа и на поиск. Рядом с ними поток записи — клипы, которые нашёл
+ * детектор, — и отношение между ними говорит, какая база нужна.
  */
 function delivery(v: Record<string, number>): ClipsResult {
   const views = v.uploadsPerDay * v.watchRatio;
   const viewsPeak = (views / DAY) * v.peakFactor;
-  const egressDay = (views * v.clipSeconds * v.clipMbps * MBIT) / 8;
+  const egressDay = (views * v.clipSeconds * v.playMbps * MBIT) / 8;
   const egressMonth = egressDay * 30;
   const searchesPeak = viewsPeak * v.searchesPerView;
   const readsPeak = viewsPeak + searchesPeak;
@@ -80,7 +83,6 @@ function delivery(v: Record<string, number>): ClipsResult {
   const writesPeak = (clipsPerDay / DAY) * v.peakFactor;
   const readWrite = (views * (1 + v.searchesPerView)) / clipsPerDay;
 
-  const TIB = 1024 ** 4;
   const verdict = searchesPeak > 2_000 ? 'cluster' : egressMonth > 10 * TIB ? 'cdn' : 'direct';
 
   return {

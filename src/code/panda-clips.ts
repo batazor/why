@@ -6,14 +6,16 @@ import type { LikeC4Spec } from './likec4';
  * Колода разбора системного дизайна: сервис клипов с пандами.
  *
  * Задача с собеседования: пользователь загружает видео из зоопарка, система
- * сама вырезает куски, где в кадре панда, клипы можно тегировать, искать и
+ * сама находит куски, где в кадре панда, клипы можно тегировать, искать и
  * смотреть. Разбор идёт в том же порядке, что и у скрейпинг-джоб: понять →
  * спросить → записать требования → посчитать → нарисовать.
  *
  * Чем этот разбор отличается от скрейпера: поток крошечный — доли видео в
  * секунду, — а единица тяжёлая: сотни мегабайт на входе и минута GPU в
- * обработке. Поэтому брокера здесь нет, очередь — таблица в базе, а главные
- * решения — про байты: куда их лить, где хранить, откуда раздавать.
+ * обработке. Поэтому брокера здесь нет, очередь — таблица в базе. Клип — не
+ * файл, а пара таймкодов в оригинале: нарезки и второго хранилища нет,
+ * оригинал хранится целиком и раздаётся по диапазону через CDN. Главные
+ * решения — про байты: куда их лить, что хранить, откуда раздавать.
  *
  * ПРАВИЛО: код, дерево и схема общие для всех локалей, поэтому в них только
  * английский. Вся проза идёт в `narration` локализованного урока.
@@ -44,7 +46,7 @@ export const likec4: LikeC4Spec = {
   // Итоговая схема и последовательности — во всю ширину: в половине экрана их
   // подписи не прочитать.
   wide: ['c2-full', 'seq-upload', 'seq-watch'],
-  heights: { 'c2-full': 1000, 'c3-pipeline': 780, 'seq-upload': 860, 'seq-watch': 500 },
+  heights: { 'c2-full': 1000, 'c3-pipeline': 720, 'seq-upload': 820, 'seq-watch': 500 },
   // Итоговая схема — только связи: подписи запросов живут на последовательностях.
   bare: ['c2-full'],
   // Рамки на последовательности загрузки: старт, завершение, обработка.
@@ -53,11 +55,12 @@ export const likec4: LikeC4Spec = {
     'seq-upload': [
       { from: 1, to: 5, label: 'seq.start' },
       { from: 7, to: 10, label: 'seq.complete' },
-      { from: 11, to: 15, label: 'seq.pipeline' },
+      { from: 11, to: 14, label: 'seq.pipeline' },
     ],
   },
   // Стикеры — только там, где схема показывает то, что легко пропустить:
-  // отсутствующую коробку очереди, удаление оригинала, байты мимо API.
+  // отсутствующую коробку очереди, отсутствующее второе хранилище, байты
+  // мимо API.
   notes: {
     c1: { element: 'cdn', side: 'bottom' },
     'c2-queue': { element: 'pandas.db', side: 'bottom' },
@@ -109,14 +112,13 @@ const requirements: RequirementsData = {
 const board = { widget: 'requirements', data: requirements } as const;
 
 /**
- * Ползунки, общие для трёх калькуляторов. Значения по умолчанию — небольшой,
- * но настоящий сервис: пять тысяч пятиминутных видео в сутки с телефона.
+ * Ползунки, общие для калькуляторов. Значения по умолчанию — небольшой, но
+ * настоящий сервис: пять тысяч пятиминутных видео в сутки с телефона.
  */
 const uploadsPerDay = { key: 'uploadsPerDay', min: 100, max: 1_000_000, scale: 'log', value: 5_000 } as const;
 const videoMinutes = { key: 'videoMinutes', min: 1, max: 120, scale: 'log', value: 5 } as const;
 const peakFactor = { key: 'peakFactor', min: 1, max: 20, value: 4 } as const;
 const clipSeconds = { key: 'clipSeconds', min: 5, max: 120, value: 20 } as const;
-const clipMbps = { key: 'clipMbps', min: 0.5, max: 20, scale: 'log', value: 3 } as const;
 
 export const widgets: WidgetSpec = {
   fr: board,
@@ -173,10 +175,11 @@ export const widgets: WidgetSpec = {
   },
 
   /**
-   * Хранилище: оригинал против клипов. Битрейт телефона — 10 Мбит/с, доля
-   * панды в кадре — пятая часть ролика, клипы кодируются в 3 Мбит/с.
-   * `keepDays` по умолчанию ноль: оригинал удаляется после нарезки, а
-   * ползунок показывает, во что обошлось бы хранить его.
+   * Хранилище: клип — таймкоды, поэтому хранится оригинал целиком и живёт,
+   * пока живёт видео. Битрейт телефона — 10 Мбит/с. Рядом альтернатива:
+   * нарезать клипы в отдельные файлы в битрейте раздачи и хранить только
+   * их — разница в десятки раз, и это цена решения. Горячий класс — первые
+   * тридцать дней, дальше видео уходит в класс с редким доступом.
    */
   'calc-storage': {
     widget: 'clips-calculator',
@@ -189,15 +192,17 @@ export const widgets: WidgetSpec = {
         { key: 'mbps', min: 1, max: 100, scale: 'log', value: 10 },
         { key: 'pandaShare', min: 1, max: 100, value: 20 },
         clipSeconds,
-        clipMbps,
-        { key: 'keepDays', min: 0, max: 365, value: 0 },
+        { key: 'clipMbps', min: 0.5, max: 20, scale: 'log', value: 3 },
+        { key: 'hotDays', min: 0, max: 365, value: 30 },
       ],
     },
   },
 
   /**
    * Раздача: сто просмотров на загруженное видео, каждый пятый зритель
-   * ищет. Байты идут с CDN, в базу приходят только метаданные.
+   * ищет. Байты идут с CDN в битрейте оригинала — клип не перекодирован, —
+   * и ползунок битрейта показывает, что сэкономила бы разовая
+   * перекодировка при загрузке.
    */
   'calc-delivery': {
     widget: 'clips-calculator',
@@ -209,7 +214,7 @@ export const widgets: WidgetSpec = {
         { key: 'clipsPerVideo', min: 1, max: 30, value: 3 },
         { key: 'watchRatio', min: 1, max: 10_000, scale: 'log', value: 100 },
         clipSeconds,
-        clipMbps,
+        { key: 'playMbps', min: 0.5, max: 50, scale: 'log', value: 10 },
         peakFactor,
         { key: 'searchesPerView', min: 0.05, max: 1, step: 0.05, value: 0.2 },
       ],
@@ -246,7 +251,8 @@ export const widgets: WidgetSpec = {
 
   /**
    * ER-схема: видео, клипы, теги. Кадром шага во всю ширину — таблицам
-   * нужна она вся. Строка videos — она же задача обработки.
+   * нужна она вся. Строка videos — она же задача обработки; строка clips —
+   * таймкоды, а не файл.
    */
   data: {
     widget: 'er-diagram',
@@ -260,7 +266,7 @@ export const widgets: WidgetSpec = {
             { name: 'id', type: 'uuid', keys: ['pk'] },
             { name: 'owner_id', type: 'uuid' },
             { name: 'status', type: 'text' },
-            { name: 'raw_key', type: 'text' },
+            { name: 'video_key', type: 'text' },
             { name: 'duration_s', type: 'int' },
             { name: 'attempt', type: 'int' },
             { name: 'lease_until', type: 'timestamptz' },
@@ -278,7 +284,6 @@ export const widgets: WidgetSpec = {
             { name: 'start_ms', type: 'int' },
             { name: 'end_ms', type: 'int' },
             { name: 'score', type: 'real' },
-            { name: 'media_key', type: 'text' },
             { name: 'thumb_key', type: 'text' },
             { name: 'title', type: 'text' },
             { name: 'description', type: 'text' },
@@ -381,7 +386,7 @@ export const widgets: WidgetSpec = {
         { key: 'lease', fits: ['NFR-3', 'NFR-11'] },
         { key: 'gpuPool', fits: ['NFR-4', 'NFR-9'] },
         { key: 'fairPoll', fits: ['NFR-7'] },
-        { key: 'deleteOriginal', fits: ['NFR-10'] },
+        { key: 'keepOriginal', fits: ['NFR-10'] },
         { key: 'cdn', fits: ['FR-4', 'NFR-5', 'NFR-12'] },
         { key: 'gin', fits: ['FR-6', 'NFR-6'] },
         { key: 'status', fits: ['FR-2', 'FR-3', 'NFR-14'] },
@@ -407,7 +412,7 @@ const deck: CodeDeck = [
   { id: 'slo' },
 
   // Расчёты: GPU, байты на диске, байты в раздаче. Без них «нужна ли
-  // очередь» и «хранить ли оригинал» решаются на вкус.
+  // очередь» и «резать ли клипы в файлы» решаются на вкус.
   { id: 'calc-pipeline' },
   { id: 'calc-storage' },
   { id: 'calc-delivery' },
@@ -453,7 +458,8 @@ export default deck;
 export const inlineWidgets: WidgetSpec = {
   /**
    * Контракт карточками: метод, путь, код ответа и поля. Байты видео в нём
-   * нет: они идут в хранилище по ссылке из первого ответа.
+   * нет: они идут в хранилище по ссылке из первого ответа, а клип в ответе —
+   * адрес оригинала и два таймкода.
    */
   api: {
     widget: 'api-cards',
@@ -508,7 +514,7 @@ export const inlineWidgets: WidgetSpec = {
           path: '/clips/{id}',
           status: 200,
           statusText: 'OK',
-          response: ['title', 'description', 'tags[]', 'playback_url', 'thumbnail_url'],
+          response: ['title', 'description', 'tags[]', 'video_url', 'start_ms', 'end_ms', 'thumbnail_url'],
         },
         {
           key: 'tag',

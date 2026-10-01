@@ -307,7 +307,8 @@ export const P2P_LINES: Record<P2PModel, number> = { swarm: 2, dht: 2, availabil
  *
  * Главное, что калькулятор должен показать: поток здесь — доли видео в
  * секунду, а единица — сотни мегабайт и минута GPU. Очередь на таком потоке
- * не вопрос, вопрос — байты.
+ * не вопрос, вопрос — байты: клип здесь не файл, а таймкоды в оригинале, и
+ * оригинал хранится и раздаётся целиком.
  */
 export type ClipsModel = 'pipeline' | 'storage' | 'delivery';
 
@@ -326,13 +327,13 @@ export const CLIPS_OUTPUTS: Record<ClipsModel, { key: string; format: P2PFormat;
   ],
   storage: [
     { key: 'perVideo', format: 'bytes' },
-    { key: 'uploadBytes', format: 'bytes', main: true },
+    { key: 'uploadBytes', format: 'bytes' },
     { key: 'clipsPerDay', format: 'number' },
-    { key: 'clipBytes', format: 'bytes', main: true },
-    { key: 'ratio', format: 'times' },
-    { key: 'originals', format: 'bytes' },
-    { key: 'clipsYear', format: 'bytes' },
-    { key: 'total', format: 'bytes' },
+    { key: 'storedYear', format: 'bytes', main: true },
+    { key: 'hot', format: 'bytes' },
+    { key: 'cold', format: 'bytes' },
+    { key: 'cutAlternative', format: 'bytes' },
+    { key: 'ratio', format: 'times', main: true },
   ],
   delivery: [
     { key: 'views', format: 'number', main: true },

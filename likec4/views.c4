@@ -822,9 +822,9 @@ view scrape_full {
   /**
    * Разбор сервиса клипов с пандами: C2 по одному элементу за кадр.
    *
-   * Порядок кадров — порядок байтов: куда льётся оригинал, кто его берёт,
-   * где лежат клипы, откуда их смотрят. Очередь появляется между вторым и
-   * третьим кадром и оказывается таблицей.
+   * Порядок кадров — порядок байтов: куда льётся оригинал, кто его читает,
+   * откуда его смотрят. Очередь появляется между вторым и третьим кадром и
+   * оказывается таблицей; второго хранилища нет, потому что клип — таймкоды.
    */
 
   /** Экран `c1`: система одним блоком, пользователь и CDN. */
@@ -886,20 +886,19 @@ view scrape_full {
   }
 
   /**
-   * Экран `c2-pipeline`: откуда пайплайн берёт байты и куда кладёт.
+   * Экран `c2-pipeline`: откуда пайплайн берёт байты и что пишет.
    *
-   * Оригинал читается один раз, клипы уходят в своё хранилище, оригинал
-   * удаляется — после того, как клипы и статус закоммичены.
+   * Оригинал читается один раз, в базу уходят таймкоды, в хранилище — только
+   * превью. Второго хранилища нет: клип — строка, а не файл.
    */
   view pandas_pipeline {
-    title 'From the original to the clips'
+    title 'From the original to the timecodes'
 
     include
       pandas,
       pandas.db,
       pandas.raw,
-      pandas.pipeline,
-      pandas.media
+      pandas.pipeline
 
     autoLayout LeftRight
   }
@@ -926,8 +925,8 @@ view scrape_full {
   /**
    * Экран `c2-delivery`: байты клипа зритель получает с CDN.
    *
-   * API отдаёт только метаданные и адрес; плеер идёт на CDN, CDN на промахе
-   * тянет из хранилища клипов.
+   * API отдаёт метаданные и таймкоды; плеер идёт на CDN за диапазоном
+   * оригинала, CDN на промахе тянет его из хранилища видео.
    */
   view pandas_delivery {
     title 'Playback'
@@ -938,12 +937,13 @@ view scrape_full {
       pandas.gateway,
       pandas.api,
       pandas.db,
-      pandas.media,
+      pandas.raw,
       cdn
 
     exclude
       * -> * where kind is write,
-      clipUser -> pandas.raw
+      clipUser -> pandas.raw,
+      pandas.raw -> pandas.pipeline
 
     autoLayout LeftRight
   }
@@ -966,7 +966,6 @@ view scrape_full {
       pandas.pipeline,
       pandas.db,
       pandas.raw,
-      pandas.media,
       cdn
 
     include
@@ -977,8 +976,7 @@ view scrape_full {
       pandas.api -> pandas.raw with { color gray },
       pandas.db -> pandas.pipeline with { color gray; tail normal },
       pandas.raw -> pandas.pipeline with { color gray; tail normal },
-      pandas.pipeline -> pandas.media with { color gray },
-      pandas.media -> cdn with { color gray },
+      pandas.raw -> cdn with { color gray },
       cdn -> clipUser with { color gray }
     exclude
       clipUser -> pandas.gateway where kind is read,
@@ -1010,10 +1008,9 @@ view scrape_full {
     pandas.api -> pandas.db 'status = uploaded'
     clipUser <- pandas.gateway '202 Accepted'
     pandas.db -> pandas.pipeline 'next task, lease'
-    pandas.raw -> pandas.pipeline 'original'
-    pandas.pipeline -> pandas.media 'clips'
-    pandas.pipeline -> pandas.db 'clips, status = ready'
-    pandas.pipeline -> pandas.raw 'delete original'
+    pandas.raw -> pandas.pipeline 'original, once'
+    pandas.pipeline -> pandas.raw 'thumbnails'
+    pandas.pipeline -> pandas.db 'clips: timecodes, status = ready'
   }
 
   dynamic view pandas_watch_seq {
@@ -1022,18 +1019,18 @@ view scrape_full {
     clipUser -> pandas.gateway 'GET /clips?tag=cub'
     pandas.gateway -> pandas.api 'search'
     pandas.db -> pandas.api 'clips WHERE tags @> {cub}'
-    clipUser <- pandas.gateway '200 + items + CDN URLs'
-    clipUser -> cdn 'GET playlist.m3u8, segments'
-    cdn -> pandas.media 'origin pull on miss'
-    cdn -> clipUser 'segments from the edge'
+    clipUser <- pandas.gateway '200 + items: video URL, start, end'
+    clipUser -> cdn 'GET video, Range: bytes of the clip'
+    cdn -> pandas.raw 'origin pull on miss'
+    cdn -> clipUser 'bytes from the edge'
   }
 
   /**
    * Экран `c3-pipeline`: внутри clip-pipeline.
    *
-   * Четыре модуля: поллер, детектор, резак, репозиторий. Рядом база и оба
-   * хранилища: без них не видно, что оригинал читается один раз и удаляется
-   * только после записи клипов.
+   * Три модуля: поллер, детектор, репозиторий. Рядом база и хранилище видео:
+   * без них не видно, что оригинал читается один раз, а обратно уходят только
+   * таймкоды и превью.
    */
   view pandas_pipeline_c3 {
     title 'Inside clip-pipeline'
@@ -1043,11 +1040,9 @@ view scrape_full {
       pandas.pipeline,
       pandas.pipeline.poller,
       pandas.pipeline.detector,
-      pandas.pipeline.cutter,
       pandas.pipeline.repo,
       pandas.db,
-      pandas.raw,
-      pandas.media
+      pandas.raw
 
     autoLayout TopBottom 40 60
   }

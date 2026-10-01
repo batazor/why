@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 300" width="640" height="300">
   <!--
-    Обложка «panda-clips»: Плёнка с одной пандой: клипы с тегами направо, остаток — в корзину.
+    Обложка «panda-clips»: Плёнка с одной пандой: клипы — скобки таймкодов на ней, справа карточки с тегами.
     Сгенерировано scripts/covers/build.py.
   -->
   <defs>
@@ -44,7 +44,7 @@
   <g filter="url(#bloom)" opacity="0.5">
     <ellipse cx="190" cy="150" rx="170" ry="80" fill="#d3e3ee" />
     <ellipse cx="500" cy="140" rx="110" ry="110" fill="#d4e6dc" />
-    <ellipse cx="90" cy="250" rx="70" ry="50" fill="#f3d6d6" />
+    <ellipse cx="90" cy="250" rx="70" ry="50" fill="#f3e8cc" />
   </g>
   <g filter="url(#wash)">
     <rect x="40" y="110" width="300" height="80" rx="6" fill="#b9d3e6" opacity="0.85" />
@@ -80,13 +80,13 @@
     <circle cx="196" cy="152" r="3.5" fill="#8792a3" opacity="0.85" />
     <circle cx="191" cy="158" r="1.8" fill="#8792a3" opacity="0.9" />
   </g>
-  <g filter="url(#brush)" stroke="#9a8b7a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.7" stroke-dasharray="6 6">
-    <path d="M166 98 v104" />
-    <path d="M222 98 v104" />
+  <g filter="url(#brush)" stroke="#6f8a74" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.8">
+    <path d="M172 98 h-8 v104 h8" />
+    <path d="M216 98 h8 v104 h-8" />
   </g>
-  <g filter="url(#brush)" stroke="#9a8b7a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.7">
-    <path d="M172 92 l-6 6 l6 6" />
-    <path d="M216 92 l6 6 l-6 6" />
+  <g filter="url(#brush)" stroke="#6f8a74" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.6">
+    <path d="M150 224 h20" />
+    <path d="M226 224 h20" />
   </g>
   <g filter="url(#brush)" stroke="#8792a3" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.55">
     <path d="M230 140 Q317.6 87.1 420 84" />
@@ -117,16 +117,9 @@
     <path d="M568 92 h28" />
     <path d="M568 160 h28" />
   </g>
-  <g filter="url(#wash)">
-    <rect x="78" y="226" width="44" height="42" rx="5" fill="#e8b7b7" opacity="0.8" />
-    <rect x="72" y="220" width="56" height="8" rx="3" fill="#e8b7b7" opacity="0.95" />
-  </g>
-  <g filter="url(#brush)" stroke="#b77f7f" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.6">
-    <path d="M90 236 v24 M100 236 v24 M110 236 v24" />
-  </g>
-  <g filter="url(#brush)" stroke="#b77f7f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.55" stroke-dasharray="4 6">
-    <path d="M100 194 Q100.0 205.0 100 216" />
-    <path d="M104.2 208.1 L100 216 L95.8 208.1" />
+  <g filter="url(#brush)" stroke="#9a8b7a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.5">
+    <path d="M60 246 h26 M94 246 h6 M108 246 h26" />
+    <path d="M300 246 h26 M334 246 h6 M348 246 h26" />
   </g>
   <g filter="url(#wash)" opacity="0.5">
     <circle cx="360" cy="50" r="3" fill="#bcd4b4" opacity="1" />
