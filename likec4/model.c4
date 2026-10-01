@@ -433,4 +433,115 @@ model {
   p2p.client.wire -[calls]-> p2p.client.verifier 'piece'
   p2p.client.verifier -[calls]-> p2p.client.disk 'verified piece'
   p2p.client.disk -[calls]-> p2p.client.wire 'blocks to upload'
+
+  /*
+   * Сервис клипов с пандами — разбор системного дизайна.
+   *
+   * Третья система в той же модели: пересечений по идентификаторам нет. Как и
+   * у скрейпера, элементы появляются по мере разбора, по кадру на шаг.
+   *
+   * Чем система отличается от скрейпера: поток крошечный — доли видео в
+   * секунду, — а единица тяжёлая: сотни мегабайт на входе и минута GPU в
+   * обработке. Поэтому брокера здесь нет: очередь задач — таблица в той же
+   * базе, где лежат видео, а всё внимание отдано байтам — куда они льются,
+   * где лежат и откуда раздаются.
+   */
+  clipUser = actor 'User'
+
+  /**
+   * Не наш: кэш на краю, который мы только настраиваем. Байты клипов идут
+   * зрителю отсюда, а не из нашего API.
+   */
+  cdn = external 'CDN' {
+    technology 'edge cache'
+  }
+
+  pandas = context 'Panda clips service' {
+
+    /** Точка входа: проверяет, кто пришёл, держит лимиты, раздаёт внутрь. */
+    gateway = service 'api-gateway'
+
+    /**
+     * Единственный сервис с HTTP-ручками: заводит загрузку, принимает
+     * «загрузка закончена», пишет теги и описания, отдаёт галерею, поиск и
+     * страницу клипа. Байты видео через него не идут никогда.
+     */
+    api = service 'video-api'
+
+    /**
+     * Шедулер с обработкой внутри: берёт следующее видео из таблицы, качает
+     * оригинал, ищет панду нейронкой, режет клипы, складывает их и удаляет
+     * оригинал. Модули — уровень C3.
+     */
+    pipeline = service 'clip-pipeline' {
+
+      /** Берёт следующую задачу из таблицы под аренду и возвращает зависшие. */
+      poller = component 'task-poller'
+
+      /** Нейронка: кадры через детектор, из попаданий — отрезки с пандой. */
+      detector = component 'panda-detector'
+
+      /** ffmpeg: режет отрезки, кодирует в HLS, делает превью. */
+      cutter = component 'clip-cutter'
+
+      /** Единственный модуль, который ходит в базу. */
+      repo = component 'videos-repository'
+    }
+
+    /**
+     * Одна база: видео, клипы, теги. Строка videos — она же задача обработки:
+     * status, attempt, lease_until. Отдельной очереди нет.
+     */
+    db = store 'clips-pg' {
+      technology 'postgres'
+    }
+
+    /** Оригиналы: сюда пользователь льёт байты сам, отсюда их берёт пайплайн, и здесь они живут до нарезки. */
+    raw = store 'raw-s3' {
+      technology 's3'
+    }
+
+    /** Клипы: HLS-сегменты и превью. Хранятся всегда, раздаются через CDN. */
+    media = store 'clips-s3' {
+      technology 's3'
+    }
+  }
+
+  /*
+   * Стрелка идёт туда, куда едут данные; вид связи — `write` или `read` —
+   * задаёт цвет. Две линии от пользователя — легенда цвета, на каждом кадре
+   * остаётся та, о которой кадр (см. views).
+   */
+  clipUser -[write]-> pandas.gateway 'write: start upload, complete, tag'
+  clipUser -[read]-> pandas.gateway 'read: gallery, search, clip'
+  // Байты видео — напрямую в хранилище по подписанной ссылке, мимо API.
+  clipUser -[write]-> pandas.raw 'write: parts by presigned URL'
+
+  pandas.gateway -[write]-> pandas.api 'start, complete, tag'
+  pandas.gateway -[read]-> pandas.api 'gallery, search, clip'
+
+  pandas.api -[calls]-> pandas.raw 'sign upload URL'
+  pandas.api -[write]-> pandas.db 'video row: status = uploaded'
+  pandas.db -[read]-> pandas.api 'clips, tags'
+
+  /*
+   * Очередь — таблица. Поллер берёт следующую строку под аренду, репозиторий
+   * пишет клипы и статус. Связи — от модулей: на C2 LikeC4 сам поднимает их
+   * до сервиса, а на C3 они стоят у своих модулей.
+   */
+  pandas.db -[read]-> pandas.pipeline.poller 'next task: SKIP LOCKED'
+  pandas.pipeline.poller -[calls]-> pandas.pipeline.detector 'video id, raw key'
+  // Оригинал качается один раз: детектор сэмплирует кадры из локальной копии,
+  // резак режет из неё же.
+  pandas.raw -[read]-> pandas.pipeline.detector 'original, once'
+  pandas.pipeline.detector -[calls]-> pandas.pipeline.cutter 'segments'
+  pandas.pipeline.cutter -[write]-> pandas.media 'clips: HLS, thumbnail'
+  pandas.pipeline.cutter -[calls]-> pandas.pipeline.repo 'clips'
+  pandas.pipeline.repo -[write]-> pandas.db 'clips, status, lease'
+  // Оригинал удаляется после коммита клипов — и никогда до него.
+  pandas.pipeline.poller -[write]-> pandas.raw 'delete original after commit'
+
+  // Раздача: CDN тянет из хранилища клипов, зритель смотрит с края.
+  pandas.media -[read]-> cdn 'origin pull'
+  cdn -[read]-> clipUser 'read: clip by CDN URL'
 }

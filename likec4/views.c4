@@ -819,4 +819,236 @@ view scrape_full {
     autoLayout TopBottom 40 60
   }
 
+  /**
+   * Разбор сервиса клипов с пандами: C2 по одному элементу за кадр.
+   *
+   * Порядок кадров — порядок байтов: куда льётся оригинал, кто его берёт,
+   * где лежат клипы, откуда их смотрят. Очередь появляется между вторым и
+   * третьим кадром и оказывается таблицей.
+   */
+
+  /** Экран `c1`: система одним блоком, пользователь и CDN. */
+  view pandas_context {
+    title 'The service and its neighbours'
+
+    include
+      clipUser,
+      pandas,
+      cdn
+
+    /* Легенда цвета: запись уходит в сервис, чтение приходит с CDN. Прямая
+       заливка в хранилище — деталь C2. */
+    exclude
+      clipUser -> * where kind is read,
+      clipUser -> pandas.raw
+
+    autoLayout LeftRight
+  }
+
+  /**
+   * Экран `c2-upload`: вход и то, куда льются байты.
+   *
+   * API подписывает ссылку, пользователь льёт части в хранилище сам, в базе
+   * появляется строка видео. Через наши сервисы байты не проходят.
+   */
+  view pandas_upload {
+    title 'Upload'
+
+    include
+      clipUser,
+      pandas,
+      pandas.gateway,
+      pandas.api,
+      pandas.db,
+      pandas.raw
+
+    exclude clipUser -> * where kind is read
+
+    autoLayout LeftRight
+  }
+
+  /**
+   * Экраны `c2-queue` и `c2-lease`: очередь — это таблица.
+   *
+   * Строка videos и есть задача: пайплайн читает следующую под аренду и
+   * пишет в ту же строку статус. Брокера на кадре нет, потому что его нет.
+   */
+  view pandas_queue {
+    title 'The queue is a table'
+
+    include
+      pandas,
+      pandas.api,
+      pandas.db,
+      pandas.pipeline
+
+    autoLayout LeftRight
+  }
+
+  /**
+   * Экран `c2-pipeline`: откуда пайплайн берёт байты и куда кладёт.
+   *
+   * Оригинал читается один раз, клипы уходят в своё хранилище, оригинал
+   * удаляется — после того, как клипы и статус закоммичены.
+   */
+  view pandas_pipeline {
+    title 'From the original to the clips'
+
+    include
+      pandas,
+      pandas.db,
+      pandas.raw,
+      pandas.pipeline,
+      pandas.media
+
+    autoLayout LeftRight
+  }
+
+  /** Экран `c2-read`: галерея, поиск и страница клипа — из базы. */
+  view pandas_read {
+    title 'Read side'
+
+    include
+      clipUser,
+      pandas,
+      pandas.gateway,
+      pandas.api,
+      pandas.db
+
+    // Кадр про чтение: без линий записи и без прямой заливки в хранилище.
+    exclude
+      * -> * where kind is write,
+      clipUser -> pandas.raw
+
+    autoLayout LeftRight
+  }
+
+  /**
+   * Экран `c2-delivery`: байты клипа зритель получает с CDN.
+   *
+   * API отдаёт только метаданные и адрес; плеер идёт на CDN, CDN на промахе
+   * тянет из хранилища клипов.
+   */
+  view pandas_delivery {
+    title 'Playback'
+
+    include
+      clipUser,
+      pandas,
+      pandas.gateway,
+      pandas.api,
+      pandas.db,
+      pandas.media,
+      cdn
+
+    exclude
+      * -> * where kind is write,
+      clipUser -> pandas.raw
+
+    autoLayout LeftRight
+  }
+
+  /**
+   * Экран `c2-full`: сервис целиком.
+   *
+   * Только связи между сервисами, серым: подписи и порядок — на
+   * последовательностях. Пара, которая ходит в обе стороны, — одна линия со
+   * стрелками на концах.
+   */
+  view pandas_full {
+    title 'The service'
+
+    include
+      clipUser,
+      pandas,
+      pandas.gateway,
+      pandas.api,
+      pandas.pipeline,
+      pandas.db,
+      pandas.raw,
+      pandas.media,
+      cdn
+
+    include
+      clipUser -> pandas.gateway with { color gray; tail normal },
+      clipUser -> pandas.raw with { color gray },
+      pandas.gateway -> pandas.api with { color gray; tail normal },
+      pandas.api -> pandas.db with { color gray; tail normal },
+      pandas.api -> pandas.raw with { color gray },
+      pandas.db -> pandas.pipeline with { color gray; tail normal },
+      pandas.raw -> pandas.pipeline with { color gray; tail normal },
+      pandas.pipeline -> pandas.media with { color gray },
+      pandas.media -> cdn with { color gray },
+      cdn -> clipUser with { color gray }
+    exclude
+      clipUser -> pandas.gateway where kind is read,
+      pandas.gateway -> pandas.api where kind is read,
+      pandas.db -> pandas.api,
+      pandas.pipeline -> pandas.db,
+      pandas.pipeline -> pandas.raw
+
+    autoLayout TopBottom 20 90
+  }
+
+  /**
+   * Экраны `seq-upload` и `seq-watch`: запросы по шагам.
+   *
+   * Загрузка — три рамки: старт, завершение, обработка. Между первой и
+   * второй пользователь льёт части в хранилище сам, и API в этом не участвует.
+   */
+  dynamic view pandas_upload_seq {
+    title 'Uploading a video'
+
+    clipUser -> pandas.gateway 'POST /videos'
+    pandas.gateway -> pandas.api 'start upload'
+    pandas.api -> pandas.raw 'sign multipart upload'
+    pandas.api -> pandas.db 'INSERT video, status = uploading'
+    clipUser <- pandas.gateway '201 + id + part URLs'
+    clipUser -> pandas.raw 'PUT parts, straight to storage'
+    clipUser -> pandas.gateway 'POST /videos/{id}/complete'
+    pandas.gateway -> pandas.api 'complete'
+    pandas.api -> pandas.db 'status = uploaded'
+    clipUser <- pandas.gateway '202 Accepted'
+    pandas.db -> pandas.pipeline 'next task, lease'
+    pandas.raw -> pandas.pipeline 'original'
+    pandas.pipeline -> pandas.media 'clips'
+    pandas.pipeline -> pandas.db 'clips, status = ready'
+    pandas.pipeline -> pandas.raw 'delete original'
+  }
+
+  dynamic view pandas_watch_seq {
+    title 'Watching a clip'
+
+    clipUser -> pandas.gateway 'GET /clips?tag=cub'
+    pandas.gateway -> pandas.api 'search'
+    pandas.db -> pandas.api 'clips WHERE tags @> {cub}'
+    clipUser <- pandas.gateway '200 + items + CDN URLs'
+    clipUser -> cdn 'GET playlist.m3u8, segments'
+    cdn -> pandas.media 'origin pull on miss'
+    cdn -> clipUser 'segments from the edge'
+  }
+
+  /**
+   * Экран `c3-pipeline`: внутри clip-pipeline.
+   *
+   * Четыре модуля: поллер, детектор, резак, репозиторий. Рядом база и оба
+   * хранилища: без них не видно, что оригинал читается один раз и удаляется
+   * только после записи клипов.
+   */
+  view pandas_pipeline_c3 {
+    title 'Inside clip-pipeline'
+
+    include
+      pandas,
+      pandas.pipeline,
+      pandas.pipeline.poller,
+      pandas.pipeline.detector,
+      pandas.pipeline.cutter,
+      pandas.pipeline.repo,
+      pandas.db,
+      pandas.raw,
+      pandas.media
+
+    autoLayout TopBottom 40 60
+  }
 }

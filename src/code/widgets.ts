@@ -25,7 +25,8 @@ export type WidgetName =
   | 'api-cards'
   | 'p2p-calculator'
   | 'swarm-sim'
-  | 'er-diagram';
+  | 'er-diagram'
+  | 'clips-calculator';
 
 /** Один ползунок калькулятора. Диапазон и шаг — часть конструкции, не перевод. */
 export type LoadInput = {
@@ -299,6 +300,63 @@ export const P2P_VERDICTS: Record<P2PModel, string[]> = {
 export const P2P_LINES: Record<P2PModel, number> = { swarm: 2, dht: 2, availability: 2 };
 
 /**
+ * Калькуляторы разбора сервиса клипов с пандами. Модель — какая формула
+ * считается: пайплайн (сколько GPU держать), хранилище (сколько весят
+ * оригиналы и клипы), раздача (сколько смотрят и откуда идут байты). Формулы —
+ * в `clips-calc.ts`: чистые функции, их гоняет и node.
+ *
+ * Главное, что калькулятор должен показать: поток здесь — доли видео в
+ * секунду, а единица — сотни мегабайт и минута GPU. Очередь на таком потоке
+ * не вопрос, вопрос — байты.
+ */
+export type ClipsModel = 'pipeline' | 'storage' | 'delivery';
+
+export type ClipsCalculatorData = { model: ClipsModel; inputs: LoadInput[] };
+
+/** Итоги по моделям: порядок задаёт порядок в таблице, `main` — выделенные. */
+export const CLIPS_OUTPUTS: Record<ClipsModel, { key: string; format: P2PFormat; main?: boolean }[]> = {
+  pipeline: [
+    { key: 'average', format: 'number' },
+    { key: 'peak', format: 'number', main: true },
+    { key: 'jobTime', format: 'duration' },
+    { key: 'gpuHours', format: 'number' },
+    { key: 'inFlight', format: 'number', main: true },
+    { key: 'queued', format: 'number' },
+    { key: 'timeToClips', format: 'duration' },
+  ],
+  storage: [
+    { key: 'perVideo', format: 'bytes' },
+    { key: 'uploadBytes', format: 'bytes', main: true },
+    { key: 'clipsPerDay', format: 'number' },
+    { key: 'clipBytes', format: 'bytes', main: true },
+    { key: 'ratio', format: 'times' },
+    { key: 'originals', format: 'bytes' },
+    { key: 'clipsYear', format: 'bytes' },
+    { key: 'total', format: 'bytes' },
+  ],
+  delivery: [
+    { key: 'views', format: 'number', main: true },
+    { key: 'viewsPeak', format: 'number' },
+    { key: 'egressDay', format: 'bytes' },
+    { key: 'egressMonth', format: 'bytes', main: true },
+    { key: 'searchesPeak', format: 'number' },
+    { key: 'readsPeak', format: 'number' },
+    { key: 'writesPeak', format: 'number' },
+    { key: 'readWrite', format: 'times' },
+  ],
+};
+
+/** Вердикты по моделям: какой выпал, решает формула. */
+export const CLIPS_VERDICTS: Record<ClipsModel, string[]> = {
+  pipeline: ['single', 'pool', 'split'],
+  storage: ['bucket', 'tiers', 'budget'],
+  delivery: ['direct', 'cdn', 'cluster'],
+};
+
+/** Сколько строк-формул под таблицей у каждой модели. */
+export const CLIPS_LINES: Record<ClipsModel, number> = { pipeline: 2, storage: 2, delivery: 2 };
+
+/**
  * Симулятор роя: сид, качающие и правило выбора следующего куска.
  *
  * Числа — конструкция: роя из восьми узлов и шестнадцати кусков хватает, чтобы
@@ -330,7 +388,8 @@ export type WidgetStep =
   | { widget: 'api-cards'; wide?: boolean; data: ApiCardsData }
   | { widget: 'p2p-calculator'; wide?: boolean; data: P2PCalculatorData }
   | { widget: 'swarm-sim'; wide?: boolean; data: SwarmSimData }
-  | { widget: 'er-diagram'; wide?: boolean; data: ErDiagramData };
+  | { widget: 'er-diagram'; wide?: boolean; data: ErDiagramData }
+  | { widget: 'clips-calculator'; wide?: boolean; data: ClipsCalculatorData };
 
 /** Шаг разбора → врезка, которая на нём стоит. */
 export type WidgetSpec = Record<string, WidgetStep>;
@@ -496,6 +555,22 @@ export function widgetLabelKeys(step: WidgetStep): string[] {
         ...Array.from({ length: P2P_LINES[step.data.model] }, (_, i) => `${prefix}.line.${i + 1}`),
         ...P2P_VERDICTS[step.data.model].map((key) => `${prefix}.verdict.${key}`),
         ...['s', 'min', 'h', 'd'].map((unit) => `p2p.time.${unit}`),
+      ];
+    }
+    case 'clips-calculator': {
+      // Префикс с моделью: калькуляторов в разборе три, и подписи у них разные.
+      const prefix = `clips.${step.data.model}`;
+      return [
+        'clips.inputs',
+        'clips.result',
+        ...step.data.inputs.flatMap((input) => [`${prefix}.${input.key}`, `${prefix}.${input.key}.unit`]),
+        ...CLIPS_OUTPUTS[step.data.model].flatMap((out) => [
+          `${prefix}.out.${out.key}`,
+          ...(out.format === 'number' ? [`${prefix}.out.${out.key}.unit`] : []),
+        ]),
+        ...Array.from({ length: CLIPS_LINES[step.data.model] }, (_, i) => `${prefix}.line.${i + 1}`),
+        ...CLIPS_VERDICTS[step.data.model].map((key) => `${prefix}.verdict.${key}`),
+        ...['s', 'min', 'h', 'd'].map((unit) => `clips.time.${unit}`),
       ];
     }
     case 'swarm-sim':
