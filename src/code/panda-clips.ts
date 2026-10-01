@@ -424,6 +424,51 @@ const deck: CodeDeck = [
   // чтение, раздача — и всё вместе.
   { id: 'c2-upload' },
   { id: 'c2-queue' },
+  // Сама таблица: колонки, которые делают из строки видео задачу, индекс по
+  // голове очереди, взятие под аренду и возврат зависших.
+  {
+    id: 'queue-table',
+    lang: 'sql',
+    caption: 'videos.sql',
+    code: `-- {{taskColumns}}
+CREATE TABLE videos (
+  id           uuid PRIMARY KEY,
+  owner_id     uuid NOT NULL,
+  status       text NOT NULL,  -- uploading | uploaded | processing | ready | empty | failed
+  video_key    text NOT NULL,
+  duration_s   int,
+  attempt      int  NOT NULL DEFAULT 0,
+  lease_until  timestamptz,
+  next_run_at  timestamptz NOT NULL DEFAULT now(),
+  error        text,
+  created_at   timestamptz NOT NULL DEFAULT now()
+);
+
+-- {{queueIndex}}
+CREATE INDEX videos_queue ON videos (next_run_at)
+  WHERE status = 'uploaded';
+
+-- {{take}}
+UPDATE videos
+SET status = 'processing',
+    lease_until = now() + interval '10 minutes'
+WHERE id = (
+  SELECT id FROM videos
+  WHERE status = 'uploaded' AND next_run_at <= now()
+  ORDER BY next_run_at
+  FOR UPDATE SKIP LOCKED
+  LIMIT 1
+)
+RETURNING id, video_key, attempt;
+
+-- {{sweep}}
+UPDATE videos
+SET status = 'uploaded',
+    attempt = attempt + 1,
+    next_run_at = now() + (interval '1 minute' * power(2, attempt)),
+    lease_until = NULL
+WHERE status = 'processing' AND lease_until < now();`,
+  },
   { id: 'queue-choice' },
   { id: 'c2-pipeline' },
   { id: 'c2-lease' },

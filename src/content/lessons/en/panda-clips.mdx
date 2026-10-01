@@ -21,6 +21,11 @@ brief:
 tags: [system-design, video, storage]
 order: 15
 deck: panda-clips
+comments:
+  taskColumns: 'The video row is the task: status, attempt, lease_until, next_run_at.'
+  queueIndex: 'An index over the head of the queue only: uploaded rows are few, the rest never enter it.'
+  take: 'Take the next one under a lease. SKIP LOCKED: rows grabbed by a neighbour are skipped, not waited for.'
+  sweep: 'Return stuck tasks: the lease expired, so the task is queued again with attempt plus one and a pause.'
 labels:
   clips.inputs: What we know
   clips.result: What follows from it
@@ -797,10 +802,37 @@ steps:
 
       A broker is for thousands of messages a second, many different
       consumers, or events that must reach several services. None of that is
-      in the task: there is one consumer, and it is heavy.
+      in the task: there is one consumer, and it is heavy. The table itself
+      and the queries against it are on the next step.
     added:
       - element: pandas.pipeline
         role: 'A scheduler with the processing inside: takes the next video from the table under a lease, downloads the original, finds the panda and writes the clip timecodes. Cuts nothing.'
+  - id: queue-table
+    title: The videos table as a queue
+    narration: |-
+      Here is the table. Four columns turn a video row into a task.
+
+      - **status** is where the video is in its lifecycle. The queue is the
+        rows with the value `uploaded`, and only those.
+      - **next_run_at** is when the task may be taken. Immediately for a new
+        one, after a pause for one that failed.
+      - **lease_until** is until when the task belongs to someone. While a
+        worker works, it keeps moving this time forward.
+      - **attempt** and **error**: how many times it was taken and how it
+        ended.
+
+      The index is partial: only over `uploaded` rows, by run time. It holds a
+      handful of rows rather than millions, and the poller's query reads
+      exactly the head of the queue.
+
+      Taking is one `UPDATE` with a subquery. `FOR UPDATE SKIP LOCKED` skips
+      rows a neighbour has already grabbed; `RETURNING` hands the worker
+      everything it needs. The transaction is short: take and release. The
+      processing itself runs without a lock, under the lease.
+
+      The last query returns stuck tasks: a `processing` row with an expired
+      lease becomes `uploaded` again, with attempt plus one and a pause that
+      grows with every attempt. Why that is needed comes in the lease step.
   - id: queue-choice
     title: Table or broker
     narration: |-
