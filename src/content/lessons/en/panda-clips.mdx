@@ -9,13 +9,15 @@ problem: 'A video task gets solved as a queue task: Kafka, workers, arrows. But 
 brief:
   label: Task description
   source: Interviewer
-  text: >-
+  text: |-
     Design a service that lets users extract and store panda clips from
     uploaded videos. Users can tag clips with words so that other users can
-    search for and watch those clips. The analogy: you go to a zoo, record a
-    video, upload it to the system, and the system automatically cuts out the
-    parts where a panda is in the frame. Those clips can then be tagged,
-    watched, shared and searched, like on YouTube.
+    search for and watch those clips.
+
+    The interviewer's analogy: you go to a zoo, record a video, upload it to
+    the system → the system automatically cuts out the parts where a panda is
+    in the frame. Those clips can then be tagged, watched, shared and searched
+    (like YouTube).
 tags: [system-design, video, storage]
 order: 15
 deck: panda-clips
@@ -356,7 +358,7 @@ labels:
   match.why.fairPoll: 'This is uploader isolation: a zoo archive does not take the whole pool.'
   match.card.keepOriginal: 'One file per video'
   match.card.keepOriginal.text: 'A clip is timecodes in the clips row; a range of the original gets watched; after 30 days the original moves to an infrequent-access tier'
-  match.why.keepOriginal: 'About the storage budget: we pay for originals rather than for cutting and a second copy, and any video can be run again.'
+  match.why.keepOriginal: 'About the storage budget: we pay for originals rather than for cutting, and any video can be run again.'
   match.card.cdn: 'A range of the original from the CDN'
   match.card.cdn.text: 'video_url points at the CDN; the player asks for the clip bytes with a Range header; the CDN pulls them from videos-s3 on a miss'
   match.why.cdn: 'About watching and its speed: bytes do not pass through the API, the first frame comes from the nearest edge.'
@@ -684,7 +686,7 @@ steps:
       year, 17 times less. That is the price of "timecodes instead of
       cutting", and it has to be said out loud.
 
-      What it buys. No cutting and no transcoding: no CPU, no second store, no
+      What it buys. No cutting and no transcoding: no CPU per video, no
       files that can drift away from the rows in the database. A clip boundary
       moves by changing two numbers. A missed panda can be found by a rerun,
       and a new model can be applied to the archive. With cutting, none of
@@ -826,7 +828,7 @@ steps:
       it would not be about the queue but about petabytes.
   - id: c2-pipeline
     title: From the original to the timecodes
-    note: 'No second store: a clip is a row in the database, the bytes are the original'
+    note: 'The original is read once; timecodes and thumbnails go back'
     narration: |-
       The pipeline took the task. Three actions follow, and none of them
       creates a new video.
@@ -835,18 +837,15 @@ steps:
       disk. The detector samples frames from it, runs them through the model
       and merges the hits into ranges: start and end in milliseconds, and a
       confidence. From the frame with the most confident panda it makes a
-      thumbnail, the only file processing puts back into `videos-s3`, next to
-      the video.
+      thumbnail and puts it into `videos-s3`, next to the video.
 
       Then one transaction in `clips-pg`: the clip rows with their timecodes
       and the video status `ready`. Until it commits, the video is still
       processing for the whole system, and it has no clips.
 
-      What the frame does not show: a second store. In the scraper the result
-      of a job went to a separate bucket; here the result is rows in the
-      database, and the clip's bytes are the bytes of the original, which
-      already sits where the user put it. The pipeline cuts and transcodes
-      nothing: [[ffmpeg]] here only extracts frames.
+      The clip's bytes are the bytes of the original, which already sits where
+      the user put it. The pipeline cuts and transcodes nothing: [[ffmpeg]]
+      here only extracts frames.
   - id: c2-lease
     title: A worker died holding a video
     note: 'The lease is extended every minute of work; expired, the task goes to another'
@@ -929,7 +928,7 @@ steps:
       is the only place that changes.
   - id: c2-full
     title: C2 as a whole
-    note: 'One database and one store: clips are rows, the bytes are the original'
+    note: 'One database: videos, tasks, clips with timecodes, tags, and search'
     narration: |-
       The service is assembled. Only the connections here; an arrow at both
       ends is a connection in both directions.
@@ -939,11 +938,10 @@ steps:
       through the CDN to the viewer, by range. Our services touch the bytes
       exactly once, inside the pipeline, and only read them.
 
-      In the middle are one database and one store. The database holds the
-      videos with their tasks, the clips with their timecodes and tags, and
-      search. The store holds originals and thumbnails. No broker, no second
-      store, no separate read side, no cache: the numbers do not justify any
-      of those yet, and each would add a component that can break.
+      In the middle is one database: the videos with their tasks, the clips
+      with their timecodes and tags, and search. No broker, no separate read
+      side, no cache: the numbers do not justify any of those yet, and each
+      would add a component that can break.
 
       What the diagram does not show yet: how the detector decides there is a
       panda in the frame, how the pool is shared between uploaders, and where
@@ -997,11 +995,9 @@ steps:
       - **videos-repository** is the only module that goes to the database:
         timecodes and status in one transaction.
 
-      There is no cutter here, and that is not a simplification of the
-      diagram: a clip is a row, there is nothing to cut. If a one-time
-      transcode of the original to the delivery bitrate is ever needed, it
-      becomes a separate module on a CPU, not a GPU, and it too makes one file
-      per video, not per clip.
+      If a one-time transcode of the original to the delivery bitrate is ever
+      needed, it becomes a separate module on a CPU, not a GPU, and it makes
+      one file per video, not per clip.
     added:
       - element: pandas.pipeline.poller
         role: 'The whole queue: the next task under a lease, extension, returning expired ones.'
@@ -1032,9 +1028,8 @@ steps:
       `clips.tags` in one transaction; two copies are the price of search
       without a separate engine.
 
-      What is not in the data: clip files, and ranges without a clip. If the
-      detector found something, it is a clip; if not, the video has the
-      `empty` status.
+      There are no ranges without a clip in the data: if the detector found
+      something, it is a clip; if not, the video has the `empty` status.
   - id: api
     title: 'The contract: a receipt and addresses'
     narration: |-

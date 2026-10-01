@@ -23,12 +23,19 @@ interface Props {
   source?: string;
   /** Сама постановка. Абзацы делятся пустой строкой, как и весь нарратив. */
   text: string;
+  /**
+   * Обложка разбора, уже готовым адресом. Та же акварель, что на карточке в
+   * каталоге: без неё у разбора задачи картинка была бы только в каталоге,
+   * потому что блок «Проблема», где она стоит у разбора паттерна, карточка
+   * задания собой заменяет. Декоративная, как и там.
+   */
+  cover?: string;
 }
 
-const { label, source, text } = Astro.props;
+const { label, source, text, cover } = Astro.props;
 ---
 
-<figure class="brief" data-brief data-brief-label={label}>
+<figure class:list={['brief', cover && 'brief--illustrated']} data-brief data-brief-label={label}>
   <figcaption class="brief__head">
     <span class="brief__label">{label}</span>
     {source && <span class="brief__source">{source}</span>}
@@ -50,6 +57,13 @@ const { label, source, text } = Astro.props;
       )
     }
   </blockquote>
+  {
+    cover && (
+      <div class="brief__figure" aria-hidden="true">
+        <img src={cover} alt="" width="640" height="300" />
+      </div>
+    )
+  }
 </figure>
 
 <script>

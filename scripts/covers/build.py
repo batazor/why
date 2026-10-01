@@ -412,22 +412,30 @@ def panda_clips():
         t = f' transform="rotate({rot} {cx} {cy})"' if rot else ''
         return f'<ellipse cx="{cx}" cy="{cy}" rx="{rx}" ry="{ry}" fill="{fill}" opacity="{op}"{t} />'
 
-    # Панда: тело, голова, уши, пятна вокруг глаз, лапы. Чёрное — кистевой
+    # Панда сидит лицом к нам, по-детски: голова большая, тело круглое.
+    # Уши рисуются раньше головы и выглядывают из-за неё; чёрное — кистевой
     # серый INK, чтобы пятна легли на бумагу так же матово, как остальное.
+    ears = [circle(118, 78, 18, INK, 0.9), circle(212, 78, 18, INK, 0.9)]
     body = [
-        ellipse(160, 206, 76, 60, CREAM, 0.95),
-        ellipse(104, 196, 22, 36, INK, 0.85, rot=18),
-        ellipse(216, 196, 22, 36, INK, 0.85, rot=-18),
-        ellipse(124, 254, 28, 17, INK, 0.85),
-        ellipse(198, 254, 28, 17, INK, 0.85),
+        ellipse(165, 215, 72, 58, CREAM, 0.95),
+        # Чёрная полоса через плечи, как у настоящей панды.
+        ellipse(165, 182, 62, 17, INK, 0.82),
+        ellipse(108, 208, 20, 38, INK, 0.85, rot=24),
+        ellipse(222, 208, 20, 38, INK, 0.85, rot=-24),
+        ellipse(128, 262, 30, 18, INK, 0.85),
+        ellipse(202, 262, 30, 18, INK, 0.85),
     ]
-    head = [
-        circle(160, 112, 52, CREAM, 0.97),
-        circle(120, 74, 17, INK, 0.9), circle(200, 74, 17, INK, 0.9),
-        ellipse(142, 110, 13, 17, INK, 0.88, rot=-18),
-        ellipse(178, 110, 13, 17, INK, 0.88, rot=18),
-        circle(144, 112, 3.6, CREAM, 1), circle(176, 112, 3.6, CREAM, 1),
-        circle(160, 131, 5, INK, 0.9),
+    head = [circle(165, 118, 56, CREAM, 0.97)]
+    face = [
+        # Румянец и пятна вокруг глаз — каплями, с наклоном к носу.
+        circle(128, 140, 9, PEACH, 0.5), circle(202, 140, 9, PEACH, 0.5),
+        ellipse(143, 118, 14, 18, INK, 0.88, rot=-25),
+        ellipse(187, 118, 14, 18, INK, 0.88, rot=25),
+        # Глаза внутри пятен: белок, зрачок, блик.
+        circle(145, 116, 5.5, CREAM, 1), circle(185, 116, 5.5, CREAM, 1),
+        circle(146, 117, 3, INK, 1), circle(184, 117, 3, INK, 1),
+        circle(147.5, 115.5, 1.3, CREAM, 1), circle(185.5, 115.5, 1.3, CREAM, 1),
+        ellipse(165, 137, 6, 4.5, INK, 0.9),
     ]
     # Бамбук в правой лапе: стебель с коленцами и три листа.
     leaves = [
@@ -451,9 +459,11 @@ def panda_clips():
         tags += [rect(548, y + 10, 34, 18, BUTTER, r=9, op=0.95)]
     return (
         bloom((160, 170, 120, 120, '#d4e6dc'), (470, 90, 150, 70, '#d3e3ee'), (540, 210, 90, 80, '#f3e8cc'))
+        + wash(*ears)
         + wash(*body)
         + wash(*head)
-        + brush('M152 138 q8 7 16 0', color=INK, width=2, opacity=0.7)
+        + wash(*face)
+        + brush('M157 143 q4 5 8 0 q4 5 8 0', color=INK, width=1.8, opacity=0.75)
         # Стебель бамбука кистью, коленца — поперечные штрихи.
         + brush('M232 168 L264 44', color=INK_SAGE, width=5, opacity=0.8)
         + brush('M243 128 h10 M251 98 h10 M258 70 h10', color=INK_SAGE, width=2, opacity=0.8)

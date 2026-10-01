@@ -3128,6 +3128,53 @@ vscode-tree-item.is-new {
   margin-bottom: 0;
 }
 
+/* Задание с обложкой: текст слева, акварель справа, как у блока «Проблема» с
+   иллюстрацией. figcaption остаётся прямым ребёнком figure — сетка раскладывает
+   шапку и цитату в левую колонку, картинку — в правую на обе строки. Карточка
+   при этом шире обычной: двум колонкам в 48rem тесно. */
+.brief--illustrated {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 20rem);
+  grid-template-rows: auto 1fr;
+  column-gap: 1.4rem;
+  width: min(62rem, calc(100vw - 2.5rem));
+}
+
+.brief--illustrated .brief__head,
+.brief--illustrated .brief__text {
+  grid-column: 1;
+}
+
+/* На тёплой бумаге, как в каталоге: прозрачная краска на фоне панели
+   потеряла бы цвет. */
+.brief__figure {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  margin: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: color-mix(in srgb, #efe6d6 55%, var(--panel));
+}
+
+.brief__figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+@media (max-width: 46rem) {
+  .brief--illustrated {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .brief__figure {
+    grid-column: 1;
+    grid-row: auto;
+    margin-top: 0.9rem;
+  }
+}
+
 /* Значок «задание под рукой»: появляется, когда карточка условия уехала
    вверх, и открывает её копию поверх страницы.
 
@@ -3229,6 +3276,15 @@ vscode-tree-item.is-new {
   max-width: none;
   margin: 0;
   box-shadow: 0 8px 30px var(--shadow);
+}
+
+/* В панели «задание под рукой» картинка лишняя: читатель вернулся за текстом. */
+.brief-recall__panel .brief--illustrated {
+  display: block;
+}
+
+.brief-recall__panel .brief__figure {
+  display: none;
 }
 
 /* На узком экране панель встаёт снизу во всю ширину: сбоку от значка ей уже
