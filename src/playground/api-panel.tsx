@@ -12,7 +12,7 @@ import {
   type ApiTemplate,
 } from './api-templates';
 import { BLOCK_BY_KIND } from './catalog';
-import { HTTP_METHODS, uid, type Design, type Endpoint, type HttpMethod } from './model';
+import { HTTP_METHODS, blocksOf, uid, type Design, type Endpoint, type HttpMethod } from './model';
 import type { T } from './i18n';
 
 type Update = (fn: (design: Design) => Design) => void;
@@ -232,7 +232,7 @@ function Editor({ item, design, update, t, onClose }: { item: Endpoint; design: 
             onChange={(event) => patch({ service: event.currentTarget.value || undefined })}
           >
             <option value="">—</option>
-            {design.nodes.map((node) => (
+            {blocksOf(design.nodes).map((node) => (
               <option key={node.id} value={node.id}>
                 {node.label || t(`block.${node.kind}`)}
               </option>
@@ -341,7 +341,7 @@ export function ApiPanel({ design, update, t, readOnly }: Props) {
    * Сервисом считается то, что отвечает на запросы: вычисления и периметр,
    * плюс любой блок, которому маршрут уже отдали руками.
    */
-  const serving = design.nodes.filter(
+  const serving = blocksOf(design.nodes).filter(
     (node) =>
       ['compute', 'edge'].includes(BLOCK_BY_KIND.get(node.kind)?.category ?? 'compute') ||
       design.api.some((item) => item.service === node.id),
@@ -430,7 +430,7 @@ export function ApiPanel({ design, update, t, readOnly }: Props) {
               onChange={(event) => setService(event.currentTarget.value)}
             >
               <option value="">{t('api.serviceAny')}</option>
-              {design.nodes.map((node) => (
+              {blocksOf(design.nodes).map((node) => (
                 <option key={node.id} value={node.id}>
                   {node.label || t(`block.${node.kind}`)}
                 </option>

@@ -553,6 +553,18 @@ body:has(.pg) .site-footer {
 .pg-block--storage { --pg-tint: var(--pg-storage); }
 .pg-block--messaging { --pg-tint: var(--pg-messaging); }
 .pg-block--infra { --pg-tint: var(--pg-infra); }
+/* Надпись — инструмент, а не часть системы: без цвета категории. */
+.pg-block--text { --pg-tint: var(--pg-muted); }
+
+.pg-palette__text {
+  margin-bottom: 0.6rem;
+  border-left-style: dashed;
+}
+
+.pg-palette__rail-text {
+  margin-top: 0.35rem;
+  border-style: dashed;
+}
 
 /* -------------------------------------------------------------- Полотно */
 
@@ -679,6 +691,79 @@ body:has(.pg) .site-footer {
 .pg-block__reqs > span.is-nfr {
   background: color-mix(in srgb, var(--pg-storage) 14%, transparent);
   color: var(--pg-storage);
+}
+
+/* Подпись под блоком: висит под рамкой и не меняет её размер. Фон полотна —
+   чтобы читалась поверх связи, уходящей из блока вниз. */
+.pg-block__caption {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 220px;
+  padding: 0 0.3rem;
+  border-radius: 4px;
+  background: var(--pg-bg);
+  font-size: 0.7rem;
+  line-height: 1.3;
+  text-align: center;
+  color: var(--pg-muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+
+/* ----------------------------------------------------------- Надпись */
+
+.pg-text {
+  min-width: 2.5rem;
+  max-width: 360px;
+  padding: 0.2rem 0.35rem;
+  border: 1px dashed transparent;
+  border-radius: 6px;
+  color: var(--pg-fg);
+  line-height: 1.35;
+}
+
+.pg-text:hover {
+  border-color: var(--pg-border);
+}
+
+.pg-text.is-selected {
+  border-color: var(--pg-accent);
+  background: color-mix(in srgb, var(--pg-accent-soft) 40%, transparent);
+}
+
+.pg-text--s { font-size: 0.72rem; color: var(--pg-muted); }
+.pg-text--m { font-size: 0.88rem; }
+.pg-text--l { font-size: 1.25rem; font-weight: 700; }
+
+.pg-text__body {
+  display: block;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.pg-text__body.is-empty {
+  color: var(--pg-muted);
+  font-style: italic;
+}
+
+.pg-text__field {
+  display: block;
+  width: 320px;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  resize: none;
+  overflow: hidden;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
 }
 
 /* Ручки видны на наведении: на схеме из двадцати блоков постоянные точки — шум. */
@@ -4309,6 +4394,10 @@ td.pg-level--3 { color: #1f7a4d; font-weight: 600; }
 .pg-block.is-by-interviewer {
   outline: 2px dashed var(--pg-live-interviewer);
   outline-offset: 3px;
+}
+
+.pg-text.is-by-interviewer {
+  color: var(--pg-live-interviewer);
 }
 
 .pg-block__by {

@@ -2,7 +2,7 @@ import type { ModelMessage } from 'ai';
 import { streamReply } from './llm';
 import { active, checkText } from '../checks';
 import { translator } from '../i18n';
-import type { AiTurn, Design } from '../model';
+import { blocksOf, isText, type AiTurn, type Design } from '../model';
 import type { AiSettings } from './settings';
 
 /**
@@ -75,13 +75,14 @@ export function describeBoard(design: Design, lang: string, { checks: withChecks
   section(ru ? 'ПРИКИДКА НАГРУЗКИ' : 'LOAD ESTIMATE', [design.estimate.trim()].filter(Boolean));
   section(
     ru ? 'БЛОКИ СХЕМЫ' : 'DIAGRAM BLOCKS',
-    design.nodes.map((node) => {
+    blocksOf(design.nodes).map((node) => {
       const tech = node.tech ? `, ${node.tech}` : '';
+      const caption = node.caption?.trim() ? ` «${node.caption.trim()}»` : '';
       const note = node.note.trim() ? ` — ${node.note.trim()}` : '';
       const schema = node.schema?.length ? ` (${ru ? 'таблицы' : 'tables'}: ${node.schema.map((table) => table.name).join(', ')})` : '';
       // Нарисованное интервьюером — не заслуга кандидата: модель должна это видеть.
       const by = node.drawnBy ? (ru ? ' (нарисовал интервьюер)' : ' (drawn by the interviewer)') : '';
-      return `- ${node.label || node.kind} [${node.kind}${tech}]${note}${schema}${by}`;
+      return `- ${node.label || node.kind} [${node.kind}${tech}]${caption}${note}${schema}${by}`;
     }),
   );
   section(
@@ -93,6 +94,10 @@ export function describeBoard(design: Design, lang: string, { checks: withChecks
         }`,
     ),
   );
+  // Надписи пишутся только если они есть: пустой раздел модели ничего не говорит.
+  const texts = design.nodes.filter((node) => isText(node) && node.label.trim());
+  if (texts.length)
+    section(ru ? 'НАДПИСИ НА СХЕМЕ' : 'TEXT ON THE DIAGRAM', texts.map((node) => `- ${node.label.trim().replace(/\s*\n\s*/g, ' / ')}`));
   const checks = withChecks ? active(design.scenario.checks ?? []) : [];
   const t = translator(lang);
   if (checks.length) section(ru ? 'ПРОВЕРКИ ТРЕНИРОВКИ' : 'PRACTICE CHECKS', checks.map((check) => `- ${checkText(check, t)}`));

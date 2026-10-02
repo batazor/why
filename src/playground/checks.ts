@@ -12,7 +12,7 @@
  */
 
 import type { Board, EdgeMode, RequirementKind, Scenario } from './model';
-import { uid } from './model';
+import { blocksOf, uid } from './model';
 import { STATEFUL_KINDS } from './catalog';
 import type { T } from './i18n';
 
@@ -278,7 +278,7 @@ export function deriveChecks(scenario: Scenario, t: T): Check[] {
     paths.push({ id: uid('chk'), text: describe(rule, t) ?? '', weight: 2, rule });
   }
 
-  const kinds = new Set(reference.nodes.map((node) => node.kind));
+  const kinds = new Set(blocksOf(reference.nodes).map((node) => node.kind));
   for (const kind of kinds)
     if (!OBVIOUS.has(kind) && !linked.has(kind)) add({ is: 'kind', kind });
   checks.push(...paths);

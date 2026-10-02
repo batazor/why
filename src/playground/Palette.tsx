@@ -2,6 +2,7 @@ import { useRef, useState, type DragEvent } from 'react';
 import { AnimatePresence, LazyMotion, domAnimation, m, useReducedMotion } from 'motion/react';
 import { BLOCKS, CATEGORIES, type BlockCategory } from './catalog';
 import { DRAG_TYPE } from './Canvas';
+import { TEXT_KIND } from './model';
 import type { T } from './i18n';
 
 /**
@@ -181,6 +182,18 @@ export default function Palette({ t, onAdd }: Props) {
             </div>
           );
         })}
+
+        {/* Надпись — не категория блоков, а инструмент: стоит отдельно, под чертой. */}
+        <button
+          type="button"
+          className="pg-palette__rail-item pg-palette__rail-text pg-block--text"
+          title={t('palette.textHint')}
+          aria-label={t('palette.text')}
+          {...drag(TEXT_KIND)}
+          onClick={() => onAdd(TEXT_KIND)}
+        >
+          <i className="codicon codicon-text-size" aria-hidden="true" />
+        </button>
       </aside>
       </LazyMotion>
     );
@@ -212,6 +225,18 @@ export default function Palette({ t, onAdd }: Props) {
           />
         </div>
         <p className="pg-hint">{t('palette.hint')}</p>
+
+        <button
+          type="button"
+          className="pg-palette__item pg-palette__text pg-block--text"
+          title={t('palette.textHint')}
+          {...drag(TEXT_KIND)}
+          onClick={() => onAdd(TEXT_KIND)}
+        >
+          <i className="codicon codicon-text-size" aria-hidden="true" />
+          {t('palette.text')}
+          <i className="codicon codicon-add pg-palette__add" aria-hidden="true" />
+        </button>
 
         {CATEGORIES.map((category) => {
           const blocks = found(category);

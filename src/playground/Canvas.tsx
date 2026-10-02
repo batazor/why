@@ -27,12 +27,31 @@ import { techName } from './competency';
 import { ROUTE_DRAG, assignRoute } from './api-templates';
 import FloatingEdge from './FloatingEdge';
 import { autoLayout } from './layout';
-import { REQ_DRAG, coverRequirement, uid, type Design, type DesignEdge, type DesignNode } from './model';
+import {
+  REQ_DRAG,
+  TEXT_KIND,
+  blocksOf,
+  coverRequirement,
+  isText,
+  uid,
+  type Design,
+  type DesignEdge,
+  type DesignNode,
+} from './model';
 import type { T } from './i18n';
 
 export const DRAG_TYPE = 'application/x-sysdesign-block';
 
 type BlockData = { node: DesignNode; t: T; reqs: string[] };
+
+type TextData = {
+  node: DesignNode;
+  t: T;
+  /** Новый текст надписи; null — надпись опустела и её больше нет. */
+  write?: (id: string, text: string | null) => void;
+  /** Только что поставлена: сразу печатать, без двойного щелчка. */
+  fresh: boolean;
+};
 
 const SIDES = [
   ['t', Position.Top],
@@ -83,15 +102,95 @@ function BlockNode({ data, selected }: NodeProps) {
           </span>
         )}
       </span>
+      {/* Подпись — под рамкой, а не в ней: замер узла её не включает, и
+          связи по-прежнему упираются в сам блок. */}
+      {node.caption?.trim() && <span className="pg-block__caption">{node.caption.trim()}</span>}
     </div>
   );
 }
 
-const nodeTypes = { block: BlockNode };
+/**
+ * Надпись: текст без рамки и без ручек — к ней не ведут связи. Печатают
+ * прямо на полотне: двойной щелчок открывает поле, Esc или щелчок мимо
+ * закрывают. Опустевшая надпись удаляется — пустой узел не найти глазами.
+ */
+function TextNode({ data, selected }: NodeProps) {
+  const { node, t, write, fresh } = data as unknown as TextData;
+  const [editing, setEditing] = useState(fresh && Boolean(write));
+  const field = useRef<HTMLTextAreaElement>(null);
+
+  /**
+   * Новый узел React Flow держит скрытым, пока не замерит, а скрытое поле
+   * фокус не берёт. Поэтому фокус ставится по кадрам, пока поле его не
+   * примет, — обычно со второго.
+   */
+  useEffect(() => {
+    if (!editing) return;
+    let frame = 0;
+    let tries = 0;
+    const grab = () => {
+      const element = field.current;
+      if (!element) return;
+      element.focus();
+      if (document.activeElement === element) element.setSelectionRange(element.value.length, element.value.length);
+      else if (++tries < 20) frame = requestAnimationFrame(grab);
+    };
+    grab();
+    return () => cancelAnimationFrame(frame);
+  }, [editing]);
+
+  // Поле растёт по тексту: прокрутка внутри надписи на полотне неуместна.
+  useEffect(() => {
+    const element = field.current;
+    if (!element) return;
+    element.style.height = '0';
+    element.style.height = `${element.scrollHeight}px`;
+  });
+
+  const finish = () => {
+    setEditing(false);
+    if (!node.label.trim()) write?.(node.id, null);
+  };
+
+  return (
+    <div
+      // nopan: двойной щелчок по надписи открывает поле, а не приближает полотно.
+      className={`pg-text pg-text--${node.textSize ?? 'm'} nopan ${selected ? 'is-selected' : ''} ${node.drawnBy ? 'is-by-interviewer' : ''}`}
+      title={node.drawnBy ? t('canvas.byInterviewer') : undefined}
+      onDoubleClick={write ? () => setEditing(true) : undefined}
+    >
+      {editing ? (
+        <textarea
+          ref={field}
+          className="pg-text__field nodrag nowheel"
+          rows={1}
+          value={node.label}
+          placeholder={t('text.typing')}
+          onChange={(event) => write?.(node.id, event.currentTarget.value)}
+          onBlur={finish}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape' || (event.key === 'Enter' && (event.metaKey || event.ctrlKey))) finish();
+          }}
+        />
+      ) : (
+        <span className={`pg-text__body ${node.label.trim() ? '' : 'is-empty'}`}>
+          {node.label.trim() ? node.label : t(write ? 'text.placeholder' : 'text.empty')}
+        </span>
+      )}
+    </div>
+  );
+}
+
+const nodeTypes = { block: BlockNode, [TEXT_KIND]: TextNode };
 const edgeTypes = { floating: FloatingEdge };
 
 function toFlowNode(node: DesignNode, t: T, reqs: string[]): Node {
   return { id: node.id, type: 'block', position: { x: node.x, y: node.y }, data: { node, t, reqs } };
+}
+
+function toTextNode(node: DesignNode, t: T, write: TextData['write'], fresh: boolean): Node {
+  const data: TextData = { node, t, write, fresh };
+  return { id: node.id, type: TEXT_KIND, position: { x: node.x, y: node.y }, data };
 }
 
 function toFlowEdge(edge: DesignEdge): Edge {
@@ -159,6 +258,19 @@ export default function Canvas({
    */
   const fresh = useRef<string | null>(null);
 
+  /** Текст надписи правится прямо на полотне; пустая надпись уходит со схемы. */
+  const write = useCallback(
+    (id: string, text: string | null) =>
+      update((current) => ({
+        ...current,
+        nodes:
+          text === null
+            ? current.nodes.filter((node) => node.id !== id)
+            : current.nodes.map((node) => (node.id === id ? { ...node, label: text } : node)),
+      })),
+    [update],
+  );
+
   useEffect(() => {
     const covered = new Map<string, string[]>();
     for (const item of design.requirements)
@@ -169,13 +281,15 @@ export default function Canvas({
     setNodes((previous) => {
       const byId = new Map(previous.map((node) => [node.id, node]));
       return design.nodes.map((node) => {
-        const next = toFlowNode(node, t, covered.get(node.id) ?? []);
+        const next = isText(node)
+          ? toTextNode(node, t, readOnly ? undefined : write, node.id === picked)
+          : toFlowNode(node, t, covered.get(node.id) ?? []);
         const old = byId.get(node.id);
         const merged = old ? { ...old, ...next, data: next.data } : next;
         return picked ? { ...merged, selected: node.id === picked } : merged;
       });
     });
-  }, [design.nodes, design.requirements, t]);
+  }, [design.nodes, design.requirements, t, readOnly, write]);
 
   useEffect(() => {
     setEdges((previous) => {
@@ -270,7 +384,7 @@ export default function Canvas({
         ...current,
         nodes: [
           ...current.nodes,
-          { id, kind, label: t(`block.${kind}`), note: '', x: Math.round(center.x), y: Math.round(center.y), ...(drawnBy ? { drawnBy } : {}) },
+          { id, kind, label: kind === TEXT_KIND ? '' : t(`block.${kind}`), note: '', x: Math.round(center.x), y: Math.round(center.y), ...(drawnBy ? { drawnBy } : {}) },
         ],
       }));
     },
@@ -307,7 +421,8 @@ export default function Canvas({
           .filter((node) => node.measured?.width && node.measured?.height)
           .map((node) => [node.id, { width: node.measured!.width!, height: node.measured!.height! }]),
       );
-      const placed = await autoLayout(design.nodes, design.edges, sizes);
+      // Надписи остаются где были: связей у них нет, и ELK свалил бы их в угол.
+      const placed = await autoLayout(blocksOf(design.nodes), design.edges, sizes);
       if (placed.size) {
         update((current) => ({
           ...current,
@@ -326,7 +441,8 @@ export default function Canvas({
     if (readOnly) return;
     const types = event.dataTransfer.types;
     if (types.includes(ROUTE_DRAG) || types.includes(REQ_DRAG)) {
-      const node = (event.target as HTMLElement).closest<HTMLElement>('.react-flow__node');
+      // На надпись требование и маршрут не бросают: она ничего не обслуживает.
+      const node = (event.target as HTMLElement).closest<HTMLElement>('.react-flow__node:not(.react-flow__node-text)');
       markTarget(node);
       if (!node) return;
       event.preventDefault();
@@ -416,7 +532,7 @@ export default function Canvas({
         minZoom={0.2}
         proOptions={{ hideAttribution: true }}
       >
-        {!readOnly && design.nodes.length > 1 && (
+        {!readOnly && blocksOf(design.nodes).length > 1 && (
           <Panel position="top-right">
             <button type="button" className="pg-button pg-arrange" onClick={arrange} disabled={laying}>
               <i className={`codicon codicon-${laying ? 'sync' : 'type-hierarchy'}`} aria-hidden="true" />{' '}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { totalScore, type Design, type Signal } from '../model';
+import { blocksOf, totalScore, type Design, type Signal } from '../model';
 import { duration, summarize } from '../integrity';
 import { RequirementsTable } from '../req-doc';
 import { interviewUrl } from './links';
@@ -235,7 +235,7 @@ export function ReportPanel({
           <li>{t('report.hints', { n: String(session.revealed.length), of: String(scenario.hints.length) })}</li>
           <li>{t('report.questions', { n: String(session.asked.length), of: String(scenario.questions.length) })}</li>
           <li>
-            {t('report.nodes', { n: String(design.nodes.length), edges: String(design.edges.length) })} ·{' '}
+            {t('report.nodes', { n: String(blocksOf(design.nodes).length), edges: String(design.edges.length) })} ·{' '}
             {t('report.reqs', { n: String(design.requirements.length) })} · {t('report.api', { n: String(design.api.length) })}
           </li>
         </ul>

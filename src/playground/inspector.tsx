@@ -5,7 +5,7 @@ import { patchRequirement } from './panels';
 import { BlockRoutes } from './api-panel';
 import { SchemaSummary } from './schema-editor';
 import { ReqChip } from './req-chip';
-import type { Design, DesignNode, MatrixCell, MatrixScore, Requirement, TechMatrix } from './model';
+import { TEXT_SIZES, isText, type Design, type DesignNode, type MatrixCell, type MatrixScore, type Requirement, type TechMatrix } from './model';
 import type { T } from './i18n';
 
 type Update = (fn: (design: Design) => Design) => void;
@@ -424,11 +424,69 @@ export function InspectorPanel({ design, update, t, lang, selection, readOnly, s
         ...current,
         nodes: current.nodes.map((item) => (item.id === node.id ? { ...item, ...value } : item)),
       }));
+    const remove = () =>
+      update((current) => ({
+        ...current,
+        nodes: current.nodes.filter((item) => item.id !== node.id),
+        edges: current.edges.filter((item) => item.source !== node.id && item.target !== node.id),
+        requirements: current.requirements.map((item) => ({
+          ...item,
+          covers: item.covers.filter((id) => id !== node.id),
+        })),
+        api: current.api.map((item) => (item.service === node.id ? { ...item, service: undefined } : item)),
+      }));
+
+    if (isText(node))
+      return (
+        <div className="pg-panel">
+          <label className="pg-field">
+            <span className="pg-field__label">{t('inspect.text')}</span>
+            <textarea
+              className="pg-input pg-textarea"
+              rows={5}
+              readOnly={readOnly}
+              value={node.label}
+              placeholder={t('text.placeholder')}
+              onChange={(event) => patch({ label: event.currentTarget.value })}
+            />
+          </label>
+          <fieldset className="pg-field pg-segmented" disabled={readOnly}>
+            <legend className="pg-field__label">{t('inspect.textSize')}</legend>
+            {TEXT_SIZES.map((size) => (
+              <label key={size} className={(node.textSize ?? 'm') === size ? 'is-on' : ''}>
+                <input
+                  type="radio"
+                  name="pg-text-size"
+                  checked={(node.textSize ?? 'm') === size}
+                  onChange={() => patch({ textSize: size === 'm' ? undefined : size })}
+                />
+                {t(`text.size.${size}`)}
+              </label>
+            ))}
+          </fieldset>
+          {!readOnly && (
+            <button type="button" className="pg-button pg-button--danger" onClick={remove}>
+              {t('inspect.delete')}
+            </button>
+          )}
+        </div>
+      );
+
     return (
       <div className="pg-panel">
         <label className="pg-field">
           <span className="pg-field__label">{t('inspect.name')}</span>
           <input className="pg-input" readOnly={readOnly} value={node.label} onChange={(event) => patch({ label: event.currentTarget.value })} />
+        </label>
+        <label className="pg-field">
+          <span className="pg-field__label">{t('inspect.caption')}</span>
+          <input
+            className="pg-input"
+            readOnly={readOnly}
+            value={node.caption ?? ''}
+            placeholder={t('inspect.captionHint')}
+            onChange={(event) => patch({ caption: event.currentTarget.value || undefined })}
+          />
         </label>
         <label className="pg-field">
           <span className="pg-field__label">{t('inspect.type')}</span>
@@ -474,22 +532,7 @@ export function InspectorPanel({ design, update, t, lang, selection, readOnly, s
           />
         </label>
         {!readOnly && (
-          <button
-            type="button"
-            className="pg-button pg-button--danger"
-            onClick={() =>
-              update((current) => ({
-                ...current,
-                nodes: current.nodes.filter((item) => item.id !== node.id),
-                edges: current.edges.filter((item) => item.source !== node.id && item.target !== node.id),
-                requirements: current.requirements.map((item) => ({
-                  ...item,
-                  covers: item.covers.filter((id) => id !== node.id),
-                })),
-                api: current.api.map((item) => (item.service === node.id ? { ...item, service: undefined } : item)),
-              }))
-            }
-          >
+          <button type="button" className="pg-button pg-button--danger" onClick={remove}>
             {t('inspect.delete')}
           </button>
         )}

@@ -19,6 +19,13 @@ export interface DesignNode {
   kind: BlockKind;
   label: string;
   note: string;
+  /**
+   * Подпись на схеме — строка под блоком: «шард по user_id», «только чтение».
+   * Заметки длинные и для себя, подпись короткая и для того, кто смотрит схему.
+   */
+  caption?: string;
+  /** Только у надписи: мелкий текст, обычный или заголовок. */
+  textSize?: TextSize;
   /** Выбранная технология: id из каталога (kafka, postgres…) или своё название. */
   tech?: string;
   /**
@@ -34,6 +41,22 @@ export interface DesignNode {
   x: number;
   y: number;
 }
+
+/**
+ * Надпись — не блок системы, а просто текст на полотне: заголовок зоны,
+ * пояснение к куску схемы, вопрос самому себе. Лежит среди узлов, чтобы
+ * двигаться, отменяться и ехать к собеседнику теми же путями, что и блоки,
+ * но в проверках, связях и эталоне её нет. Текст — в `label`.
+ */
+export const TEXT_KIND = 'text';
+
+export const TEXT_SIZES = ['s', 'm', 'l'] as const;
+export type TextSize = (typeof TEXT_SIZES)[number];
+
+export const isText = (node: { kind: string }) => node.kind === TEXT_KIND;
+
+/** Блоки схемы без надписей: всё, что считают проверки, эталон и отчёт. */
+export const blocksOf = <N extends { kind: string }>(nodes: N[]): N[] => nodes.filter((node) => !isText(node));
 
 /** Оценка технологии под одно требование: подходит, частично или нет. */
 export type MatrixScore = 'yes' | 'partial' | 'no';
@@ -499,10 +522,10 @@ export interface Finding {
  * кандидата нет. Сравниваются типы, а не блоки — названия у всех свои.
  */
 export function compareToReference(answer: Board, reference: Board): Finding[] {
-  if (!reference.nodes.length) return [];
+  if (!blocksOf(reference.nodes).length) return [];
   const count = (board: Board) => {
     const map = new Map<string, number>();
-    for (const node of board.nodes) map.set(node.kind, (map.get(node.kind) ?? 0) + 1);
+    for (const node of blocksOf(board.nodes)) map.set(node.kind, (map.get(node.kind) ?? 0) + 1);
     return map;
   };
   const mine = count(answer);
@@ -527,10 +550,11 @@ export function totalScore(rubric: Criterion[], scores: Record<string, number>):
 export function lint(design: Board, spofKinds: ReadonlySet<string>): Finding[] {
   const findings: Finding[] = [];
   const linked = new Set(design.edges.flatMap((edge) => [edge.source, edge.target]));
-  const byId = new Map(design.nodes.map((node) => [node.id, node]));
+  const blocks = blocksOf(design.nodes);
+  const byId = new Map(blocks.map((node) => [node.id, node]));
 
-  for (const node of design.nodes) {
-    if (design.nodes.length > 1 && !linked.has(node.id)) {
+  for (const node of blocks) {
+    if (blocks.length > 1 && !linked.has(node.id)) {
       findings.push({ level: 'warn', key: 'lint.orphan', params: { name: node.label } });
     }
   }
@@ -552,9 +576,9 @@ export function lint(design: Board, spofKinds: ReadonlySet<string>): Finding[] {
    */
   const incoming = new Map<string, number>();
   for (const edge of design.edges) incoming.set(edge.target, (incoming.get(edge.target) ?? 0) + 1);
-  for (const node of design.nodes) {
+  for (const node of blocks) {
     if (spofKinds.has(node.kind) && (incoming.get(node.id) ?? 0) >= 2) {
-      const twins = design.nodes.filter((other) => other.kind === node.kind).length;
+      const twins = blocks.filter((other) => other.kind === node.kind).length;
       if (twins === 1) findings.push({ level: 'info', key: 'lint.spof', params: { name: node.label } });
     }
   }
@@ -573,6 +597,6 @@ export function lint(design: Board, spofKinds: ReadonlySet<string>): Finding[] {
         findings.push({ level: 'info', key: 'lint.routeNoService', params: { route: `${item.method} ${item.path}` } });
   }
 
-  if (!design.nodes.length) findings.push({ level: 'info', key: 'lint.empty' });
+  if (!blocks.length) findings.push({ level: 'info', key: 'lint.empty' });
   return findings;
 }
