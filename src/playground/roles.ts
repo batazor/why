@@ -25,6 +25,12 @@ export type Tab =
   | 'ai'
   | 'assist';
 
+/**
+ * Какая доска на полотне: ответ кандидата, эталон автора или исходная
+ * система — то, с чего кандидат начинает.
+ */
+export type BoardView = 'answer' | 'reference' | 'start';
+
 export interface Permissions {
   /** Какую доску показывает полотно: эталон автора или ответ кандидата. */
   board: 'reference' | 'answer';

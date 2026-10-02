@@ -7,6 +7,7 @@ import {
   emptyBoard,
   emptySession,
   migrate,
+  migrateBoard,
   pickBoard,
   type Board,
   type Design,
@@ -396,12 +397,18 @@ export class InterviewRepository implements DesignRepository {
     }));
   }
 
-  /** Текст задания — кандидату, когда собеседование началось. До старта — null. */
-  async task(): Promise<string | null> {
-    const row = must(
-      await db().from('interview_tasks').select('task').eq('interview_id', this.interviewId).maybeSingle(),
-    ) as { task: string } | null;
-    return row?.task ?? null;
+  /**
+   * Текст задания и исходная система — кандидату, когда собеседование
+   * началось. До старта — null: строку сервер ему не отдаёт.
+   */
+  async task(): Promise<{ task: string; start: Board | null } | null> {
+    const query = (columns: string) =>
+      db().from('interview_tasks').select(columns).eq('interview_id', this.interviewId).maybeSingle();
+    let result = await query('task, start');
+    // База ещё без исходной системы (миграция given_system не применена) — задание всё равно отдаём.
+    if (result.error?.code === '42703') result = await query('task');
+    const row = must(result) as { task: string; start?: Partial<Board> | null } | null;
+    return row ? { task: row.task, start: row.start ? migrateBoard(row.start) : null } : null;
   }
 
   async feedback(): Promise<Feedback | null> {

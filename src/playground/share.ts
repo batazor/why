@@ -1,4 +1,4 @@
-import { emptyBoard, emptyScenario, emptySession, emptyTraining, migrate, pickBoard, type Design, type Scenario } from './model';
+import { emptyScenario, emptySession, emptyTraining, migrate, pickBoard, startBoard, type Design, type Scenario } from './model';
 import type { Role } from './roles';
 
 /**
@@ -40,6 +40,8 @@ function forTraining(design: Design): Scenario {
     allowChecks: design.scenario.allowChecks,
     hints: design.scenario.hints,
     questions: design.scenario.questions,
+    // Исходная система — не ответ, а условие: без неё «Заново» дало бы чистый лист.
+    ...(design.scenario.start ? { start: design.scenario.start } : {}),
     ...(design.scenario.checks ? { checks: design.scenario.checks } : {}),
   };
 }
@@ -48,7 +50,8 @@ function forTraining(design: Design): Scenario {
 export function shared(design: Design, options: ShareOptions): Design {
   return {
     ...design,
-    ...(options.board ? pickBoard(design) : emptyBoard()),
+    // Без доски человек начинает с того же, с чего начал бы на собеседовании.
+    ...(options.board ? pickBoard(design) : startBoard(design.scenario)),
     scenario: options.scenario
       ? design.scenario
       : options.role === 'trainee'

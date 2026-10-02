@@ -77,6 +77,13 @@ function BlockNode({ data, selected }: NodeProps) {
           <i className="codicon codicon-person" aria-hidden="true" />
         </span>
       )}
+      {/* Блок из исходной системы: его дали, а не нарисовали. Интервьюеру
+          это нужно, чтобы отличить готовое от сделанного на собеседовании. */}
+      {node.given && (
+        <span className="pg-block__given" title={t('canvas.given')} aria-label={t('canvas.given')}>
+          <i className="codicon codicon-history" aria-hidden="true" />
+        </span>
+      )}
       {SIDES.map(([id, side]) => (
         <Handle key={id} id={id} type="source" position={side} className="pg-block__handle" />
       ))}

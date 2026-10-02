@@ -38,6 +38,8 @@ export interface DesignNode {
   schema?: DbTable[];
   /** Нарисовал интервьюер на доске кандидата в собеседовании, а не сам кандидат. */
   drawnBy?: 'interviewer';
+  /** Был в исходной системе сценария: кандидат его получил, а не нарисовал. */
+  given?: boolean;
   x: number;
   y: number;
 }
@@ -91,6 +93,8 @@ export interface DesignEdge {
   mode: EdgeMode;
   /** Провёл интервьюер на доске кандидата в собеседовании. */
   drawnBy?: 'interviewer';
+  /** Была в исходной системе сценария. */
+  given?: boolean;
 }
 
 export type RequirementKind = 'fr' | 'nfr';
@@ -199,6 +203,12 @@ export interface Criterion extends ScenarioItem {
  */
 export interface Scenario {
   reference: Board;
+  /**
+   * Исходная система: с чем кандидат начинает собеседование. Пусто —
+   * чистый лист. Не пусто — задача «доработай то, что есть»: кандидату
+   * отдают работающую систему, и разговор идёт о том, что в ней менять.
+   */
+  start?: Board;
   hints: ScenarioItem[];
   rubric: Criterion[];
   questions: ScenarioItem[];
@@ -338,6 +348,46 @@ export function emptyBoard(): Board {
   return { nodes: [], edges: [], requirements: [], api: [], estimate: '' };
 }
 
+/** Есть ли на доске хоть что-то: блок, связь, требование, маршрут или прикидка. */
+export function hasContent(board: Board): boolean {
+  return Boolean(board.nodes.length || board.edges.length || board.requirements.length || board.api.length || board.estimate.trim());
+}
+
+/**
+ * Доска, с которой кандидат начинает: копия исходной системы, блоки и
+ * связи помечены как данные. Сервер делает то же самое при старте
+ * собеседования (private.seed_start_board) — пометка должна совпадать.
+ */
+export function startBoard(scenario: Scenario): Board {
+  const start = scenario.start;
+  if (!start) return emptyBoard();
+  const copy = structuredClone(pickBoard(start));
+  return {
+    ...copy,
+    nodes: copy.nodes.map((node) => ({ ...node, given: true })),
+    edges: copy.edges.map((edge) => ({ ...edge, given: true })),
+  };
+}
+
+/**
+ * Доложить исходную систему к тому, что уже есть: своё остаётся, чего нет
+ * по id — добавляется в начало. Кандидат мог порисовать до старта, и это не
+ * должно пропасть.
+ */
+export function mergeBoards(own: Board, extra: Board): Board {
+  const add = <T extends { id: string }>(mine: T[], theirs: T[]) => {
+    const known = new Set(mine.map((item) => item.id));
+    return [...theirs.filter((item) => !known.has(item.id)), ...mine];
+  };
+  return {
+    nodes: add(own.nodes, extra.nodes),
+    edges: add(own.edges, extra.edges),
+    requirements: add(own.requirements, extra.requirements),
+    api: add(own.api, extra.api),
+    estimate: own.estimate.trim() ? own.estimate : extra.estimate,
+  };
+}
+
 export function emptyScenario(): Scenario {
   return { reference: emptyBoard(), hints: [], rubric: [], questions: [], allowChecks: false, guide: '' };
 }
@@ -402,7 +452,7 @@ export function nextRequirementId(design: Design, kind: RequirementKind): string
  * прошлой версии песочницы. Недостающие поля добиваются значениями по
  * умолчанию, мусор отбрасывается — открыть проект лучше, чем показать ошибку.
  */
-function migrateBoard(data: Partial<Board> | undefined): Board {
+export function migrateBoard(data: Partial<Board> | undefined): Board {
   return {
     nodes: Array.isArray(data?.nodes)
       ? data.nodes.map((node) => ({
@@ -475,6 +525,7 @@ export function migrate(raw: unknown): Design {
     ...migrateBoard(data),
     scenario: {
       reference: migrateBoard(scenario.reference),
+      ...(scenario.start ? { start: migrateBoard(scenario.start) } : {}),
       hints: list(scenario.hints),
       rubric: list<Criterion>(scenario.rubric).map((item) => ({ ...item, weight: item.weight ?? 1 })),
       questions: list(scenario.questions),

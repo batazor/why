@@ -3,7 +3,9 @@ import { checkText, deriveChecks, evaluate } from './checks';
 import {
   TRAIN_STEPS,
   compareToReference,
-  emptyBoard,
+  mergeBoards,
+  pickBoard,
+  startBoard,
   emptySession,
   emptyTraining,
   type Design,
@@ -79,7 +81,7 @@ function restart(update: Update, t: T, onReset: () => void) {
   if (!confirm(t('train.againConfirm'))) return;
   update((current) => ({
     ...current,
-    ...emptyBoard(),
+    ...startBoard(current.scenario),
     session: { ...emptySession(), startedAt: new Date().toISOString() },
     training: emptyTraining(),
   }));
@@ -121,6 +123,8 @@ export function TrainDock({ design, update, t, now, onStep, onFinish, onReset }:
   const start = () => {
     update((current) => ({
       ...current,
+      // Задача «доработай систему»: исходная система ложится на доску к старту.
+      ...mergeBoards(pickBoard(current), startBoard(current.scenario)),
       session: { ...emptySession(), startedAt: new Date().toISOString() },
       training: emptyTraining(),
     }));

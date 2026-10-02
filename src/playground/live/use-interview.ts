@@ -3,8 +3,8 @@ import type { Person } from './auth';
 import type { Course, InterviewRepository } from './interviews';
 import { merge, signalsFrom, snapshotsFrom, type JournalEntry } from './journal';
 import { useRoom } from './room';
-import type { Design } from '../model';
-import type { Role } from '../roles';
+import { mergeBoards, pickBoard, type Design } from '../model';
+import type { BoardView, Role } from '../roles';
 import type { T } from '../i18n';
 
 /**
@@ -30,7 +30,7 @@ interface Options {
   /** Чужая правка доски: мимо истории отмены. */
   remote: (fn: (design: Design) => Design) => void;
   /** Какая доска на полотне: курсор над эталоном кандидату ни о чём не скажет. */
-  board: 'answer' | 'reference';
+  board: BoardView;
   t: T;
 }
 
@@ -67,9 +67,15 @@ export function useInterview({ interview, me, role, design, update, remote, boar
        */
       if (next.startedAt && interview?.as === 'candidate' && taskLocked.current) {
         const fetchTask = async (attempt: number) => {
-          const text = await interview.task().catch(() => null);
-          if (text !== null)
-            update((current) => ({ ...current, session: { ...current.session, taskLocked: false, openedTask: text } }));
+          const opened = await interview.task().catch(() => null);
+          if (opened !== null)
+            update((current) => ({
+              ...current,
+              // Исходная система: сервер уже положил её в доску, но автосохранение
+              // кандидата могло успеть записать доску без неё. Слияние по id — без дублей.
+              ...(opened.start ? mergeBoards(pickBoard(current), opened.start) : {}),
+              session: { ...current.session, taskLocked: false, openedTask: opened.task },
+            }));
           else if (attempt < 8 && taskLocked.current) setTimeout(() => fetchTask(attempt + 1), 750);
         };
         fetchTask(0);

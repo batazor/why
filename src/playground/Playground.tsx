@@ -19,7 +19,10 @@ import {
   emptyBoard,
   emptyDesign,
   emptySession,
+  hasContent,
+  mergeBoards,
   pickBoard,
+  startBoard,
   candidateEstimates,
   uid,
   type Design,
@@ -31,7 +34,7 @@ import { ShareDialog } from './share-dialog';
 import { HistoryButtons, ProjectMenu, ProjectPicker, SaveStatus, SessionControls, WorkspaceButtons, type SaveState } from './toolbar';
 import { clearPayload, decodeDesign, payloadFromUrl } from './share';
 import { translator } from './i18n';
-import { PERMISSIONS, ROLES, initialRole, rememberRole, type Role, type Tab } from './roles';
+import { PERMISSIONS, ROLES, initialRole, rememberRole, type BoardView, type Role, type Tab } from './roles';
 import { useAuth } from './live/auth';
 import { useInterview } from './live/use-interview';
 import { Gate, LiveBar, RemoteCursors, WelcomeGate } from './live/live-ui';
@@ -91,6 +94,8 @@ export default function Playground({ lang, repository }: Props) {
   const [tab, setTab] = useState<Tab>(PERMISSIONS[role].tabs[0]);
   /** Интервьюер переключается между ответом кандидата и эталоном. */
   const [compareView, setCompareView] = useState<'answer' | 'reference'>('answer');
+  /** Что рисует автор: эталон или исходную систему, с которой начнёт кандидат. */
+  const [authorView, setAuthorView] = useState<'reference' | 'start'>('reference');
   const [selection, setSelection] = useState<Selection>({});
   const [status, setStatus] = useState<SaveState>('saved');
   const [canvasKey, setCanvasKey] = useState(0);
@@ -125,7 +130,7 @@ export default function Playground({ lang, repository }: Props) {
   };
 
   const perms = PERMISSIONS[role];
-  const board = role === 'interviewer' ? compareView : perms.board;
+  const board: BoardView = role === 'interviewer' ? compareView : role === 'author' ? authorView : perms.board;
   /** Собеседование закончено — доска кандидата заморожена и на сервере, и здесь. */
   const frozen = Boolean(interview && design?.session.finishedAt);
 
@@ -327,19 +332,25 @@ export default function Playground({ lang, repository }: Props) {
   const view = useMemo(() => {
     if (!design) return design;
     if (board === 'reference') return { ...design, ...design.scenario.reference };
+    if (board === 'start') return { ...design, ...(design.scenario.start ?? emptyBoard()) };
     // Запись: на полотне снимок доски из журнала, а не живая доска.
     const frame = replay !== null ? snapshots[replay] : undefined;
     return frame ? { ...design, ...frame.board } : design;
   }, [design, board, replay, snapshots]);
   const updateView = useCallback(
     (fn: (design: Design) => Design) => {
-      if (board !== 'reference') return update(fn);
+      if (board === 'answer') return update(fn);
       update((current) => {
-        const next = fn({ ...current, ...current.scenario.reference });
+        const next = fn({ ...current, ...(current.scenario[board] ?? emptyBoard()) });
+        const drawn = pickBoard(next);
         return {
           ...next,
           ...pickBoard(current),
-          scenario: { ...next.scenario, reference: pickBoard(next) },
+          scenario: {
+            ...next.scenario,
+            // Пустая исходная система — это чистый лист, а не «система из ничего».
+            [board]: board === 'start' && !hasContent(drawn) ? undefined : drawn,
+          },
         };
       });
     },
@@ -551,7 +562,9 @@ export default function Playground({ lang, repository }: Props) {
     drawBanner ??
     waiting ??
     (role === 'author'
-      ? t('role.authorBanner')
+      ? board === 'start'
+        ? t('role.startBanner')
+        : t(design.scenario.start ? 'role.authorBannerStart' : 'role.authorBanner')
       : role === 'trainee'
         ? t('role.traineeBanner')
         : role === 'interviewer'
@@ -685,6 +698,42 @@ export default function Playground({ lang, repository }: Props) {
           </div>
         )}
 
+        {role === 'author' && (
+          <div className="pg-switch" role="group">
+            {(['reference', 'start'] as const).map((name) => (
+              <button
+                key={name}
+                type="button"
+                className={authorView === name ? 'is-on' : ''}
+                aria-pressed={authorView === name}
+                title={t(`view.${name}Hint`)}
+                onClick={() => {
+                  setAuthorView(name);
+                  setSelection({});
+                  setCanvasKey((key) => key + 1);
+                }}
+              >
+                {t(`view.${name}`)}
+                {name === 'start' && design.scenario.start && <span className="pg-count">{design.scenario.start.nodes.length}</span>}
+              </button>
+            ))}
+          </div>
+        )}
+        {/* Эталон задачи «доработай систему» почти всегда начинается с той же
+            системы: не рисовать её второй раз. */}
+        {role === 'author' && board === 'reference' && design.scenario.start && !hasContent(design.scenario.reference) && (
+          <button
+            type="button"
+            className="pg-button"
+            onClick={() => {
+              updateView((current) => ({ ...current, ...structuredClone(pickBoard(current.scenario.start ?? emptyBoard())) }));
+              setCanvasKey((key) => key + 1);
+            }}
+          >
+            <i className="codicon codicon-copy" aria-hidden="true" /> {t('view.copyStart')}
+          </button>
+        )}
+
         <span className="pg-toolbar__spacer" />
 
         <SessionControls
@@ -697,14 +746,18 @@ export default function Playground({ lang, repository }: Props) {
           onToggle={() =>
             update((current) => ({
               ...current,
+              // Исходная система ложится на доску к старту. В собеседовании её
+              // кладёт и сервер; здесь — чтобы интервьюер видел её сразу, не
+              // дожидаясь доски от кандидата. Слияние по id, дублей не будет.
+              ...(!running ? mergeBoards(pickBoard(current), startBoard(current.scenario)) : {}),
               session: running
                 ? { ...current.session, finishedAt: new Date().toISOString() }
                 : { ...current.session, startedAt: new Date().toISOString(), finishedAt: undefined },
             }))
           }
           onReset={() => {
-            // Сценарий и эталон остаются: очищается только прохождение.
-            update((current) => ({ ...current, ...emptyBoard(), session: emptySession() }));
+            // Сценарий и эталон остаются: прохождение начинается заново, с исходной системы.
+            update((current) => ({ ...current, ...startBoard(current.scenario), session: emptySession() }));
             setSelection({});
             setCanvasKey((key) => key + 1);
           }}
@@ -896,7 +949,9 @@ export default function Playground({ lang, repository }: Props) {
                   {t(
                     name === 'board'
                       ? role === 'author'
-                        ? 'group.reference'
+                        ? board === 'start'
+                          ? 'view.start'
+                          : 'group.reference'
                         : 'group.board'
                       : role === 'author'
                         ? 'group.scenario'

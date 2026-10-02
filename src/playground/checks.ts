@@ -12,7 +12,7 @@
  */
 
 import type { Board, EdgeMode, RequirementKind, Scenario } from './model';
-import { blocksOf, uid } from './model';
+import { blocksOf, emptyBoard, uid } from './model';
 import { STATEFUL_KINDS } from './catalog';
 import type { T } from './i18n';
 
@@ -219,21 +219,32 @@ function worthChecking(toKind: string, mode: EdgeMode): boolean {
  *
  * Требования пересчитываются с запасом вниз: эталон — не единственный верный
  * ответ, и требовать ровно столько же формулировок нечестно.
+ *
+ * Если у сценария есть исходная система, проверяется только то, что поверх
+ * неё: блок, связь или требование, которые кандидат получил готовыми,
+ * засчитывались бы ему даром.
  */
 export function deriveChecks(scenario: Scenario, t: T): Check[] {
   const { reference } = scenario;
+  const start = scenario.start ?? emptyBoard();
   const checks: Check[] = [];
   /* Текст кладётся в проект для сервера и для правил, которые словами не описать; на экране он берётся из правила. */
   const add = (rule: Rule, weight = 1) => checks.push({ id: uid('chk'), text: describe(rule, t) ?? '', weight, rule });
+  /** Блок или схема, которые уже есть в исходной системе, — не проверка. */
+  const addNew = (rule: Rule, weight = 1) => !holds(start, rule) && add(rule, weight);
 
-  const fr = reference.requirements.filter((item) => item.kind === 'fr' && item.text.trim()).length;
-  const nfr = reference.requirements.filter((item) => item.kind === 'nfr' && item.text.trim()).length;
+  const written = (board: Board, kind: RequirementKind) =>
+    board.requirements.filter((item) => item.kind === kind && item.text.trim());
+  const givenIds = new Set(start.requirements.map((item) => item.id));
+  const fresh = (kind: RequirementKind) => written(reference, kind).filter((item) => !givenIds.has(item.id)).length;
+  const fr = fresh('fr');
+  const nfr = fresh('nfr');
   if (fr) {
-    const min = threshold(fr);
+    const min = written(start, 'fr').length + threshold(fr);
     add({ is: 'reqs', kind: 'fr', min }, 2);
   }
   if (nfr) {
-    const min = threshold(nfr);
+    const min = written(start, 'nfr').length + threshold(nfr);
     add({ is: 'reqs', kind: 'nfr', min }, 2);
     if (reference.requirements.some((item) => item.kind === 'nfr' && item.target.trim())) add({ is: 'numbers' }, 3);
   }
@@ -275,17 +286,18 @@ export function deriveChecks(scenario: Scenario, t: T): Check[] {
           ],
         }
       : { is: 'path', from, to, mode: edge.mode };
+    if (holds(start, rule)) continue;
     paths.push({ id: uid('chk'), text: describe(rule, t) ?? '', weight: 2, rule });
   }
 
   const kinds = new Set(blocksOf(reference.nodes).map((node) => node.kind));
   for (const kind of kinds)
-    if (!OBVIOUS.has(kind) && !linked.has(kind)) add({ is: 'kind', kind });
+    if (!OBVIOUS.has(kind) && !linked.has(kind)) addNew({ is: 'kind', kind });
   checks.push(...paths);
 
   for (const kind of kinds)
     if (STATEFUL_KINDS.has(kind) && reference.nodes.some((node) => node.kind === kind && node.schema?.length))
-      add({ is: 'schema', kind });
+      addNew({ is: 'schema', kind });
 
   if (reference.estimate.trim()) add({ is: 'estimate' }, 3);
 

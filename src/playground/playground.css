@@ -4436,6 +4436,24 @@ td.pg-level--3 { color: #1f7a4d; font-weight: 600; }
   font-size: 12px;
 }
 
+.pg-block__given {
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--pg-border);
+  border-radius: 50%;
+  background: var(--pg-panel);
+  color: var(--pg-muted);
+}
+
+.pg-block__given .codicon {
+  font-size: 10px;
+}
+
 .pg-edge.is-by-interviewer path {
   stroke: var(--pg-live-interviewer) !important;
 }

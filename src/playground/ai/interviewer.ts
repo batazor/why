@@ -81,7 +81,11 @@ export function describeBoard(design: Design, lang: string, { checks: withChecks
       const note = node.note.trim() ? ` — ${node.note.trim()}` : '';
       const schema = node.schema?.length ? ` (${ru ? 'таблицы' : 'tables'}: ${node.schema.map((table) => table.name).join(', ')})` : '';
       // Нарисованное интервьюером — не заслуга кандидата: модель должна это видеть.
-      const by = node.drawnBy ? (ru ? ' (нарисовал интервьюер)' : ' (drawn by the interviewer)') : '';
+      const by = node.drawnBy
+        ? ru ? ' (нарисовал интервьюер)' : ' (drawn by the interviewer)'
+        : node.given
+          ? ru ? ' (был в исходной системе)' : ' (part of the given system)'
+          : '';
       return `- ${node.label || node.kind} [${node.kind}${tech}]${caption}${note}${schema}${by}`;
     }),
   );

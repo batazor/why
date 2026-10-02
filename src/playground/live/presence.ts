@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from './client';
 import type { Person } from './auth';
-import type { Role } from '../roles';
+import type { BoardView, Role } from '../roles';
 
 /**
  * Присутствие и курсоры: кто ещё смотрит на то же, что и я, и где у него
@@ -25,7 +25,7 @@ export interface Peer {
   person: Person;
   role: Role;
   /** Какая доска у него на полотне: курсор над другой доской показывать незачем. */
-  board?: 'answer' | 'reference';
+  board?: BoardView;
 }
 
 export interface Point {
@@ -39,7 +39,7 @@ export type LiveStatus = 'connecting' | 'live' | 'error';
 export interface PresenceMeta {
   person: Person;
   role: Role;
-  board?: 'answer' | 'reference';
+  board?: BoardView;
 }
 
 /** Курсор чаще 20 раз в секунду не нужен: глаз не заметит, а лимиты канала заметят. */
@@ -104,7 +104,7 @@ interface Options {
   topic: string | null;
   me: Person | null;
   role: Role;
-  board: 'answer' | 'reference';
+  board: BoardView;
 }
 
 /**

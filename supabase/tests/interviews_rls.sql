@@ -41,7 +41,8 @@ begin
   values (current_setting('test.ws')::uuid, 'URL shortener', 'Design a URL shortener')
   returning id into sc;
   insert into public.scenario_private (scenario_id, content)
-  values (sc, '{"reference": {"nodes": [{"id": "secret"}]}, "rubric": [{"id": "r1", "text": "Scale", "weight": 1}]}');
+  values (sc, '{"reference": {"nodes": [{"id": "secret"}]}, "rubric": [{"id": "r1", "text": "Scale", "weight": 1}],
+               "start": {"nodes": [{"id": "given_svc", "kind": "service"}], "edges": [], "requirements": [], "api": [], "estimate": ""}}');
   perform set_config('test.scenario', sc::text, false);
 end $$;
 
@@ -346,6 +347,10 @@ set role authenticated;
 do $$ begin
   assert (select revealed_hints -> 0 ->> 'text' from public.interviews) = 'Think about the read path', 'the candidate sees a revealed hint';
   assert (select task from public.interview_tasks) = 'Design a URL shortener', 'after the start the candidate reads the task';
+  assert (select start -> 'nodes' -> 0 ->> 'id' from public.interview_tasks) = 'given_svc', 'and the given system';
+  assert (select board -> 'nodes' -> 0 ->> 'id' from public.interview_boards) = 'given_svc', 'the start put the given system on her board';
+  assert (select board -> 'nodes' -> 0 ->> 'given' from public.interview_boards) = 'true', 'marked as given';
+  assert (select board -> 'nodes' -> 1 ->> 'id' from public.interview_boards) = 'n1', 'what she drew before the start stays';
   begin
     insert into public.interview_feedback (interview_id, rating) values (current_setting('test.interview')::uuid, 5);
     raise exception 'FAIL: feedback before the end';
