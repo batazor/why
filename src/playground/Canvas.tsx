@@ -103,8 +103,17 @@ function BlockNode({ data, selected }: NodeProps) {
         )}
       </span>
       {/* Подпись — под рамкой, а не в ней: замер узла её не включает, и
-          связи по-прежнему упираются в сам блок. */}
-      {node.caption?.trim() && <span className="pg-block__caption">{node.caption.trim()}</span>}
+          связи по-прежнему упираются в сам блок. Оформлена как пометка в
+          разборах: рукописный текст и стрелка к блоку. */}
+      {node.caption?.trim() && (
+        <span className="pg-block__caption">
+          <svg className="pg-block__caption-arrow" viewBox="0 0 40 40" aria-hidden="true">
+            <path d="M 37 33 C 18 33 7 26 7 9" />
+            <path d="M 2 15 L 7 6 L 12 15" />
+          </svg>
+          {node.caption.trim()}
+        </span>
+      )}
     </div>
   );
 }

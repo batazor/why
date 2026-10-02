@@ -693,25 +693,43 @@ body:has(.pg) .site-footer {
   color: var(--pg-storage);
 }
 
-/* Подпись под блоком: висит под рамкой и не меняет её размер. Фон полотна —
-   чтобы читалась поверх связи, уходящей из блока вниз. */
+/* Подпись под блоком — та же пометка на полях, что в разборах (.fnote в
+   global.css): рукописный Caveat на мягкой подложке и стрелка, которая
+   остриём упирается в блок. Висит под рамкой и не меняет её размер. */
 .pg-block__caption {
   position: absolute;
-  top: calc(100% + 4px);
-  left: 50%;
-  transform: translateX(-50%);
+  top: calc(100% + 1.75rem);
+  left: 0.4rem;
   width: max-content;
   max-width: 220px;
-  padding: 0 0.3rem;
-  border-radius: 4px;
-  background: var(--pg-bg);
-  font-size: 0.7rem;
-  line-height: 1.3;
-  text-align: center;
-  color: var(--pg-muted);
+  padding: 0.2rem 0.5rem;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--pg-bg) 82%, transparent);
+  backdrop-filter: blur(3px);
+  font-family: var(--font-note, 'Caveat', 'Segoe Script', 'Bradley Hand', cursive);
+  font-size: 1.05rem;
+  font-weight: 400;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  color: var(--pg-fg);
+  text-wrap: pretty;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   pointer-events: none;
+}
+
+/* Хвост у записки, остриё — у нижнего края блока. */
+.pg-block__caption-arrow {
+  position: absolute;
+  top: -1.9rem;
+  left: 0.2rem;
+  width: 2.1rem;
+  height: 2.1rem;
+  fill: none;
+  stroke: var(--pg-muted);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 /* ----------------------------------------------------------- Надпись */
