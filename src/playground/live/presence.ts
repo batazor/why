@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { RealtimeChannel } from '@supabase/supabase-js';
+import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from './client';
 import type { Person } from './auth';
 import type { BoardView, Role } from '../roles';
@@ -49,6 +49,46 @@ const CURSOR_MS = 50;
 const TAB = crypto.randomUUID().slice(0, 8);
 
 export const presenceKey = (me: Person | null) => (me ? `${me.id}:${TAB}` : '');
+
+/**
+ * Новый канал на тему. realtime-js на `channel()` с тем же именем отдаёт уже
+ * существующий канал — а прошлый, упавший или ещё закрывающийся, заново не
+ * подпишется. Поэтому старый сначала убираем и ждём, пока уйдёт.
+ */
+export async function freshChannel(client: SupabaseClient, topic: string, key: string): Promise<RealtimeChannel> {
+  const stale = client.getChannels().find((ch) => ch.topic === `realtime:${topic}`);
+  if (stale) await client.removeChannel(stale);
+  return client.channel(topic, { config: { private: true, broadcast: { self: false }, presence: { key } } });
+}
+
+/**
+ * Канал упал — подключиться заново. Падает он не только от сети: токен
+ * истекает раз в час, а в фоновой вкладке или после сна ноутбука его не
+ * успевают обновить, и сервер закрывает приватный канал. Без повтора человек
+ * так и сидел бы один в комнате, хотя остальные давно в ней.
+ *
+ * Повтор — с растущей паузой, а сразу — когда вкладку снова открыли или
+ * вернулась сеть. Возвращает номер попытки: эффект канала зависит от него.
+ */
+export function useReconnect(status: LiveStatus): number {
+  const [attempt, setAttempt] = useState(0);
+  const failures = useRef(0);
+  useEffect(() => {
+    if (status === 'live') failures.current = 0;
+    if (status !== 'error') return;
+    const retry = () => setAttempt((value) => value + 1);
+    const onVisible = () => !document.hidden && retry();
+    const timer = setTimeout(retry, Math.min(30_000, 1000 * 2 ** failures.current++));
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('online', retry);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('online', retry);
+    };
+  }, [status]);
+  return attempt;
+}
 
 /** Все в канале, кроме себя. */
 export function peersOf(channel: RealtimeChannel, me: string): Peer[] {
@@ -124,43 +164,46 @@ export function usePresence({ topic, me, role, board }: Options) {
   const meta = useRef<PresenceMeta | null>(null);
   meta.current = me ? { person: me, role, board } : null;
 
+  const attempt = useReconnect(status);
+
   useEffect(() => {
     const client = supabase();
     if (!client || !topic || !me) return;
     let alive = true;
+    let ch: RealtimeChannel | null = null;
     setStatus('connecting');
-
-    const ch = client.channel(topic, {
-      config: { private: true, broadcast: { self: false }, presence: { key } },
-    });
-    channel.current = ch;
-
-    ch.on('presence', { event: 'sync' }, () => setPeers(peersOf(ch, key)))
-      .on('presence', { event: 'leave' }, ({ key: left }) => {
-        setCursors(({ [left]: _gone, ...rest }) => rest);
-      })
-      .on('broadcast', { event: 'cursor' }, ({ payload }) => {
-        const { from, point } = payload as { from: string; point: Point | null };
-        setCursors(({ [from]: _old, ...rest }) => (point ? { ...rest, [from]: point } : rest));
-      });
 
     (async () => {
       // Приватному каналу нужен токен пользователя: без него сервер откажет в подписке.
       await client.realtime.setAuth();
       if (!alive) return;
-      ch.subscribe(async (state) => {
-        if (!alive) return;
-        if (state === 'SUBSCRIBED') {
-          live.current = true;
-          setStatus('live');
-          if (meta.current) await ch.track(meta.current);
-        } else if (state === 'CHANNEL_ERROR' || state === 'TIMED_OUT') {
-          live.current = false;
-          setStatus('error');
-        } else if (state === 'CLOSED') {
-          live.current = false;
-        }
-      });
+      const created = await freshChannel(client, topic, key);
+      if (!alive) return void client.removeChannel(created);
+      ch = created;
+      channel.current = created;
+
+      created
+        .on('presence', { event: 'sync' }, () => setPeers(peersOf(created, key)))
+        .on('presence', { event: 'leave' }, ({ key: left }) => {
+          setCursors(({ [left]: _gone, ...rest }) => rest);
+        })
+        .on('broadcast', { event: 'cursor' }, ({ payload }) => {
+          const { from, point } = payload as { from: string; point: Point | null };
+          setCursors(({ [from]: _old, ...rest }) => (point ? { ...rest, [from]: point } : rest));
+        })
+        .subscribe(async (state) => {
+          if (!alive) return;
+          if (state === 'SUBSCRIBED') {
+            live.current = true;
+            setStatus('live');
+            if (meta.current) await created.track(meta.current);
+          } else {
+            // Ошибка, таймаут или сервер закрыл канал сам — useReconnect подключит заново.
+            live.current = false;
+            setPeers([]);
+            setStatus('error');
+          }
+        });
     })();
 
     return () => {
@@ -169,9 +212,9 @@ export function usePresence({ topic, me, role, board }: Options) {
       channel.current = null;
       setPeers([]);
       setCursors({});
-      client.removeChannel(ch);
+      if (ch) client.removeChannel(ch);
     };
-  }, [topic, me, key]);
+  }, [topic, me, key, attempt]);
 
   // Сменил роль или доску — остальные должны это увидеть.
   useEffect(() => {

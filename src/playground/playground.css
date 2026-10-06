@@ -4513,3 +4513,150 @@ td.pg-level--3 { color: #1f7a4d; font-weight: 600; }
 .pg-assist__level.pg-level--1 { color: #c7791b; }
 .pg-assist__level.pg-level--2 { color: var(--pg-compute); }
 .pg-assist__level.pg-level--3 { color: #1f7a4d; }
+
+/* ---------------------------------------------------------------- тур */
+
+/* Карточка тура лежит поверх сетки — сетка становится точкой отсчёта. */
+.pg-body {
+  position: relative;
+}
+
+/*
+ * Угол считается от прямоугольника полотна (--tour-l/t/w/h ставит сама
+ * карточка): палитру могут свернуть, окно — сузить. Верх справа (--tour-top)
+ * пропускает кнопку «Разложить» и карточку задания, низ слева — кнопки масштаба.
+ */
+.pg-tour {
+  --tour-gap: 0.75rem;
+  position: absolute;
+  z-index: 20;
+  width: min(21rem, calc(var(--tour-w) - 2 * var(--tour-gap)));
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--pg-border);
+  border-radius: 0.6rem;
+  background: var(--pg-panel);
+  box-shadow: 0 0.5rem 1.6rem rgb(0 0 0 / 0.16);
+  transition:
+    top 0.35s ease,
+    left 0.35s ease,
+    transform 0.35s ease;
+}
+
+.pg-tour--top-right {
+  top: var(--tour-top);
+  left: calc(var(--tour-l) + var(--tour-w) - var(--tour-gap));
+  transform: translateX(-100%);
+}
+
+.pg-tour--bottom-right {
+  top: calc(var(--tour-t) + var(--tour-h) - var(--tour-gap));
+  left: calc(var(--tour-l) + var(--tour-w) - var(--tour-gap));
+  transform: translate(-100%, -100%);
+}
+
+.pg-tour--bottom-left {
+  top: calc(var(--tour-t) + var(--tour-h) - var(--tour-gap));
+  left: calc(var(--tour-l) + 3.25rem);
+  transform: translateY(-100%);
+}
+
+.pg-tour--center {
+  top: calc(var(--tour-t) + var(--tour-h) / 2);
+  left: calc(var(--tour-l) + var(--tour-w) / 2);
+  transform: translate(-50%, -50%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pg-tour {
+    transition: none;
+  }
+}
+
+.pg-tour__head {
+  margin-bottom: 0.6rem;
+}
+
+.pg-tour__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+
+/* Шагов в туре много: вместо кружков с номерами — точки, номер в подсказке. */
+.pg-tour .pg-stepper {
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.pg-tour .pg-stepper__step {
+  width: 0.7rem;
+  height: 0.7rem;
+}
+
+.pg-tour .pg-stepper__step + .pg-stepper__step {
+  margin-left: 0;
+}
+
+.pg-tour .pg-stepper__step + .pg-stepper__step::before {
+  content: none;
+}
+
+.pg-tour .pg-stepper__step.is-done {
+  background: var(--pg-good);
+}
+
+.pg-stepper__jump {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}
+
+.pg-tour__title {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+}
+
+.pg-tour__text {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.pg-tour__count {
+  margin-left: auto;
+}
+
+/* Куда смотреть на этом шаге — рамка цвета акцента, мягко пульсирует. */
+.pg--tour-palette .pg-palette,
+.pg--tour-canvas .pg-canvas,
+.pg--tour-side .pg-side__body,
+.pg--tour-toolbar .pg-toolbar,
+.pg--tour-brief .pg-brief {
+  animation: pg-tour-focus 1.6s ease-in-out 3;
+  box-shadow: inset 0 0 0 2px var(--pg-accent);
+}
+
+.pg--tour-brief .pg-brief {
+  box-shadow: 0 0 0 2px var(--pg-accent);
+}
+
+@keyframes pg-tour-focus {
+  50% {
+    box-shadow: inset 0 0 0 2px transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pg--tour-palette .pg-palette,
+  .pg--tour-canvas .pg-canvas,
+  .pg--tour-side .pg-side__body,
+  .pg--tour-toolbar .pg-toolbar,
+  .pg--tour-brief .pg-brief {
+    animation: none;
+  }
+}

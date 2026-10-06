@@ -177,6 +177,13 @@ export function playgroundUrl(): URL {
   return url;
 }
 
+/** Тур по песочнице: кандидату до собеседования, без входа. */
+export function tourUrl(): string {
+  const url = playgroundUrl();
+  url.searchParams.set('tour', '');
+  return url.toString().replace(/tour=$/, 'tour');
+}
+
 /** Кабинет интервьюера — подстраница песочницы. */
 export function cabinetUrl(): string {
   const url = playgroundUrl();

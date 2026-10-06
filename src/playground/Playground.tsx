@@ -51,6 +51,8 @@ import { CandidateEnd } from './live/candidate-end';
 import { ReportPanel } from './live/report-panel';
 import { AiPanel } from './ai/ai-panel';
 import { AssistantPanel } from './ai/assistant-panel';
+import { TourRepository, tourDesign, tourRequested, type TourFocus, type TourStep } from './tour';
+import { TourDock } from './tour-panel';
 
 /**
  * Песочница системного дизайна для собеседований.
@@ -83,14 +85,26 @@ export default function Playground({ lang, repository }: Props) {
    */
   const auth = useAuth();
   const { cloud, openInterview, leave, switchWorkspace, reloadWorkspace } = useCloud(auth, local, t('ws.default'));
-  const repo: DesignRepository = cloud.mode === 'workspace' || cloud.mode === 'interview' ? cloud.repo : local;
-  const interview = cloud.mode === 'interview' ? cloud.repo : null;
+  /**
+   * Тур по песочнице — по ссылке `?tour`: кандидату до собеседования. Без
+   * входа, в памяти, в роли кандидата; ни пространства, ни комнаты.
+   */
+  const tour = useMemo(tourRequested, []);
+  const tourRepo = useMemo(() => new TourRepository(), []);
+  const repo: DesignRepository = tour
+    ? tourRepo
+    : cloud.mode === 'workspace' || cloud.mode === 'interview'
+      ? cloud.repo
+      : local;
+  const interview = !tour && cloud.mode === 'interview' ? cloud.repo : null;
   /** Пока не ясно, где работаем, открывать нечего: иначе мелькнёт чужой проект. */
-  const settled = cloud.mode === 'local' || cloud.mode === 'workspace' || cloud.mode === 'interview';
+  const settled = tour || cloud.mode === 'local' || cloud.mode === 'workspace' || cloud.mode === 'interview';
+  /** Какую часть экрана тур сейчас подсвечивает. */
+  const [tourFocus, setTourFocus] = useState<TourFocus>();
 
   const { design, load, update, remote, undo, redo, forget, canUndo, canRedo } = useDesignHistory();
   const [projects, setProjects] = useState<DesignSummary[]>([]);
-  const [role, setRole] = useState<Role>(initialRole);
+  const [role, setRole] = useState<Role>(() => (tour ? 'candidate' : initialRole()));
   const [tab, setTab] = useState<Tab>(PERMISSIONS[role].tabs[0]);
   /** Интервьюер переключается между ответом кандидата и эталоном. */
   const [compareView, setCompareView] = useState<'answer' | 'reference'>('answer');
@@ -214,8 +228,8 @@ export default function Playground({ lang, repository }: Props) {
     setSelection({});
     // Новый проект — новое полотно: React Flow заново подгоняет вид под схему.
     setCanvasKey((key) => key + 1);
-    // Собеседование открывается адресом, а не «последним проектом».
-    if (repo instanceof InterviewRepository) return;
+    // Собеседование открывается адресом, а не «последним проектом»; тур не проект вовсе.
+    if (repo instanceof InterviewRepository || repo instanceof TourRepository) return;
     lastOpened.set(next.id);
     // Сценарий пространства — в адресе, пока открыт: адресом можно поделиться с коллегой.
     setParams({ scenario: isCloudId(next.id) ? next.id : null });
@@ -234,6 +248,8 @@ export default function Playground({ lang, repository }: Props) {
     let alive = true;
     const show = (next: Design) => alive && open(next);
     (async () => {
+      if (tour) return show(tourDesign(lang));
+
       /**
        * Собеседование — один проект, и роль в нём не выбирают: кто принял
        * приглашение, тот кандидат, остальные — интервьюеры.
@@ -242,7 +258,8 @@ export default function Playground({ lang, repository }: Props) {
         try {
           const found = await repo.load(repo.interviewId);
           if (!alive) return;
-          if (!found) return setLoadError(t('iv.notFound'));
+          // Не нашлось — значит, не участник: чаще всего кандидату прислали ссылку для коллег вместо приглашения.
+          if (!found) return setLoadError('interview not yours');
           setLoadError('');
           setRole(repo.as);
           // Законченное собеседование интервьюер открывает ради результата — сразу отчёт.
@@ -322,7 +339,7 @@ export default function Playground({ lang, repository }: Props) {
     return () => {
       alive = false;
     };
-  }, [repo, settled, lang, open, t, auth.enabled]);
+  }, [repo, settled, lang, open, t, auth.enabled, tour]);
 
   /**
    * Полотно, требования и калькулятор работают с «доской» — верхними полями
@@ -440,12 +457,13 @@ export default function Playground({ lang, repository }: Props) {
 
   // Сигналы пишутся только пока на экране кандидат, и всегда в сам проект, а не в эталон.
   // После конца собеседования писать нечего: журнал закрыт и на сервере.
-  useIntegrity(role === 'candidate' && Boolean(design) && !frozen, update);
+  // В туре ничего не пишется: это знакомство, а не собеседование.
+  useIntegrity(role === 'candidate' && Boolean(design) && !frozen && !tour, update);
 
   const findings = useFindings(view ?? emptyDesign(''));
   const fileInput = useRef<HTMLInputElement>(null);
 
-  if (cloud.mode === 'gate' || (loadError && !design))
+  if (!tour && (cloud.mode === 'gate' || (loadError && !design)))
     return (
       <Gate
         t={t}
@@ -465,14 +483,14 @@ export default function Playground({ lang, repository }: Props) {
     );
 
   /** Без учётки в песочницу не попадают, в любой роли: входят через Google или гостем. */
-  if (auth.enabled && auth.ready && !auth.me && cloud.mode === 'local')
+  if (!tour && auth.enabled && auth.ready && !auth.me && cloud.mode === 'local')
     return <WelcomeGate t={t} onSignIn={auth.signIn} onGuest={auth.guestAllowed ? auth.signInAsGuest : undefined} />;
 
   if (!design || !view) return <div className="pg pg--loading" />;
 
   /** Новый проект — туда, где сейчас работаем: в пространство, если вошли. */
   const newId = () => repo.newId?.() ?? uid('d');
-  const inWorkspace = cloud.mode === 'workspace';
+  const inWorkspace = !tour && cloud.mode === 'workspace';
   /** Интервьюеру пространства сценарии писать нельзя — и выбирать роль автора незачем. */
   const canAuthor = cloud.mode !== 'workspace' || cloud.workspace.role !== 'interviewer';
 
@@ -583,10 +601,22 @@ export default function Playground({ lang, repository }: Props) {
   const notableSignals = (withSignals ?? design).session.signals.filter((signal) => isNotable(signal, now)).length;
   const panelProps = { design: view, update: updateView, t, lang };
 
+  /** Шаг тура на экране: его вкладка, выбранный блок, подсветка; полотно заново подгоняет вид. */
+  const showTourStep = (step: TourStep) => {
+    setTourFocus(step.focus);
+    setSelection(step.select ? { node: step.select } : {});
+    setCanvasKey((key) => key + 1);
+    if (step.tab) setTab(step.tab);
+  };
+
   return (
-    <div className={`pg pg--${role}`}>
+    <div className={`pg pg--${role} ${tour && tourFocus ? `pg--tour-${tourFocus}` : ''}`}>
       <div className="pg-toolbar">
-        {interview ? (
+        {tour ? (
+          <span className="pg-role pg-role--fixed">
+            <i className="codicon codicon-mortar-board" aria-hidden="true" /> {t('tour.label')}
+          </span>
+        ) : interview ? (
           // В собеседовании роль задана приглашением, а не выбором.
           <span className="pg-role pg-role--fixed">
             <i className="codicon codicon-account" aria-hidden="true" /> {t(`role.${role}`)}
@@ -609,7 +639,7 @@ export default function Playground({ lang, repository }: Props) {
           <>
             <strong className="pg-toolbar__title">{design.title || t('pg.untitled')}</strong>
             {/* Кандидат знает, что пишется: сбор без предупреждения — это уже слежка. */}
-            {role === 'candidate' && !frozen && (
+            {role === 'candidate' && !frozen && !tour && (
               <span className="pg-recording" title={t('sig.notice')}>
                 <i className="codicon codicon-circle-filled" aria-hidden="true" /> {t('sig.recording')}
               </span>
@@ -789,9 +819,9 @@ export default function Playground({ lang, repository }: Props) {
           <HistoryButtons t={t} canUndo={canUndo} canRedo={canRedo} onUndo={undo} onRedo={redo} />
         )}
 
-        <SaveStatus t={t} status={status} onServer={isCloudId(design.id)} />
+        {!tour && <SaveStatus t={t} status={status} onServer={isCloudId(design.id)} />}
 
-        {auth.enabled && (
+        {auth.enabled && !tour && (
           <LiveBar
             t={t}
             role={role}
@@ -843,7 +873,7 @@ export default function Playground({ lang, repository }: Props) {
           lang={lang}
           source={
             interview
-              ? { kind: 'interview', id: interview.interviewId }
+              ? { kind: 'interview', id: interview.interviewId, scenarioId: interview.scenarioId, workspace: interview.workspace }
               : cloud.mode === 'workspace'
                 ? isCloudId(design.id)
                   ? { kind: 'workspace', workspace: cloud.workspace, onInterviews: () => setDialog('interviews') }
@@ -921,6 +951,7 @@ export default function Playground({ lang, repository }: Props) {
               </>
             }
             drawnBy={drawing ? 'interviewer' : undefined}
+            select={tour ? selection.node : undefined}
             onPointer={shownCursors?.send}
             layer={
               shownCursors && (
@@ -1067,6 +1098,9 @@ export default function Playground({ lang, repository }: Props) {
             {activeTab === 'check' && <ChecksPanel {...panelProps} extra={extraFindings} />}
           </div>
         </section>
+
+        {/* Тур — карточкой поверх полотна: сама встаёт в угол, где не мешает шагу. */}
+        {tour && <TourDock design={design} update={update} t={t} lang={lang} onShow={showTourStep} />}
       </div>
     </div>
   );

@@ -125,9 +125,10 @@ export function useInterview({ interview, me, role, design, update, remote, boar
   useEffect(() => {
     if (role !== 'interviewer' || !interview) return;
     for (const peer of live.peers) {
-      if (seenPeers.current.has(peer.key)) continue;
+      // Пока собеседование у кандидата грузится, он в комнате с ролью прошлого
+      // захода. Запоминаем его только кандидатом — иначе сообщения не будет вовсе.
+      if (peer.role !== 'candidate' || seenPeers.current.has(peer.key)) continue;
       seenPeers.current.add(peer.key);
-      if (peer.role !== 'candidate') continue;
       setToast(t('join.candidate', { name: peer.person.name }));
       if (document.hidden) {
         const original = document.title;

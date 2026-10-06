@@ -123,7 +123,7 @@ export interface Schedule {
 }
 
 export async function createInterview(
-  workspace: Workspace,
+  workspace: Pick<Workspace, 'id'>,
   scenarioId: string,
   email: string,
   schedule: Schedule = { at: null, minutes: 60 },
@@ -234,6 +234,9 @@ export class InterviewRepository implements DesignRepository {
   createdAt = '';
   scheduledAt: string | null = null;
   durationMinutes = 60;
+  /** Сценарий и пространство собеседования — чтобы позвать следующего кандидата отсюда же. */
+  scenarioId = '';
+  workspace: { id: string; name: string } | null = null;
   private title = '';
   private saved = { board: '', review: '', course: '' };
   /** Что из сигналов уже в журнале: сигнал «ушёл» дописывается ещё раз, когда человек вернулся. */
@@ -259,7 +262,7 @@ export class InterviewRepository implements DesignRepository {
     // Собеседование живёт по своему снимку сценария, а не по живому: правка
     // сценария после приглашения не должна менять ни задание, ни критерии.
     // Текст задания кандидату сервер отдаёт только после старта; до него строки просто нет.
-    const [scenario, secret, board, review, interviewer, task] = await Promise.all([
+    const [scenario, secret, board, review, interviewer, task, space] = await Promise.all([
       row.brief ? null : db().from('scenarios').select('*').eq('id', row.scenario_id).single(),
       staff ? db().from('interview_scenarios').select('content').eq('interview_id', id).maybeSingle() : null,
       db().from('interview_boards').select('board').eq('interview_id', id).maybeSingle(),
@@ -268,7 +271,10 @@ export class InterviewRepository implements DesignRepository {
         : null,
       db().from('profiles').select('id, name, email, avatar_url').eq('id', row.interviewer_id).maybeSingle(),
       db().from('interview_tasks').select('task').eq('interview_id', id).maybeSingle(),
+      staff ? db().from('workspaces').select('name').eq('id', row.workspace_id).maybeSingle() : null,
     ]);
+    this.scenarioId = row.scenario_id;
+    this.workspace = staff ? { id: row.workspace_id, name: (space?.data as { name: string } | null)?.name ?? '' } : null;
     const taskRow = must(task) as { task: string } | null;
     const candidate =
       staff && row.candidate_id

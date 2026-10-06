@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Design } from './model';
 import type { T } from './i18n';
+import { tourUrl } from './live/links';
 
 /**
  * Задание — карточкой поверх полотна, в том же оформлении, что в разборе
@@ -86,6 +87,14 @@ export function BriefCard({ design, t }: { design: Design; t: T }) {
           {/* blockquote: это дословная чужая постановка, как и в разборе. */}
           <blockquote className="pg-brief__text">
             {locked && <p className="pg-brief__locked">{t('brief.locked')}</p>}
+            {/* Ждать старта — самое время посмотреть, где что лежит: тур в новой вкладке, комната остаётся. */}
+            {locked && (
+              <p>
+                <a href={tourUrl()} target="_blank" rel="noopener">
+                  <i className="codicon codicon-mortar-board" aria-hidden="true" /> {t('tour.waiting')}
+                </a>
+              </p>
+            )}
             {blocks(task).map((block, index) =>
               block.kind === 'ul' ? (
                 <ul key={index}>

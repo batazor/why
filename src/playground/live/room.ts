@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from './client';
 import type { Person } from './auth';
-import { peersOf, presenceKey, useCursorSender, type LiveStatus, type Peer, type Point } from './presence';
+import { freshChannel, peersOf, presenceKey, useCursorSender, useReconnect, type LiveStatus, type Peer, type Point } from './presence';
 import { pickBoard, type Board, type Design } from '../model';
 import { applyPatch, diffBoard, type BoardPatch } from './board-patch';
 import { course, type Course } from './interviews';
@@ -129,70 +129,73 @@ export function useRoom({ room, me, role, design, onBoard, onCourse, onJournal }
     if (JSON.stringify(course(current)) !== lastCourse.current) sendCourseNow();
   }, [sendCourseNow]);
 
+  const attempt = useReconnect(status);
+
   useEffect(() => {
     const client = supabase();
     if (!client || !room || !me) return;
     let alive = true;
+    let ch: RealtimeChannel | null = null;
     setStatus('connecting');
-
-    const ch = client.channel(`room:${room}`, {
-      config: { private: true, broadcast: { self: false }, presence: { key } },
-    });
-    channel.current = ch;
-
-    ch.on('presence', { event: 'sync' }, () => setPeers(peersOf(ch, key)))
-      .on('presence', { event: 'join' }, ({ key: joined }) => {
-        // Пришедший позже не видел ни одной правки — отдаём ему своё сразу, без ожидания следующей.
-        if (joined !== key) sendOwn();
-      })
-      .on('presence', { event: 'leave' }, ({ key: left }) => {
-        setCursors(({ [left]: _gone, ...rest }) => rest);
-      })
-      .on('broadcast', { event: 'cursor' }, ({ payload }) => {
-        const { from, point } = payload as { from: string; point: Point | null };
-        setCursors(({ [from]: _old, ...rest }) => (point ? { ...rest, [from]: point } : rest));
-      })
-      .on('broadcast', { event: 'patch' }, ({ payload }) => {
-        const { designId, patch } = payload as { designId: string; patch: BoardPatch };
-        // Чужая правка — уже известна комнате: в свои неотправленные её не записать.
-        if (synced.current?.id === designId) synced.current = { id: designId, board: applyPatch(synced.current.board, patch) };
-        onBoardRef.current(designId, (current) => applyPatch(current, patch));
-      })
-      .on('broadcast', { event: 'board' }, ({ payload }) => {
-        // Доска целиком — от кандидата; у него самого она своя.
-        if (roleRef.current === 'candidate') return;
-        const { designId, board } = payload as { designId: string; board: Board };
-        synced.current = { id: designId, board };
-        onBoardRef.current(designId, (current) => ({ ...current, ...board }));
-      })
-      .on('broadcast', { event: 'course' }, ({ payload }) => {
-        lastCourse.current = JSON.stringify(payload);
-        onCourseRef.current(payload as Course);
-      })
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'interview_events', filter: `interview_id=eq.${room}` },
-        ({ new: row }) => onJournalRef.current?.(toEntry(row as JournalRow)),
-      );
 
     (async () => {
       // Приватному каналу нужен токен пользователя: без него сервер откажет в подписке.
       await client.realtime.setAuth();
       if (!alive) return;
-      ch.subscribe(async (state) => {
-        if (!alive) return;
-        if (state === 'SUBSCRIBED') {
-          live.current = true;
-          setStatus('live');
-          await ch.track({ person: me, role: roleRef.current });
-          sendOwn();
-        } else if (state === 'CHANNEL_ERROR' || state === 'TIMED_OUT') {
-          live.current = false;
-          setStatus('error');
-        } else if (state === 'CLOSED') {
-          live.current = false;
-        }
-      });
+      const created = await freshChannel(client, `room:${room}`, key);
+      if (!alive) return void client.removeChannel(created);
+      ch = created;
+      channel.current = created;
+
+      created
+        .on('presence', { event: 'sync' }, () => setPeers(peersOf(created, key)))
+        .on('presence', { event: 'join' }, ({ key: joined }) => {
+          // Пришедший позже не видел ни одной правки — отдаём ему своё сразу, без ожидания следующей.
+          if (joined !== key) sendOwn();
+        })
+        .on('presence', { event: 'leave' }, ({ key: left }) => {
+          setCursors(({ [left]: _gone, ...rest }) => rest);
+        })
+        .on('broadcast', { event: 'cursor' }, ({ payload }) => {
+          const { from, point } = payload as { from: string; point: Point | null };
+          setCursors(({ [from]: _old, ...rest }) => (point ? { ...rest, [from]: point } : rest));
+        })
+        .on('broadcast', { event: 'patch' }, ({ payload }) => {
+          const { designId, patch } = payload as { designId: string; patch: BoardPatch };
+          // Чужая правка — уже известна комнате: в свои неотправленные её не записать.
+          if (synced.current?.id === designId) synced.current = { id: designId, board: applyPatch(synced.current.board, patch) };
+          onBoardRef.current(designId, (current) => applyPatch(current, patch));
+        })
+        .on('broadcast', { event: 'board' }, ({ payload }) => {
+          // Доска целиком — от кандидата; у него самого она своя.
+          if (roleRef.current === 'candidate') return;
+          const { designId, board } = payload as { designId: string; board: Board };
+          synced.current = { id: designId, board };
+          onBoardRef.current(designId, (current) => ({ ...current, ...board }));
+        })
+        .on('broadcast', { event: 'course' }, ({ payload }) => {
+          lastCourse.current = JSON.stringify(payload);
+          onCourseRef.current(payload as Course);
+        })
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'interview_events', filter: `interview_id=eq.${room}` },
+          ({ new: row }) => onJournalRef.current?.(toEntry(row as JournalRow)),
+        )
+        .subscribe(async (state) => {
+          if (!alive) return;
+          if (state === 'SUBSCRIBED') {
+            live.current = true;
+            setStatus('live');
+            await created.track({ person: me, role: roleRef.current });
+            sendOwn();
+          } else {
+            // Ошибка, таймаут или сервер закрыл канал сам (истёк токен) — useReconnect подключит заново.
+            live.current = false;
+            setPeers([]);
+            setStatus('error');
+          }
+        });
     })();
 
     return () => {
@@ -201,9 +204,9 @@ export function useRoom({ room, me, role, design, onBoard, onCourse, onJournal }
       channel.current = null;
       setPeers([]);
       setCursors({});
-      client.removeChannel(ch);
+      if (ch) client.removeChannel(ch);
     };
-  }, [room, me, key, sendOwn]);
+  }, [room, me, key, sendOwn, attempt]);
 
   // Сменил роль — остальные должны это увидеть.
   useEffect(() => {

@@ -198,7 +198,10 @@ export function LiveBar({
               ))}
             </span>
           ) : (
-            <span className="pg-live__alone">{t(role === 'interviewer' ? 'live.waitCandidate' : 'live.waitInterviewer')}</span>
+            // Без связи никого и не видно: «ждём кандидата» тогда врёт — он может быть уже здесь.
+            <span className="pg-live__alone">
+              {t(status !== 'live' ? `live.status.${status}` : role === 'interviewer' ? 'live.waitCandidate' : 'live.waitInterviewer')}
+            </span>
           )}
           {onLeave && (
             <button type="button" className="pg-button" onClick={onLeave}>
@@ -379,7 +382,7 @@ export function WelcomeGate({
   );
 }
 
-type Reason = 'email' | 'taken' | 'over' | 'expired' | 'staff' | 'missing' | 'other';
+type Reason = 'email' | 'taken' | 'over' | 'expired' | 'staff' | 'missing' | 'notYours' | 'other';
 
 /** Сообщение сервера из claim_interview / accept_workspace_invite — в понятную причину. */
 function explain(message: string): Reason {
@@ -389,5 +392,6 @@ function explain(message: string): Reason {
   if (message.includes('expired')) return 'expired';
   if (message.includes('staff')) return 'staff';
   if (message.includes('not found')) return 'missing';
+  if (message.includes('not yours')) return 'notYours';
   return 'other';
 }

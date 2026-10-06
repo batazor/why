@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { LINK_LIMIT, encodeDesign, shareUrl, shared, type ShareOptions } from './share';
 import { exportFile } from './storage';
 import { ROLES, type Role } from './roles';
 import type { Design } from './model';
 import type { T } from './i18n';
-import { CloudShare, LinkBox } from './live/cloud-share';
-import { interviewUrl, mailtoUrl } from './live/links';
+import { CloudShare, LinkBox, mailBody } from './live/cloud-share';
+import { interviewUrl, inviteUrl, mailtoUrl, tourUrl } from './live/links';
+import { createInterview, listInterviews, type Interview } from './live/interviews';
 import type { Workspace } from './live/workspaces';
 
 /**
@@ -21,8 +22,11 @@ export type ShareSource =
   | { kind: 'workspace'; workspace: Workspace; onInterviews: () => void }
   /** Проект из браузера при живом пространстве: сначала переезжает туда — там у него появится адрес. */
   | { kind: 'adopt'; workspace: Workspace; allowed: boolean; onAdopt: () => Promise<void> }
-  /** Открытое собеседование: ссылка — его id, откроется коллегам по пространству. */
-  | { kind: 'interview'; id: string };
+  /**
+   * Открытое собеседование: кандидату — приглашение, коллегам — id собеседования.
+   * Сценарий и пространство — чтобы позвать следующего кандидата отсюда же.
+   */
+  | { kind: 'interview'; id: string; scenarioId: string; workspace: { id: string; name: string } | null };
 
 export function ShareDialog({
   design,
@@ -58,7 +62,7 @@ export function ShareDialog({
         {source.kind === 'workspace' && (
           <CloudShare design={design} workspace={source.workspace} t={t} lang={lang} onInterviews={source.onInterviews} />
         )}
-        {source.kind === 'interview' && <InterviewShare design={design} t={t} id={source.id} />}
+        {source.kind === 'interview' && <InterviewShare design={design} t={t} lang={lang} source={source} />}
         {source.kind === 'adopt' && (
           <AdoptShare t={t} workspace={source.workspace} allowed={source.allowed} onAdopt={source.onAdopt} />
         )}
@@ -69,21 +73,140 @@ export function ShareDialog({
 }
 
 /**
- * Ссылка на собеседование — его id. Ничего из собеседования в адрес не
- * попадает: кто может его открыть, решает база, а не ссылка.
+ * Собеседование: кандидату — приглашение, коллегам — само собеседование.
+ *
+ * Это разные ссылки, и путать их нельзя. Ссылку на собеседование кандидат не
+ * откроет: база пускает в него только того, кто принял приглашение. А
+ * приглашение срабатывает один раз — принятое или закончившееся собеседование
+ * новому кандидату не отдать, ему нужно новое по тому же сценарию. Его можно
+ * завести прямо здесь, не уходя в кабинет.
+ *
+ * Приглашение перечитывается с сервера при открытии окна: кандидат мог принять
+ * его уже после того, как собеседование открылось.
  */
-function InterviewShare({ design, t, id }: { design: Design; t: T; id: string }) {
-  const url = interviewUrl(id);
+function InterviewShare({
+  design,
+  t,
+  lang,
+  source,
+}: {
+  design: Design;
+  t: T;
+  lang: string;
+  source: Extract<ShareSource, { kind: 'interview' }>;
+}) {
+  const [items, setItems] = useState<Interview[] | null>(null);
+  /** Новое собеседование, заведённое из этого окна, — его приглашение и показываем. */
+  const [created, setCreated] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    try {
+      setItems(await listInterviews(source.scenarioId));
+    } catch (reason) {
+      setError((reason as Error).message);
+      setItems([]);
+    }
+  }, [source.scenarioId]);
+  useEffect(() => {
+    load();
+  }, [load]);
+
   const title = design.title || t('pg.untitled');
+  const workspaceName = source.workspace?.name ?? '';
+  const date = new Intl.DateTimeFormat(lang, { dateStyle: 'medium', timeStyle: 'short' });
+  const current = items?.find((item) => item.id === source.id);
+  const usable = (item: Interview) =>
+    !item.candidate &&
+    (item.status === 'scheduled' || item.status === 'live') &&
+    !(item.inviteExpiresAt && Date.parse(item.inviteExpiresAt) <= Date.now());
+  const invitation = items?.find((item) => item.id === created) ?? (current && usable(current) ? current : undefined);
+
+  /** Почему приглашения этого собеседования кандидату уже не отправить. */
+  const why = !current
+    ? 'share.iv.dead'
+    : current.status === 'finished'
+      ? 'share.iv.finished'
+      : current.candidate
+        ? 'share.iv.taken'
+        : 'share.iv.dead';
+
+  const next = async () => {
+    if (!source.workspace) return;
+    setBusy(true);
+    setError('');
+    try {
+      setCreated(await createInterview(source.workspace, source.scenarioId, ''));
+      await load();
+    } catch (reason) {
+      setError((reason as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const invite = invitation ? inviteUrl(invitation.inviteToken) : '';
+  const colleagues = interviewUrl(source.id);
+
   return (
     <div className="pg-share__body">
-      <p className="pg-hint">{t('report.linkHint')}</p>
-      <LinkBox
-        t={t}
-        url={url}
-        expires={t('link.forever')}
-        mail={mailtoUrl('', t('link.mail.subject.interview', { title }), t('link.mail.body.interview', { title, url }))}
-      />
+      <div className="pg-field">
+        <span className="pg-field__label">{t('share.iv.candidate')}</span>
+        {items === null ? (
+          <p className="pg-hint">{t('iv.loading')}</p>
+        ) : invitation ? (
+          <>
+            {created && <p className="pg-note">{t('share.iv.created')}</p>}
+            <LinkBox
+              t={t}
+              url={invite}
+              expires={
+                invitation.inviteExpiresAt
+                  ? t('link.until', { date: date.format(new Date(invitation.inviteExpiresAt)) })
+                  : t('link.forever')
+              }
+              mail={mailtoUrl(
+                invitation.candidateEmail ?? '',
+                t('link.mail.subject.candidate', { title, workspace: workspaceName }),
+                mailBody(t, 'candidate', title, workspaceName, invite, ''),
+              )}
+            />
+            <p className="pg-hint">{t('share.iv.once')}</p>
+          </>
+        ) : (
+          <>
+            <p className="pg-note">{t(why, { name: current?.candidate?.name ?? '' })}</p>
+            {source.workspace && (
+              <div className="pg-actions">
+                <button type="button" className="pg-button pg-button--primary" disabled={busy} onClick={next}>
+                  <i className="codicon codicon-add" aria-hidden="true" /> {t('share.iv.next')}
+                </button>
+              </div>
+            )}
+          </>
+        )}
+        {error && <p className="pg-note pg-note--warn">{error}</p>}
+      </div>
+
+      {/* Тур — до собеседования: чтобы на нём кандидат думал о задаче, а не искал кнопки. */}
+      <div className="pg-field">
+        <span className="pg-field__label">{t('tour.link')}</span>
+        <p className="pg-hint">{t('tour.linkHint')}</p>
+        <LinkBox t={t} url={tourUrl()} expires={t('link.forever')} mail={mailtoUrl('', t('tour.link'), tourUrl())} />
+      </div>
+
+      <div className="pg-field">
+        <span className="pg-field__label">{t('share.iv.colleagues')}</span>
+        <p className="pg-hint">{t('report.linkHint')}</p>
+        <LinkBox
+          t={t}
+          url={colleagues}
+          expires={t('link.forever')}
+          mail={mailtoUrl('', t('link.mail.subject.interview', { title }), t('link.mail.body.interview', { title, url: colleagues }))}
+        />
+        <p className="pg-note pg-note--warn">{t('share.iv.notCandidate')}</p>
+      </div>
     </div>
   );
 }

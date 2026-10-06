@@ -241,6 +241,8 @@ interface Props {
   onPointer?: (point: { x: number; y: number } | null) => void;
   /** Рисует интервьюер на доске кандидата: новое на схеме помечается его. */
   drawnBy?: 'interviewer';
+  /** Блок, выбранный при открытии полотна: тур показывает его инспектор. */
+  select?: string;
 }
 
 export default function Canvas({
@@ -255,6 +257,7 @@ export default function Canvas({
   layer,
   onPointer,
   drawnBy,
+  select,
 }: Props) {
   const flow = useReactFlow();
 
@@ -272,7 +275,7 @@ export default function Canvas({
    * инспекторе: иначе React Flow тут же сообщает о пустом выделении, и
    * инспектор сбрасывается раньше, чем читатель успел назвать блок.
    */
-  const fresh = useRef<string | null>(null);
+  const fresh = useRef<string | null>(select ?? null);
 
   /** Текст надписи правится прямо на полотне; пустая надпись уходит со схемы. */
   const write = useCallback(

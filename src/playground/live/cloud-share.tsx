@@ -4,7 +4,7 @@ import { shared } from '../share';
 import type { Design } from '../model';
 import type { T } from '../i18n';
 import { createInterview, listInterviews, type Schedule } from './interviews';
-import { createShare, inviteUrl, listShares, mailtoUrl, revokeShare, type ShareLink } from './links';
+import { createShare, inviteUrl, listShares, mailtoUrl, revokeShare, tourUrl, type ShareLink } from './links';
 import { createTeamInvite, listTeamInvites, type Workspace, type WorkspaceRole } from './workspaces';
 
 /**
@@ -274,7 +274,7 @@ export function CloudShare({
 
 /** Текст письма; если время назначено — с ним. */
 export function mailBody(t: T, target: string, title: string, workspace: string, url: string, when: string): string {
-  const body = t(`link.mail.body.${target}`, { title, workspace, url });
+  const body = t(`link.mail.body.${target}`, { title, workspace, url, tour: tourUrl() });
   return when ? `${body}\n\n${t('link.mail.when', { when })}` : body;
 }
 
