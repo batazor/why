@@ -25,15 +25,17 @@ import '@xyflow/react/dist/style.css';
 import { blockSpec } from './catalog';
 import { techName } from './competency';
 import { ROUTE_DRAG, assignRoute } from './api-templates';
-import FloatingEdge from './FloatingEdge';
+import FloatingEdge, { type ContextEnds } from './FloatingEdge';
 import { autoLayout } from './layout';
 import {
   REQ_DRAG,
   TEXT_KIND,
   blocksOf,
   coverRequirement,
+  isContextEdge,
   isText,
   uid,
+  upstreamEnd,
   type Design,
   type DesignEdge,
   type DesignNode,
@@ -197,6 +199,15 @@ function TextNode({ data, selected }: NodeProps) {
   );
 }
 
+/**
+ * Насколько можно промахнуться мимо блока, бросая на него требование или
+ * маршрут. В пикселях экрана, а не схемы: рука промахивается одинаково при
+ * любом масштабе, а на мелкой схеме запас нужен как раз больше. 48 — чуть
+ * меньше высоты блока: соседи при обычной раскладке не спорят за бросок, а
+ * когда спорят, выигрывает ближний.
+ */
+const DROP_REACH = 48;
+
 const nodeTypes = { block: BlockNode, [TEXT_KIND]: TextNode };
 const edgeTypes = { floating: FloatingEdge };
 
@@ -210,6 +221,14 @@ function toTextNode(node: DesignNode, t: T, write: TextData['write'], fresh: boo
 }
 
 function toFlowEdge(edge: DesignEdge): Edge {
+  /**
+   * Карта контекстов говорит, кто под чью модель подстраивается, а не кто
+   * кого вызывает: стрелки и пунктира на такой линии нет, вместо них метки
+   * U и D, которые рисует FloatingEdge.
+   */
+  const context: ContextEnds | undefined = isContextEdge(edge)
+    ? { upstream: upstreamEnd(edge), upstreamPattern: edge.upstreamPattern, downstreamPattern: edge.downstreamPattern }
+    : undefined;
   return {
     id: edge.id,
     type: 'floating',
@@ -217,9 +236,12 @@ function toFlowEdge(edge: DesignEdge): Edge {
     target: edge.target,
     label: edge.label || undefined,
     // Асинхронная связь бежит пунктиром: сообщение ушло, отправитель не ждёт.
-    animated: edge.mode === 'async',
-    className: `pg-edge pg-edge--${edge.mode} ${edge.drawnBy ? 'is-by-interviewer' : ''}`,
-    markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18 },
+    animated: !context && edge.mode === 'async',
+    className: `pg-edge pg-edge--${context ? 'context' : edge.mode} ${edge.drawnBy ? 'is-by-interviewer' : ''}`,
+    // Поля названы и когда пусты: связь на полотне собирается поверх прежней,
+    // и пропущенное поле оставило бы стрелку от прошлой нотации.
+    markerEnd: context ? undefined : { type: MarkerType.ArrowClosed, width: 18, height: 18 },
+    data: context ? { context } : undefined,
   };
 }
 
@@ -417,6 +439,10 @@ export default function Canvas({
    * над которым курсор, подсвечивается, маршрут уходит ему, а требование
    * он начинает закрывать. Подсветка — классом на элементе узла, а не через
    * состояние: перерисовывать все узлы на каждое движение курсора незачем.
+   *
+   * Целиться точно в карточку не нужно: бросок рядом с блоком достаётся
+   * ближайшему. Блок на схеме мелкий, а тащат издалека, из боковой панели, —
+   * промах на пару десятков пикселей терял бросок молча.
    */
   const routeTarget = useRef<HTMLElement | null>(null);
   const markTarget = (element: HTMLElement | null) => {
@@ -456,12 +482,31 @@ export default function Canvas({
     }
   };
 
+  const dropTarget = (event: DragEvent): HTMLElement | null => {
+    // На надпись требование и маршрут не бросают: она ничего не обслуживает.
+    const blocks = '.react-flow__node:not(.react-flow__node-text)';
+    const under = (event.target as HTMLElement).closest<HTMLElement>(blocks);
+    if (under) return under;
+    let nearest: HTMLElement | null = null;
+    let best = DROP_REACH;
+    for (const element of event.currentTarget.querySelectorAll<HTMLElement>(blocks)) {
+      const rect = element.getBoundingClientRect();
+      const dx = Math.max(rect.left - event.clientX, 0, event.clientX - rect.right);
+      const dy = Math.max(rect.top - event.clientY, 0, event.clientY - rect.bottom);
+      const distance = Math.hypot(dx, dy);
+      if (distance <= best) {
+        best = distance;
+        nearest = element;
+      }
+    }
+    return nearest;
+  };
+
   const onDragOver = (event: DragEvent) => {
     if (readOnly) return;
     const types = event.dataTransfer.types;
     if (types.includes(ROUTE_DRAG) || types.includes(REQ_DRAG)) {
-      // На надпись требование и маршрут не бросают: она ничего не обслуживает.
-      const node = (event.target as HTMLElement).closest<HTMLElement>('.react-flow__node:not(.react-flow__node-text)');
+      const node = dropTarget(event);
       markTarget(node);
       if (!node) return;
       event.preventDefault();

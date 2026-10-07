@@ -22,6 +22,12 @@ interface Props {
   update: Update;
   t: T;
   readOnly: boolean;
+  /**
+   * Показывать ли подсказки по самому решению: пояснение к шаблону, примеры в
+   * полях, готовые описания маршрутов. Кандидату и тренирующемуся форма не
+   * должна диктовать ответ — им остаются только подсказки про интерфейс.
+   */
+  hints: boolean;
 }
 
 const patchApi = (update: Update, id: string, patch: Partial<Endpoint>) =>
@@ -157,7 +163,14 @@ function Card({ item, design, t, onEdit, onDelete }: {
  * разбираются при уходе из поля: разбор на каждом нажатии съедал бы запятую,
  * которую человек только что напечатал.
  */
-function Editor({ item, design, update, t, onClose }: { item: Endpoint; design: Design; update: Update; t: T; onClose: () => void }) {
+function Editor({ item, design, update, t, hints, onClose }: {
+  item: Endpoint;
+  design: Design;
+  update: Update;
+  t: T;
+  hints: boolean;
+  onClose: () => void;
+}) {
   const [request, setRequest] = useState(item.request.join(', '));
   const [response, setResponse] = useState(item.response.join(', '));
   const patch = (value: Partial<Endpoint>) => patchApi(update, item.id, value);
@@ -180,7 +193,9 @@ function Editor({ item, design, update, t, onClose }: { item: Endpoint; design: 
           className="pg-input pg-api__path-input"
           aria-label={t('api.path')}
           value={item.path}
-          placeholder="/resources/{id}"
+          // Пример в поле — уже половина ответа, поэтому без подсказок он
+          // называет поле, а не показывает, чем его заполнить.
+          placeholder={hints ? '/resources/{id}' : t('api.pathPlaceholder')}
           onChange={(event) => patch({ path: event.currentTarget.value })}
         />
         <select
@@ -207,7 +222,7 @@ function Editor({ item, design, update, t, onClose }: { item: Endpoint; design: 
         <span>{t('api.request')}</span>
         <input
           className="pg-input"
-          placeholder="Idempotency-Key, url, params"
+          placeholder={hints ? 'Idempotency-Key, url, params' : t('api.requestPlaceholder')}
           value={request}
           onChange={(event) => setRequest(event.currentTarget.value)}
           onBlur={() => patch({ request: parseFields(request) })}
@@ -217,7 +232,7 @@ function Editor({ item, design, update, t, onClose }: { item: Endpoint; design: 
         <span>{t('api.response')}</span>
         <input
           className="pg-input"
-          placeholder="id, status"
+          placeholder={hints ? 'id, status' : t('api.responsePlaceholder')}
           value={response}
           onChange={(event) => setResponse(event.currentTarget.value)}
           onBlur={() => patch({ response: parseFields(response) })}
@@ -314,16 +329,21 @@ function guessResource(api: Endpoint[]): string {
   return path.split(/[/?{]/).filter(Boolean)[0] ?? 'items';
 }
 
-export function ApiPanel({ design, update, t, readOnly }: Props) {
+export function ApiPanel({ design, update, t, readOnly, hints }: Props) {
   const [template, setTemplate] = useState<ApiTemplate>('crud');
   const [resource, setResource] = useState(() => guessResource(design.api));
   const [editing, setEditing] = useState<string | null>(null);
   const [service, setService] = useState('');
 
   const add = () => {
-    const fresh = expandTemplate(template, resource, t).map((item) =>
-      service && !item.outbound ? { ...item, service } : item,
-    );
+    const fresh = expandTemplate(template, resource, t).map((item) => ({
+      ...item,
+      // Описание из шаблона — разбор решения («повтор с тем же ключом вернёт
+      // тот же элемент»). Без подсказок оно пустое: что делает маршрут и
+      // почему, кандидат говорит сам.
+      about: hints ? item.about : '',
+      ...(service && !item.outbound ? { service } : {}),
+    }));
     update((current) => ({ ...current, api: [...current.api, ...fresh] }));
     // Одиночный маршрут сразу открывается на правку: пустую карточку всё равно заполнять.
     if (fresh.length === 1) setEditing(fresh[0].id);
@@ -334,6 +354,7 @@ export function ApiPanel({ design, update, t, readOnly }: Props) {
 
   const alive = new Set(design.nodes.map((node) => node.id));
   const keyOf = (item: Endpoint) => (item.outbound ? OUTBOUND : item.service && alive.has(item.service) ? item.service : '');
+  const unassigned = design.api.some((item) => keyOf(item) === '');
 
   /**
    * Группы — по сервисам схемы, в том порядке, в каком блоки лежат на
@@ -440,13 +461,15 @@ export function ApiPanel({ design, update, t, readOnly }: Props) {
               <i className="codicon codicon-add" aria-hidden="true" /> {t('req.add')}
             </button>
           </div>
-          <p className="pg-hint">{t(`tpl.${template}.hint`)}</p>
+          {hints && <p className="pg-hint">{t(`tpl.${template}.hint`)}</p>}
         </div>
       )}
 
       {!design.api.length && <p className="pg-hint pg-hint--empty">{t('api.empty')}</p>}
 
-      {!readOnly && design.api.length > 0 && <p className="pg-hint">{t('api.dragHint')}</p>}
+      {/* Про перенос напоминаем, пока есть что переносить: когда у каждого
+          маршрута уже есть хозяин, абзац только занимает место. */}
+      {!readOnly && unassigned && <p className="pg-hint">{t('api.dragHint')}</p>}
 
       <div
         className={`pg-api-groups ${dragging ? 'is-dragging' : ''}`}
@@ -472,7 +495,15 @@ export function ApiPanel({ design, update, t, readOnly }: Props) {
                 <ul className="pg-api-list">
                   {items.map((item) =>
                     editing === item.id && !readOnly ? (
-                      <Editor key={item.id} item={item} design={design} update={update} t={t} onClose={() => setEditing(null)} />
+                      <Editor
+                        key={item.id}
+                        item={item}
+                        design={design}
+                        update={update}
+                        t={t}
+                        hints={hints}
+                        onClose={() => setEditing(null)}
+                      />
                     ) : (
                       <Card
                         key={item.id}

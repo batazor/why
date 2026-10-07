@@ -2,7 +2,7 @@ import type { ModelMessage } from 'ai';
 import { streamReply } from './llm';
 import { active, checkText } from '../checks';
 import { translator } from '../i18n';
-import { blocksOf, isText, type AiTurn, type Design } from '../model';
+import { blocksOf, isContextEdge, isText, upstreamEnd, type AiTurn, type Design } from '../model';
 import type { AiSettings } from './settings';
 
 /**
@@ -91,12 +91,20 @@ export function describeBoard(design: Design, lang: string, { checks: withChecks
   );
   section(
     ru ? 'СВЯЗИ' : 'LINKS',
-    design.edges.map(
-      (edge) =>
-        `- ${name.get(edge.source) ?? edge.source} → ${name.get(edge.target) ?? edge.target} (${edge.mode})${edge.label ? ` — ${edge.label}` : ''}${
-          edge.drawnBy ? (ru ? ' (провёл интервьюер)' : ' (drawn by the interviewer)') : ''
-        }`,
-    ),
+    design.edges.map((edge) => {
+      const by = edge.drawnBy ? (ru ? ' (провёл интервьюер)' : ' (drawn by the interviewer)') : '';
+      const label = edge.label ? ` — ${edge.label}` : '';
+      // Линия карты контекстов — не вызов: модели называют, кто upstream, а не куда идёт запрос.
+      if (isContextEdge(edge)) {
+        const up = upstreamEnd(edge);
+        const down = up === 'source' ? 'target' : 'source';
+        const end = (id: string, pattern?: string) => `${name.get(id) ?? id}${pattern?.trim() ? ` [${pattern.trim()}]` : ''}`;
+        return `- ${end(edge[up], edge.upstreamPattern)} (upstream) — ${end(edge[down], edge.downstreamPattern)} (downstream), ${
+          ru ? 'карта контекстов' : 'context map'
+        }${label}${by}`;
+      }
+      return `- ${name.get(edge.source) ?? edge.source} → ${name.get(edge.target) ?? edge.target} (${edge.mode})${label}${by}`;
+    }),
   );
   // Надписи пишутся только если они есть: пустой раздел модели ничего не говорит.
   const texts = design.nodes.filter((node) => isText(node) && node.label.trim());

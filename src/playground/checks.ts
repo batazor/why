@@ -12,7 +12,7 @@
  */
 
 import type { Board, EdgeMode, RequirementKind, Scenario } from './model';
-import { blocksOf, emptyBoard, uid } from './model';
+import { blocksOf, emptyBoard, isContextEdge, uid } from './model';
 import { STATEFUL_KINDS } from './catalog';
 import type { T } from './i18n';
 
@@ -72,8 +72,12 @@ export function holds(board: Board, rule: Rule): boolean {
 
     case 'path': {
       const kinds = new Map(board.nodes.map((node) => [node.id, node.kind]));
+      // Линия карты контекстов — не вызов: по ней не видно ни кто кого зовёт,
+      // ни ждёт ли ответа. Засчитать её за «пишет в очередь асинхронно» значило
+      // бы судить по режиму, который человек на схеме не видит.
       return board.edges.some(
         (edge) =>
+          !isContextEdge(edge) &&
           kinds.get(edge.source) === rule.from &&
           kinds.get(edge.target) === rule.to &&
           (!rule.mode || edge.mode === rule.mode),
@@ -264,6 +268,8 @@ export function deriveChecks(scenario: Scenario, t: T): Check[] {
     const from = kindOf.get(edge.source);
     const to = kindOf.get(edge.target);
     if (!from || !to || from === to) continue;
+    // Из линии карты контекстов проверку вызова не вывести — см. holds.
+    if (isContextEdge(edge)) continue;
     if (!worthChecking(to, edge.mode)) continue;
     /**
      * Встречные связи одного режима — одна проверка на обе стороны: когда в
@@ -271,7 +277,8 @@ export function deriveChecks(scenario: Scenario, t: T): Check[] {
      * того, кто решает, — дело вкуса, а не ошибка.
      */
     const back = reference.edges.some(
-      (other) => kindOf.get(other.source) === to && kindOf.get(other.target) === from && other.mode === edge.mode,
+      (other) =>
+        !isContextEdge(other) && kindOf.get(other.source) === to && kindOf.get(other.target) === from && other.mode === edge.mode,
     );
     const key = back ? [from, to].sort().join('~') + `:${edge.mode}` : `${from}>${to}:${edge.mode}`;
     if (seen.has(key)) continue;

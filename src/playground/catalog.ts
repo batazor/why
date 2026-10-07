@@ -66,3 +66,11 @@ export function blockSpec(kind: string): BlockSpec {
 
 /** Протоколы-подсказки для подписи связи. */
 export const EDGE_PRESETS = ['HTTP', 'gRPC', 'SQL', 'TCP', 'WebSocket', 'publish', 'consume', 'CDC'];
+
+/**
+ * Паттерны отношений на карте контекстов — подсказки для концов связи.
+ * Upstream решает, как отдавать модель: открытый сервис (OHS), общий язык (PL).
+ * Downstream — как её принимать: заслониться (ACL) или принять как есть (CF).
+ */
+export const UPSTREAM_PATTERNS = ['OHS', 'PL', 'OHS/PL', 'SK', 'P'];
+export const DOWNSTREAM_PATTERNS = ['ACL', 'CF', 'SK', 'P'];

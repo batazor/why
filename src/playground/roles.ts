@@ -41,6 +41,12 @@ export interface Permissions {
   manageProjects: boolean;
   /** Может переключиться между ответом кандидата и эталоном. */
   compare: boolean;
+  /**
+   * Видны ли подсказки по самому решению (например, пояснения к шаблонам API).
+   * Тому, кого оценивают, форма не должна подсказывать ответ; подсказки о том,
+   * как пользоваться интерфейсом, сюда не относятся — они видны всем.
+   */
+  designHints: boolean;
   /** Задание у всех висит карточкой над полотном; вкладка «Задача» — только чтобы его править. */
   tabs: Tab[];
 }
@@ -52,6 +58,7 @@ export const PERMISSIONS: Record<Role, Permissions> = {
     editTask: true,
     manageProjects: true,
     compare: false,
+    designHints: true,
     tabs: ['task', 'scenario', 'req', 'api', 'calc', 'inspect', 'check'],
   },
   interviewer: {
@@ -60,6 +67,7 @@ export const PERMISSIONS: Record<Role, Permissions> = {
     editTask: false,
     manageProjects: false,
     compare: true,
+    designHints: true,
     tabs: ['conduct', 'score', 'signals', 'report', 'assist', 'req', 'api', 'calc', 'inspect', 'check'],
   },
   candidate: {
@@ -68,6 +76,7 @@ export const PERMISSIONS: Record<Role, Permissions> = {
     editTask: false,
     manageProjects: false,
     compare: false,
+    designHints: false,
     tabs: ['req', 'api', 'calc', 'inspect', 'check'],
   },
   /**
@@ -85,6 +94,7 @@ export const PERMISSIONS: Record<Role, Permissions> = {
     editTask: false,
     manageProjects: true,
     compare: false,
+    designHints: false,
     tabs: ['train', 'req', 'api', 'calc', 'inspect', 'ai'],
   },
 };

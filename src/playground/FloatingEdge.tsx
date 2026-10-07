@@ -54,6 +54,82 @@ const SIDE_MARGIN = 16;
 
 const horizontal = (side: Position) => side === Position.Left || side === Position.Right;
 
+/**
+ * Связь в нотации карты контекстов (DDD): вместо стрелки — метки U и D на
+ * концах. Кладётся в `data` связи; у обычной стрелки вызова `data` пуст.
+ */
+export interface ContextEnds {
+  /** Какой конец связи — upstream. */
+  upstream: 'source' | 'target';
+  /** Паттерны отношений на концах: OHS, PL, ACL, CF. */
+  upstreamPattern?: string;
+  downstreamPattern?: string;
+}
+
+/** Зазор между рамкой блока и меткой: метка не должна липнуть к рамке. */
+const MARK_GAP = 5;
+/** Высота метки — как задано в .pg-edge-mark. */
+const MARK_HEIGHT = 18;
+const LABEL_HEIGHT = 20;
+
+interface Mark {
+  letter: 'U' | 'D';
+  pattern: string;
+}
+
+const contextOf = (data: unknown) => (data as { context?: ContextEnds } | undefined)?.context;
+
+function markFor(context: ContextEnds, end: 'source' | 'target'): Mark {
+  const up = context.upstream === end;
+  return { letter: up ? 'U' : 'D', pattern: (up ? context.upstreamPattern : context.downstreamPattern)?.trim() ?? '' };
+}
+
+/**
+ * Ширина метки и подписи — прикидкой по числу знаков. Замерять DOM ради того,
+ * чтобы развести плашки, незачем: нужна не точность, а порядок величины.
+ */
+const markWidth = (mark: Mark) => MARK_HEIGHT + (mark.pattern ? 4 + mark.pattern.length * 6.4 : 0);
+const labelWidth = (text: string) => 14 + text.length * 6.2;
+
+/** Метка растёт от блока наружу: какой бы ширины ни была, на рамку не наедет. */
+const MARK_ANCHOR: Record<Position, string> = {
+  [Position.Left]: 'translate(-100%, -50%)',
+  [Position.Right]: 'translate(0, -50%)',
+  [Position.Top]: 'translate(-50%, -100%)',
+  [Position.Bottom]: 'translate(-50%, 0)',
+};
+
+interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** Прямоугольник метки на схеме — тот же, что получится из MARK_ANCHOR. */
+function markRect(point: XYPosition, side: Position, mark: Mark): Rect {
+  const width = markWidth(mark);
+  const x = side === Position.Left ? point.x - width : side === Position.Right ? point.x : point.x - width / 2;
+  const y = side === Position.Top ? point.y - MARK_HEIGHT : side === Position.Bottom ? point.y : point.y - MARK_HEIGHT / 2;
+  return { x, y, width, height: MARK_HEIGHT };
+}
+
+const overlap = (a: Rect, b: Rect, pad = 2) =>
+  a.x < b.x + b.width + pad && b.x < a.x + a.width + pad && a.y < b.y + b.height + pad && b.y < a.y + a.height + pad;
+
+/** Точка на ломаной на заданном расстоянии от её начала. */
+function pointAlong(points: XYPosition[], distance: number): XYPosition {
+  let left = distance;
+  for (let i = 0; i + 1 < points.length; i++) {
+    const a = points[i];
+    const b = points[i + 1];
+    const length = Math.hypot(b.x - a.x, b.y - a.y);
+    if (length > 0 && left <= length) return { x: a.x + ((b.x - a.x) * left) / length, y: a.y + ((b.y - a.y) * left) / length };
+    left -= length;
+  }
+  return points[points.length - 1];
+}
+
 function box(node: Node) {
   const width = node.measured?.width ?? 200;
   const height = node.measured?.height ?? 90;
@@ -81,6 +157,9 @@ interface Attachment {
   end: XYPosition;
   sourceSide: Position;
   targetSide: Position;
+  /** На сколько метку карты контекстов отодвинуть от рамки вдоль линии. */
+  sourceShift: number;
+  targetShift: number;
 }
 
 /**
@@ -90,7 +169,7 @@ interface Attachment {
 function attachments(nodes: Node[], edges: Edge[]): Map<string, Attachment> {
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const sides = new Map<string, { edgeId: string; end: 'source' | 'target'; side: Position; node: Node }>();
-  const groups = new Map<string, Array<{ key: string; order: number }>>();
+  const groups = new Map<string, Array<{ key: string; order: number; mark: Mark | null }>>();
 
   // Порядок связей фиксирован: иначе одна и та же схема разложилась бы
   // по-разному от перерисовки к перерисовке.
@@ -113,12 +192,13 @@ function attachments(nodes: Node[], edges: Edge[]): Map<string, Attachment> {
         ...(groups.get(group) ?? []),
         // Вдоль боковой грани соседей упорядочивает высота собеседника,
         // вдоль верхней и нижней — его горизонталь.
-        { key, order: horizontal(item.side) ? other.y + other.height / 2 : other.x + other.width / 2 },
+        { key, order: horizontal(item.side) ? other.y + other.height / 2 : other.x + other.width / 2, mark: contextOf(edge.data) ? markFor(contextOf(edge.data)!, item.end) : null },
       ]);
     }
   }
 
   const spot = new Map<string, XYPosition>();
+  const shifts = new Map<string, number>();
   for (const [group, items] of groups) {
     const sorted = [...items].sort((a, b) => a.order - b.order);
     sorted.forEach((item, index) => {
@@ -126,6 +206,26 @@ function attachments(nodes: Node[], edges: Edge[]): Map<string, Attachment> {
       spot.set(item.key, pointOnSide(info.node, info.side, index, sorted.length));
     });
     void group;
+
+    /**
+     * Метки соседних связей на тесной грани слиплись бы в пятно: у блока в
+     * 56 px три линии входят через 6 px, а метка — 18. Тогда метки встают
+     * лесенкой: каждая следующая — дальше от рамки на длину предыдущей.
+     */
+    const marked = sorted.filter((item) => item.mark);
+    if (marked.length < 2) continue;
+    const { node, side } = sides.get(marked[0].key)!;
+    const size = box(node);
+    const along = horizontal(side) ? size.height : size.width;
+    const spacing = Math.max(0, along - SIDE_MARGIN * 2) / (sorted.length + 1);
+    // Поперёк линии метка занимает высоту на боковой грани и ширину на верхней и нижней.
+    const across = horizontal(side) ? MARK_HEIGHT : Math.max(...marked.map((item) => markWidth(item.mark!)));
+    if (spacing >= across + 2) continue;
+    let shift = 0;
+    for (const item of marked) {
+      shifts.set(item.key, shift);
+      shift += (horizontal(side) ? markWidth(item.mark!) : MARK_HEIGHT) + 3;
+    }
   }
 
   const result = new Map<string, Attachment>();
@@ -134,7 +234,15 @@ function attachments(nodes: Node[], edges: Edge[]): Map<string, Attachment> {
     const end = spot.get(`${edge.id}:target`);
     const sourceSide = sides.get(`${edge.id}:source`)?.side;
     const targetSide = sides.get(`${edge.id}:target`)?.side;
-    if (start && end && sourceSide && targetSide) result.set(edge.id, { start, end, sourceSide, targetSide });
+    if (start && end && sourceSide && targetSide)
+      result.set(edge.id, {
+        start,
+        end,
+        sourceSide,
+        targetSide,
+        sourceShift: shifts.get(`${edge.id}:source`) ?? 0,
+        targetShift: shifts.get(`${edge.id}:target`) ?? 0,
+      });
   }
   return result;
 }
@@ -218,7 +326,7 @@ function pathPoints(path: string): XYPosition[] {
   return points;
 }
 
-export default function FloatingEdge({ id, markerEnd, style, label, selected }: EdgeProps) {
+export default function FloatingEdge({ id, markerEnd, style, label, selected, data }: EdgeProps) {
   const nodes = useNodes();
   const edges = useEdges();
 
@@ -226,6 +334,8 @@ export default function FloatingEdge({ id, markerEnd, style, label, selected }: 
     const attachment = attachments(nodes as Node[], edges).get(id);
     if (!attachment) return null;
     const { start, end, sourceSide, targetSide } = attachment;
+    /** Концы едут вместе с путём: по ним ставятся метки карты контекстов. */
+    const done = (line: { path: string; x: number; y: number }) => ({ ...line, attachment });
 
     const straight = () => {
       const [path, x, y] = getSmoothStepPath({
@@ -255,7 +365,7 @@ export default function FloatingEdge({ id, markerEnd, style, label, selected }: 
 
     const plain = straight();
     const blockers = crossed(plain.path);
-    if (!blockers.length) return plain;
+    if (!blockers.length) return done(plain);
 
     for (const options of ATTEMPTS) {
       const smart = getSmartEdge({
@@ -271,30 +381,80 @@ export default function FloatingEdge({ id, markerEnd, style, label, selected }: 
       // Найденный путь тоже проверяется: поиск иногда возвращает маршрут
       // прямо сквозь карточку, и верить ему на слово нельзя.
       if (!(smart instanceof Error) && !crossed(smart.svgPathString).length) {
-        return { path: smart.svgPathString, x: smart.edgeCenterX, y: smart.edgeCenterY };
+        return done({ path: smart.svgPathString, x: smart.edgeCenterX, y: smart.edgeCenterY });
       }
     }
     const points = detour(start, end, sourceSide, targetSide, blockers);
     const middle = points[Math.floor(points.length / 2)];
-    return { path: roundedPath(points), x: middle.x, y: middle.y };
-    return plain;
+    return done({ path: roundedPath(points), x: middle.x, y: middle.y });
   }, [nodes, edges, id]);
+
+  const context = contextOf(data);
+
+  /**
+   * Метки U и D и место подписи. Метка стоит на самой линии у рамки блока —
+   * точка берётся с нарисованного пути, а не по стороне: отодвинутая лесенкой
+   * метка иначе повисла бы в стороне от линии, ушедшей за поворот.
+   */
+  const marks = useMemo(() => {
+    if (!route || !context) return null;
+    const { sourceSide, targetSide, sourceShift, targetShift } = route.attachment;
+    const corners = pathPoints(route.path);
+    const ends = [
+      { end: 'source' as const, side: sourceSide, point: pointAlong(corners, MARK_GAP + sourceShift) },
+      { end: 'target' as const, side: targetSide, point: pointAlong([...corners].reverse(), MARK_GAP + targetShift) },
+    ].map((item) => {
+      const mark = markFor(context, item.end);
+      return { ...item, mark, rect: markRect(item.point, item.side, mark) };
+    });
+
+    /**
+     * На короткой связи подпись посередине налезла бы на метки. Тогда она
+     * уходит с линии вбок: над горизонтальным концом — вверх, у вертикального
+     * — вправо, ровно настолько, чтобы разойтись с меткой.
+     */
+    let shift = { x: 0, y: 0 };
+    if (typeof label === 'string' && label) {
+      const width = labelWidth(label);
+      const rect = { x: route.x - width / 2, y: route.y - LABEL_HEIGHT / 2, width, height: LABEL_HEIGHT };
+      const hit = ends.find((item) => overlap(item.rect, rect));
+      if (hit)
+        shift = horizontal(hit.side)
+          ? { x: 0, y: hit.rect.y - 3 - LABEL_HEIGHT / 2 - route.y }
+          : { x: hit.rect.x + hit.rect.width + 3 + width / 2 - route.x, y: 0 };
+    }
+    return { ends, shift };
+  }, [route, context, label]);
 
   if (!route) return null;
 
   return (
     <>
       <BaseEdge id={id} path={route.path} markerEnd={markerEnd} style={style} />
-      {label && (
+      {(label || marks) && (
         // Подпись рисуется отдельным слоем поверх схемы: в SVG она пряталась
         // под соседними блоками.
         <EdgeLabelRenderer>
-          <div
-            className={`pg-edge-label ${selected ? 'is-selected' : ''}`}
-            style={{ transform: `translate(-50%, -50%) translate(${route.x}px, ${route.y}px)` }}
-          >
-            {label}
-          </div>
+          {label && (
+            <div
+              className={`pg-edge-label ${selected ? 'is-selected' : ''}`}
+              style={{
+                transform: `translate(-50%, -50%) translate(${route.x + (marks?.shift.x ?? 0)}px, ${route.y + (marks?.shift.y ?? 0)}px)`,
+              }}
+            >
+              {label}
+            </div>
+          )}
+          {marks?.ends.map(({ end, side, point, mark }) => (
+            <div
+              key={end}
+              className={`pg-edge-mark pg-edge-mark--${mark.letter === 'U' ? 'up' : 'down'} ${selected ? 'is-selected' : ''}`}
+              style={{ transform: `${MARK_ANCHOR[side]} translate(${point.x}px, ${point.y}px)` }}
+            >
+              {mark.letter}
+              {mark.pattern && <span className="pg-edge-mark__pattern">{mark.pattern}</span>}
+            </div>
+          ))}
         </EdgeLabelRenderer>
       )}
     </>

@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { STATEFUL_KINDS } from './catalog';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import { BLOCK_BY_KIND, STATEFUL_KINDS } from './catalog';
 import { bytesPerWrite, schemaSizes } from './sizing';
 import {
   BYTE_OUTPUTS,
@@ -25,6 +25,7 @@ import {
   type RequirementKind,
 } from './model';
 import type { T } from './i18n';
+import { SaveStatus, type SaveState } from './toolbar';
 
 type Update = (fn: (design: Design) => Design) => void;
 
@@ -99,7 +100,291 @@ export function addRequirement(update: Update, kind: RequirementKind, patch: Par
   }));
 }
 
-export function RequirementsPanel({ design, update, t }: PanelProps) {
+/** Состояние автосохранения проекта и куда он пишется: в облако или в этот браузер. */
+export interface SaveMark {
+  status: SaveState;
+  onServer: boolean;
+}
+
+interface RequirementCardProps {
+  design: Design;
+  item: Requirement;
+  t: T;
+  editing: boolean;
+  /** Отметка сохранения — у карточки, которую только что правили. */
+  saved?: ReactNode;
+  onEdit: () => void;
+  onDone: () => void;
+  onPatch: (patch: Partial<Requirement>) => void;
+  onRemove: () => void;
+}
+
+/**
+ * Требование карточкой, как в Trello: по умолчанию это текст, а не форма —
+ * поле ввода без рамки вокруг смысла читалось как «здесь ничего нельзя».
+ * Щелчок превращает карточку в редактор, щелчок мимо возвращает обратно.
+ *
+ * Читаемую карточку тащат на блок схемы за любое место. В редакторе ручкой
+ * остаётся номер: перетаскивание из textarea выделяет текст, а не карточку.
+ */
+function RequirementCard({ design, item, t, editing, saved, onEdit, onDone, onPatch, onRemove }: RequirementCardProps) {
+  const root = useRef<HTMLLIElement>(null);
+  const card = useRef<HTMLDivElement>(null);
+  const field = useRef<HTMLTextAreaElement>(null);
+  /** Вышли клавишей или кнопкой — фокус вернётся на карточку, иначе с клавиатуры теряется место в списке. */
+  const refocus = useRef(false);
+  const done = useRef(onDone);
+  done.current = onDone;
+  /** Кнопка мыши сейчас нажата: потерю фокуса от этого нажатия разберёт щелчок, а не blur. */
+  const held = useRef(false);
+  /** Где началось нажатие — в карточке или мимо. */
+  const pressed = useRef<'in' | 'out' | null>(null);
+
+  useEffect(() => {
+    if (editing) {
+      const input = field.current;
+      if (!input) return;
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    } else if (refocus.current) {
+      refocus.current = false;
+      card.current?.focus();
+    }
+  }, [editing]);
+
+  /** Поле растёт по тексту: читаемая карточка показывала его целиком, редактор не должен прятать половину. */
+  useLayoutEffect(() => {
+    const input = field.current;
+    if (!editing || !input) return;
+    input.style.height = 'auto';
+    input.style.height = `${input.scrollHeight + input.offsetHeight - input.clientHeight}px`;
+  }, [editing, item.text]);
+
+  /**
+   * Щелчок мимо закрывает редактор — но по click, а не по нажатию: карточка
+   * при закрытии сжимается, соседи под ней съезжают, и щелчок, начатый на
+   * одной карточке, отпускался бы уже над другой и пропадал.
+   */
+  useEffect(() => {
+    if (!editing) return;
+    const inside = (target: EventTarget | null) => Boolean(root.current?.contains(target as Node | null));
+    const down = (event: PointerEvent) => {
+      held.current = true;
+      pressed.current = inside(event.target) ? 'in' : 'out';
+    };
+    const release = () => {
+      held.current = false;
+    };
+    const click = (event: MouseEvent) => {
+      // Выделяли текст и отпустили кнопку за карточкой — это не щелчок мимо.
+      if (pressed.current === 'out' && !inside(event.target)) done.current();
+      pressed.current = null;
+    };
+    document.addEventListener('pointerdown', down, true);
+    document.addEventListener('pointerup', release, true);
+    document.addEventListener('pointercancel', release, true);
+    document.addEventListener('dragend', release, true);
+    document.addEventListener('click', click, true);
+    return () => {
+      held.current = false;
+      pressed.current = null;
+      document.removeEventListener('pointerdown', down, true);
+      document.removeEventListener('pointerup', release, true);
+      document.removeEventListener('pointercancel', release, true);
+      document.removeEventListener('dragend', release, true);
+      document.removeEventListener('click', click, true);
+    };
+  }, [editing]);
+
+  const drag = (event: DragEvent) => {
+    event.dataTransfer.setData(REQ_DRAG, item.id);
+    event.dataTransfer.effectAllowed = 'link';
+  };
+
+  const finish = () => {
+    refocus.current = true;
+    onDone();
+  };
+
+  const remove = (
+    <button
+      type="button"
+      className="pg-icon-button pg-req__remove"
+      title={t('req.remove')}
+      aria-label={`${t('req.remove')}: ${item.id}`}
+      onClick={onRemove}
+    >
+      <i className="codicon codicon-trash" aria-hidden="true" />
+    </button>
+  );
+
+  if (!editing) {
+    const blocks = design.nodes.filter((node) => item.covers.includes(node.id));
+    const nfr = item.kind === 'nfr';
+    return (
+      <li ref={root} className="pg-req__item is-read" draggable onDragStart={drag}>
+        <div
+          ref={card}
+          className="pg-req__card"
+          role="button"
+          tabIndex={0}
+          title={t('req.cardHint')}
+          onClick={onEdit}
+          onKeyDown={(event) => {
+            if (event.target !== event.currentTarget) return;
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              onEdit();
+            }
+          }}
+        >
+          <span className="pg-req__id pg-req__grip">
+            <i className="codicon codicon-gripper" aria-hidden="true" />
+            {item.id}
+          </span>
+          <div className="pg-req__body">
+            <p className={`pg-req__read ${item.text.trim() ? '' : 'is-empty'}`}>
+              {item.text.trim() ? item.text : t('req.clickToWrite')}
+            </p>
+            {(nfr || blocks.length > 0) && (
+              <div className="pg-req__meta">
+                {nfr && item.category && <span className="pg-req__category">{t(`nfr.${item.category}`)}</span>}
+                {nfr && (
+                  <span className={`pg-req__target ${item.target.trim() ? '' : 'is-empty'}`}>
+                    {item.target.trim() ? item.target : t('req.noTarget')}
+                  </span>
+                )}
+                {/* Чем требование уже закрыто: ответ на перетаскивание виден на самой карточке. */}
+                {blocks.map((node) => (
+                  <span key={node.id} className="pg-doc__block">
+                    <i
+                      className={`codicon codicon-${BLOCK_BY_KIND.get(node.kind)?.icon ?? 'server-process'}`}
+                      aria-hidden="true"
+                    />
+                    {node.label || t(`block.${node.kind}`)}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+          <i className="codicon codicon-edit pg-req__pencil" aria-hidden="true" />
+        </div>
+        {remove}
+        {saved}
+      </li>
+    );
+  }
+
+  return (
+    <li
+      ref={root}
+      className="pg-req__item is-editing"
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' || (event.key === 'Enter' && (event.metaKey || event.ctrlKey))) {
+          event.preventDefault();
+          event.stopPropagation();
+          finish();
+        }
+      }}
+      onBlur={(event) => {
+        // Фокус ушёл клавишей Tab за пределы карточки. Уход мышью разбирает щелчок выше.
+        if (held.current) return;
+        const next = event.relatedTarget as Node | null;
+        if (next && !event.currentTarget.contains(next)) onDone();
+      }}
+    >
+      <div className="pg-req__row">
+        {/*
+          Номер — ручка и подпись поля: щелчок ставит курсор в текст,
+          перетаскивание на блок схемы связывает требование с блоком.
+        */}
+        <label
+          className="pg-req__id pg-req__grip"
+          htmlFor={`pg-req-${item.id}`}
+          draggable
+          title={t('req.dragHint')}
+          onDragStart={drag}
+        >
+          <i className="codicon codicon-gripper" aria-hidden="true" />
+          {item.id}
+        </label>
+        <textarea
+          ref={field}
+          id={`pg-req-${item.id}`}
+          className="pg-input pg-textarea pg-req__text"
+          rows={2}
+          placeholder={t('req.text')}
+          value={item.text}
+          onChange={(event) => onPatch({ text: event.currentTarget.value })}
+        />
+        {remove}
+      </div>
+      {item.kind === 'nfr' && (
+        <div className="pg-req__row pg-req__row--nfr">
+          <select
+            className="pg-input pg-select"
+            aria-label={t('req.category')}
+            value={item.category ?? ''}
+            onChange={(event) =>
+              onPatch({ category: (event.currentTarget.value || undefined) as NfrCategory | undefined })
+            }
+          >
+            <option value="">{t('req.category')}</option>
+            {NFR_CATEGORIES.map((category) => (
+              <option key={category} value={category}>
+                {t(`nfr.${category}`)}
+              </option>
+            ))}
+          </select>
+          <input
+            className="pg-input"
+            placeholder={t('req.target')}
+            value={item.target}
+            onChange={(event) => onPatch({ target: event.currentTarget.value })}
+          />
+        </div>
+      )}
+      <div className="pg-req__foot">
+        <button type="button" className="pg-button pg-button--small" title={t('req.doneHint')} onClick={finish}>
+          <i className="codicon codicon-check" aria-hidden="true" /> {t('req.done')}
+        </button>
+      </div>
+      {saved}
+    </li>
+  );
+}
+
+export function RequirementsPanel({ design, update, t, save }: PanelProps & { save?: SaveMark }) {
+  /** Правится одна карточка за раз: остальные остаются текстом. */
+  const [editing, setEditing] = useState<string | null>(null);
+  /** Какую карточку правили последней — отметка сохранения встаёт рядом с ней, а не в шапке окна. */
+  const [touched, setTouched] = useState<string | null>(null);
+
+  // «Сохранено» повисит пару секунд и уйдёт; «сохраняю» и «не сохранено» остаются, пока это правда.
+  const status = save?.status;
+  useEffect(() => {
+    if (!touched || status !== 'saved') return;
+    const timer = setTimeout(() => setTouched(null), 2000);
+    return () => clearTimeout(timer);
+  }, [touched, status]);
+
+  const add = (kind: RequirementKind) => {
+    // Тот же номер, что выдаст addRequirement: новая карточка сразу открыта на правку.
+    const id = nextRequirementId(design, kind);
+    addRequirement(update, kind);
+    setEditing(id);
+    setTouched(id);
+  };
+
+  const remove = (id: string) => {
+    update((current) => ({
+      ...current,
+      requirements: current.requirements.filter((other) => other.id !== id),
+      api: current.api.map((route) => ({ ...route, covers: route.covers.filter((covered) => covered !== id) })),
+    }));
+    setEditing((current) => (current === id ? null : current));
+  };
+
   const section = (kind: RequirementKind) => {
     const items = design.requirements.filter((item) => item.kind === kind);
     return (
@@ -108,7 +393,7 @@ export function RequirementsPanel({ design, update, t }: PanelProps) {
           <h3 className="pg-heading">
             {t(`req.${kind}`)} <span className="pg-count">{items.length}</span>
           </h3>
-          <button type="button" className="pg-button pg-button--small" onClick={() => addRequirement(update, kind)}>
+          <button type="button" className="pg-button pg-button--small" onClick={() => add(kind)}>
             + {t('req.add')}
           </button>
         </header>
@@ -116,77 +401,28 @@ export function RequirementsPanel({ design, update, t }: PanelProps) {
         {!items.length && <p className="pg-hint pg-hint--empty">{t('req.empty')}</p>}
         <ol className="pg-req__list">
           {items.map((item) => (
-            <li className="pg-req__item" key={item.id}>
-              <div className="pg-req__row">
-                {/*
-                  Номер — ручка и подпись поля: щелчок ставит курсор в текст,
-                  перетаскивание на блок схемы связывает требование с блоком.
-                */}
-                <label
-                  className="pg-req__id pg-req__grip"
-                  htmlFor={`pg-req-${item.id}`}
-                  draggable
-                  title={t('req.dragHint')}
-                  onDragStart={(event) => {
-                    event.dataTransfer.setData(REQ_DRAG, item.id);
-                    event.dataTransfer.effectAllowed = 'link';
-                  }}
-                >
-                  <i className="codicon codicon-gripper" aria-hidden="true" />
-                  {item.id}
-                </label>
-                <textarea
-                  id={`pg-req-${item.id}`}
-                  className="pg-input pg-textarea pg-req__text"
-                  rows={2}
-                  placeholder={t('req.text')}
-                  value={item.text}
-                  onChange={(event) => patchRequirement(update, item.id, { text: event.currentTarget.value })}
-                />
-                <button
-                  type="button"
-                  className="pg-icon-button"
-                  title={t('req.remove')}
-                  aria-label={t('req.remove')}
-                  onClick={() =>
-                    update((design) => ({
-                      ...design,
-                      requirements: design.requirements.filter((other) => other.id !== item.id),
-                      api: design.api.map((route) => ({ ...route, covers: route.covers.filter((id) => id !== item.id) })),
-                    }))
-                  }
-                >
-                  <i className="codicon codicon-trash" aria-hidden="true" />
-                </button>
-              </div>
-              {kind === 'nfr' && (
-                <div className="pg-req__row pg-req__row--nfr">
-                  <select
-                    className="pg-input pg-select"
-                    aria-label={t('req.category')}
-                    value={item.category ?? ''}
-                    onChange={(event) =>
-                      patchRequirement(update, item.id, {
-                        category: (event.currentTarget.value || undefined) as NfrCategory | undefined,
-                      })
-                    }
-                  >
-                    <option value="">{t('req.category')}</option>
-                    {NFR_CATEGORIES.map((category) => (
-                      <option key={category} value={category}>
-                        {t(`nfr.${category}`)}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    className="pg-input"
-                    placeholder={t('req.target')}
-                    value={item.target}
-                    onChange={(event) => patchRequirement(update, item.id, { target: event.currentTarget.value })}
-                  />
-                </div>
-              )}
-            </li>
+            <RequirementCard
+              key={item.id}
+              design={design}
+              item={item}
+              t={t}
+              editing={editing === item.id}
+              saved={
+                save &&
+                touched === item.id && (
+                  <span className="pg-req__saved" role="status">
+                    <SaveStatus t={t} status={save.status} onServer={save.onServer} />
+                  </span>
+                )
+              }
+              onEdit={() => setEditing(item.id)}
+              onDone={() => setEditing((current) => (current === item.id ? null : current))}
+              onPatch={(patch) => {
+                patchRequirement(update, item.id, patch);
+                setTouched(item.id);
+              }}
+              onRemove={() => remove(item.id)}
+            />
           ))}
         </ol>
       </section>

@@ -609,6 +609,52 @@ body:has(.pg) .site-footer {
   color: var(--pg-accent);
 }
 
+/* Метки U и D на концах связи в нотации карты контекстов. Высота 18px —
+   её же закладывает FloatingEdge, когда разводит метки и подпись. */
+.pg-edge-mark {
+  position: absolute;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border: 1px solid var(--pg-muted);
+  border-radius: 9px;
+  background: var(--pg-panel);
+  color: var(--pg-fg);
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.66rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Upstream задаёт модель — метка залита; downstream подстраивается — контур. */
+.pg-edge-mark--up {
+  border-color: var(--pg-accent);
+  background: var(--pg-accent-soft);
+  color: var(--pg-accent);
+}
+
+.pg-edge-mark.is-selected {
+  box-shadow: 0 0 0 2px var(--pg-accent-soft);
+}
+
+.pg-edge-mark__pattern {
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+/* Та же метка в инспекторе, рядом с подписью поля. */
+.pg-edge-mark--inline {
+  position: static;
+  vertical-align: middle;
+}
+
 .pg-canvas .react-flow__edge.selected .react-flow__edge-path {
   stroke-width: 2.5;
 }
@@ -906,6 +952,152 @@ body:has(.pg) .site-footer {
 
 .pg-req__text {
   background: var(--pg-panel);
+}
+
+/* Требование читается карточкой: текст, а не форма. Щелчок открывает
+   редактор, тащить на блок можно за любое место. */
+.pg-req__item.is-read {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.2rem;
+  padding: 0;
+  cursor: grab;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+
+.pg-req__item.is-read:hover,
+.pg-req__item.is-read:focus-within {
+  border-color: var(--pg-accent);
+  box-shadow: 0 1px 4px var(--shadow, rgba(16, 18, 22, 0.1));
+}
+
+.pg-req__item.is-read:active {
+  cursor: grabbing;
+}
+
+.pg-req__card {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  padding: 0.5rem;
+  border-radius: var(--pg-radius);
+  cursor: pointer;
+}
+
+.pg-req__card:focus-visible {
+  outline: 2px solid var(--pg-accent);
+  outline-offset: -2px;
+}
+
+.pg-req__card .pg-req__id {
+  padding-top: 0.1rem;
+  cursor: inherit;
+}
+
+.pg-req__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.pg-req__read {
+  margin: 0;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.pg-req__read.is-empty,
+.pg-req__target.is-empty {
+  color: var(--pg-muted);
+  font-style: italic;
+}
+
+.pg-req__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.35rem;
+  font-size: 0.72rem;
+}
+
+.pg-req__category {
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--pg-accent-soft);
+  color: var(--pg-accent);
+  font-weight: 600;
+}
+
+.pg-req__target {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+/* Карандаш и корзина проступают под курсором: в покое карточка — просто текст. */
+.pg-req__pencil {
+  flex: none;
+  margin-top: 0.15rem;
+  font-size: 13px;
+  color: var(--pg-muted);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.pg-req__item.is-read .pg-req__remove {
+  margin: 0.35rem 0.35rem 0 0;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.pg-req__item.is-read:hover .pg-req__pencil,
+.pg-req__item.is-read:focus-within .pg-req__pencil,
+.pg-req__item.is-read:hover .pg-req__remove,
+.pg-req__item.is-read:focus-within .pg-req__remove {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .pg-req__pencil,
+  .pg-req__item.is-read .pg-req__remove {
+    opacity: 1;
+  }
+}
+
+.pg-req__item.is-editing {
+  position: relative;
+  border-color: var(--pg-accent);
+  box-shadow: 0 0 0 2px var(--pg-accent-soft);
+}
+
+.pg-req__item.is-editing .pg-req__text {
+  resize: none;
+  overflow: hidden;
+}
+
+.pg-req__foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.4rem;
+}
+
+/* Отметка сохранения — у той карточки, которую правили. */
+.pg-req__saved .pg-status {
+  font-size: 0.7rem;
+}
+
+.pg-req__item.is-read .pg-req__saved {
+  flex-basis: 100%;
+  padding: 0 0.5rem 0.35rem 3.9rem;
+}
+
+.pg-req__item.is-editing .pg-req__saved {
+  position: absolute;
+  left: 0.6rem;
+  bottom: 0.75rem;
 }
 
 /* ---------------------------------------------------------- Инспектор */
@@ -1641,6 +1833,7 @@ body:has(.pg) .site-footer {
 }
 
 .pg-matrix thead th:hover .pg-matrix__remove,
+.pg-matrix tbody th:hover .pg-matrix__remove,
 .pg-matrix__remove:focus-visible {
   opacity: 0.6;
 }
@@ -1693,6 +1886,48 @@ body:has(.pg) .site-footer {
 /* НФТ — фиолетовым, как в документе требований. */
 .pg-matrix__req--nfr {
   color: #7a5cc4;
+}
+
+/* Свой критерий — не номер, а пометка: в документе требований такой строки
+   нет, и цвет у неё не от ФТ и не от НФТ. */
+.pg-matrix__req--own {
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--pg-edge) 12%, var(--pg-panel));
+  color: var(--pg-edge);
+  font-family: inherit;
+  font-size: 0.64rem;
+  font-weight: 600;
+}
+
+/* Текст своего критерия правят на месте: выглядит как текст требования,
+   поле проступает только под курсором и в фокусе. */
+.pg-matrix__criterion {
+  display: block;
+  width: 100%;
+  min-height: 1.4rem;
+  margin-top: 0.2rem;
+  padding: 0.1rem 0.2rem;
+  margin-left: -0.2rem;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--pg-fg);
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  resize: none;
+  field-sizing: content;
+}
+
+.pg-matrix__criterion::placeholder {
+  color: var(--pg-muted);
+}
+
+.pg-matrix__criterion:hover,
+.pg-matrix__criterion:focus {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--pg-border);
 }
 
 .pg-matrix__here {
@@ -1987,7 +2222,8 @@ body:has(.pg) .site-footer {
 /* Блок схемы, на который сейчас бросят маршрут. */
 .react-flow__node.pg-route-drop .pg-block {
   border-color: var(--pg-accent);
-  box-shadow: 0 0 0 3px var(--pg-accent-soft), 0 2px 8px var(--shadow, rgba(16, 18, 22, 0.12));
+  background: var(--pg-accent-soft);
+  box-shadow: 0 0 0 3px var(--pg-accent), 0 0 0 9px var(--pg-accent-soft), 0 2px 8px var(--shadow, rgba(16, 18, 22, 0.12));
 }
 
 .pg-api-list {

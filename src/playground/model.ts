@@ -78,9 +78,33 @@ export interface TechMatrix {
    * берутся требования, которые закрывает сам блок.
    */
   rows?: string[];
-  /** Требование → технология → оценка. Ключи — id требования и название технологии. */
+  /**
+   * Свои критерии — строки, которых нет в документе требований: «команда уже
+   * это эксплуатирует», «есть управляемый сервис». Живут в самой матрице, а не
+   * в требованиях: это довод в пользу технологии, а не обещание системы.
+   */
+  criteria?: MatrixCriterion[];
+  /**
+   * Строка → технология → оценка. Ключ строки — id требования или своего
+   * критерия, ключ колонки — название технологии.
+   */
   cells: Record<string, Record<string, MatrixCell>>;
 }
+
+/** Свой критерий сравнения: строка матрицы не из документа требований. */
+export interface MatrixCriterion {
+  id: string;
+  text: string;
+}
+
+/**
+ * Id своего критерия. Двоеточия в номерах требований не бывает (FR-1, NFR-2),
+ * поэтому строка критерия в `cells` не пересечётся с требованием, даже если
+ * его заведут позже.
+ */
+export const CRITERION_PREFIX = 'own:';
+
+export const criterionId = () => `${CRITERION_PREFIX}${uid('c')}`;
 
 /** Синхронный вызов ждёт ответа, асинхронный — оставляет сообщение и уходит. */
 export type EdgeMode = 'sync' | 'async';
@@ -91,11 +115,40 @@ export interface DesignEdge {
   target: string;
   label: string;
   mode: EdgeMode;
+  /**
+   * Как связь нарисована. Нет поля — стрелка вызова, как было всегда: старые
+   * проекты открываются без миграции. `context` — карта контекстов из DDD:
+   * линия без стрелки с метками U и D на концах. `mode` при этом хранится, но
+   * не показывается: вернувшись к стрелке, человек получает её прежней.
+   */
+  notation?: 'context';
+  /**
+   * Какой конец связи — upstream. Нет поля — `target`: тот, кого вызывают,
+   * задаёт модель, а вызывающий под неё подстраивается. От направления вызова
+   * это не зависит: издатель событий — upstream, хотя стрелка идёт от него.
+   */
+  upstream?: EdgeEnd;
+  /** Паттерн отношений на upstream-конце: OHS, PL. Свободный текст. */
+  upstreamPattern?: string;
+  /** Паттерн на downstream-конце: ACL, CF. */
+  downstreamPattern?: string;
   /** Провёл интервьюер на доске кандидата в собеседовании. */
   drawnBy?: 'interviewer';
   /** Была в исходной системе сценария. */
   given?: boolean;
 }
+
+export type EdgeEnd = 'source' | 'target';
+
+/**
+ * Связь карты контекстов — отношение команд и моделей, а не вызов: ни
+ * направления вызова, ни sync/async на ней не видно. Поэтому всё, что судит
+ * о вызовах (проверки путей, поиск единой точки отказа), её пропускает.
+ */
+export const isContextEdge = (edge: Pick<DesignEdge, 'notation'>): boolean => edge.notation === 'context';
+
+/** Upstream-конец связи; по умолчанию — тот, кого вызывают. */
+export const upstreamEnd = (edge: Pick<DesignEdge, 'upstream'>): EdgeEnd => (edge.upstream === 'source' ? 'source' : 'target');
 
 export type RequirementKind = 'fr' | 'nfr';
 
@@ -470,6 +523,14 @@ export function migrateBoard(data: Partial<Board> | undefined): Board {
             ? {
                 options: Array.isArray(node.matrix.options) ? node.matrix.options : [],
                 rows: Array.isArray(node.matrix.rows) ? node.matrix.rows : undefined,
+                // Поля нет в старых проектах — и не появляется, пока своих критериев нет.
+                ...(Array.isArray(node.matrix.criteria)
+                  ? {
+                      criteria: node.matrix.criteria
+                        .filter((item) => item && typeof item.id === 'string' && item.id)
+                        .map((item) => ({ id: item.id, text: typeof item.text === 'string' ? item.text : '' })),
+                    }
+                  : {}),
                 cells: node.matrix.cells ?? {},
               }
             : undefined,
@@ -626,7 +687,8 @@ export function lint(design: Board, spofKinds: ReadonlySet<string>): Finding[] {
    * управляемой базы реплики могут быть внутри.
    */
   const incoming = new Map<string, number>();
-  for (const edge of design.edges) incoming.set(edge.target, (incoming.get(edge.target) ?? 0) + 1);
+  for (const edge of design.edges)
+    if (!isContextEdge(edge)) incoming.set(edge.target, (incoming.get(edge.target) ?? 0) + 1);
   for (const node of blocks) {
     if (spofKinds.has(node.kind) && (incoming.get(node.id) ?? 0) >= 2) {
       const twins = blocks.filter((other) => other.kind === node.kind).length;

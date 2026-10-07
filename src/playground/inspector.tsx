@@ -1,11 +1,24 @@
 import { useEffect, useState } from 'react';
-import { BLOCKS, EDGE_PRESETS } from './catalog';
+import { BLOCKS, DOWNSTREAM_PATTERNS, EDGE_PRESETS, UPSTREAM_PATTERNS } from './catalog';
 import { competencyFor, localized, type CompetencyGroup } from './competency';
 import { patchRequirement } from './panels';
 import { BlockRoutes } from './api-panel';
 import { SchemaSummary } from './schema-editor';
 import { ReqChip } from './req-chip';
-import { TEXT_SIZES, isText, type Design, type DesignNode, type MatrixCell, type MatrixScore, type Requirement, type TechMatrix } from './model';
+import {
+  TEXT_SIZES,
+  criterionId,
+  isContextEdge,
+  isText,
+  upstreamEnd,
+  type Design,
+  type DesignNode,
+  type MatrixCell,
+  type MatrixCriterion,
+  type MatrixScore,
+  type Requirement,
+  type TechMatrix,
+} from './model';
 import type { T } from './i18n';
 
 type Update = (fn: (design: Design) => Design) => void;
@@ -80,7 +93,10 @@ const emptyMatrix = (): TechMatrix => ({ options: [], cells: {} });
  * Матрица выбора технологии во весь экран: в боковой панели колонки не
  * читаются.
  *
- * Строки — требования проекта, которые завёл сам пользователь: ФТ и НФТ.
+ * Строки — требования проекта, которые завёл сам пользователь: ФТ и НФТ, —
+ * и его же критерии, которых в документе требований нет: технологию выбирают
+ * не только по обещаниям системы, но и по тому, что команда умеет и во что
+ * обойдётся эксплуатация.
  * Колонки — технологии, которые он решил сравнить. Готовых значений нет ни в
  * одной ячейке: отметку и «почему» пишет пользователь. На собеседовании это и
  * есть сигнал — умеет ли кандидат обосновать выбор своими требованиями, а не
@@ -97,6 +113,7 @@ function MatrixDialog({ node, group, requirements, patch, onClose, t, readOnly }
   readOnly: boolean;
 }) {
   const [draft, setDraft] = useState('');
+  const [criterionDraft, setCriterionDraft] = useState('');
   const matrix = node.matrix ?? emptyMatrix();
 
   useEffect(() => {
@@ -121,7 +138,8 @@ function MatrixDialog({ node, group, requirements, patch, onClose, t, readOnly }
         return [req, rest];
       }),
     );
-    save({ options: matrix.options.filter((option) => option !== name), cells });
+    // Строки остаются как были: убирают колонку, а не выбор требований и свои критерии.
+    save({ ...matrix, options: matrix.options.filter((option) => option !== name), cells });
     if (node.tech === name) patch({ tech: undefined });
   };
 
@@ -150,7 +168,35 @@ function MatrixDialog({ node, group, requirements, patch, onClose, t, readOnly }
   const rows = requirements.filter((item) => picked.includes(item.id)).sort(byRelevance);
   const spare = requirements.filter((item) => !picked.includes(item.id)).sort(byRelevance);
 
-  const fits = (option: string) => rows.filter((row) => cell(row.id, option).score === 'yes').length;
+  // Свои критерии — после требований: сначала то, что система обещает, потом
+  // то, что важно только для этого выбора.
+  const criteria = matrix.criteria ?? [];
+
+  const addCriterion = (text: string) => {
+    const clean = text.trim();
+    if (!clean || criteria.some((item) => item.text.trim().toLowerCase() === clean.toLowerCase())) return;
+    save({ ...matrix, criteria: [...criteria, { id: criterionId(), text: clean }] });
+    setCriterionDraft('');
+  };
+
+  const renameCriterion = (id: string, text: string) =>
+    save({ ...matrix, criteria: criteria.map((item) => (item.id === id ? { ...item, text } : item)) });
+
+  // Требование из строк только скрывают — оценки ждут его возвращения. Свой
+  // критерий удаляют насовсем, и его ячейки уходят вместе с ним.
+  const removeCriterion = (id: string) => {
+    const { [id]: _, ...cells } = matrix.cells;
+    const left = criteria.filter((item) => item.id !== id);
+    save({ ...matrix, criteria: left.length ? left : undefined, cells });
+  };
+
+  // Итог считает все строки: свой критерий весит столько же, сколько требование.
+  const allRows: { id: string; req?: Requirement; own?: MatrixCriterion }[] = [
+    ...rows.map((req) => ({ id: req.id, req })),
+    ...criteria.map((own) => ({ id: own.id, own })),
+  ];
+
+  const fits = (option: string) => allRows.filter((row) => cell(row.id, option).score === 'yes').length;
 
   // Подсказки — названия из каталога, которых ещё нет в колонках.
   const suggestions = (group?.options ?? [])
@@ -188,6 +234,25 @@ function MatrixDialog({ node, group, requirements, patch, onClose, t, readOnly }
                 <i className="codicon codicon-add" aria-hidden="true" /> {t('comp.addOption')}
               </button>
             </form>
+            {/* Свой критерий — такой же формой, что и технология: строку можно
+                завести, даже когда документ требований пуст. */}
+            <form
+              className="pg-matrix__form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                addCriterion(criterionDraft);
+              }}
+            >
+              <input
+                className="pg-input"
+                value={criterionDraft}
+                placeholder={t('comp.criterionPlaceholder')}
+                onChange={(event) => setCriterionDraft(event.currentTarget.value)}
+              />
+              <button type="submit" className="pg-button pg-button--small">
+                <i className="codicon codicon-add" aria-hidden="true" /> {t('comp.addCriterion')}
+              </button>
+            </form>
             {spare.length > 0 && (
               <div className="pg-matrix__suggest">
                 <span className="pg-field__label">{t('comp.addRow')}</span>
@@ -218,13 +283,13 @@ function MatrixDialog({ node, group, requirements, patch, onClose, t, readOnly }
           </div>
         )}
 
-        {requirements.length === 0 ? (
-          <p className="pg-matrix__empty">{t('comp.noReqs')}</p>
-        ) : rows.length === 0 ? (
-          <p className="pg-matrix__empty">{t('comp.noRows')}</p>
+        {/* Таблица появляется с первой строкой любого рода: свой критерий
+            заменяет требование, которого в документе ещё нет. */}
+        {allRows.length === 0 ? (
+          <p className="pg-matrix__empty">{t(requirements.length === 0 ? 'comp.noReqs' : 'comp.noRows')}</p>
         ) : (
           <div className="pg-compare__scroll">
-            {/* Строки видны и без колонок: сначала решают, по каким требованиям сравнивать, потом — что. */}
+            {/* Строки видны и без колонок: сначала решают, по каким требованиям и критериям сравнивать, потом — что. */}
             {matrix.options.length === 0 && <p className="pg-matrix__empty">{t('comp.noOptions')}</p>}
             <table className="pg-compare pg-matrix">
               <thead>
@@ -262,24 +327,44 @@ function MatrixDialog({ node, group, requirements, patch, onClose, t, readOnly }
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => (
+                {allRows.map(({ id, req, own }) => {
+                  // Одна строка — либо требование, либо свой критерий: шапка
+                  // разная, ячейки с оценками — одни и те же.
+                  const row = { id, label: req ? req.id : own?.text || t('comp.ownBadge') };
+                  return (
                   <tr key={row.id}>
                     <th scope="row">
-                      <span className={`pg-matrix__req pg-matrix__req--${row.kind}`}>{row.id}</span>
-                      {row.covers.includes(node.id) && <span className="pg-matrix__here">{t('comp.coversHere')}</span>}
+                      {req && <span className={`pg-matrix__req pg-matrix__req--${req.kind}`}>{req.id}</span>}
+                      {req?.covers.includes(node.id) && <span className="pg-matrix__here">{t('comp.coversHere')}</span>}
+                      {own && <span className="pg-matrix__req pg-matrix__req--own">{t('comp.ownBadge')}</span>}
                       {!readOnly && (
                         <button
                           type="button"
                           className="pg-icon-button pg-matrix__remove pg-matrix__remove-row"
                           aria-label={t('comp.removeRow')}
                           title={t('comp.removeRow')}
-                          onClick={() => setRows(picked.filter((id) => id !== row.id))}
+                          onClick={() => (own ? removeCriterion(own.id) : setRows(picked.filter((item) => item !== row.id)))}
                         >
                           <i className="codicon codicon-close" aria-hidden="true" />
                         </button>
                       )}
-                      <span className="pg-matrix__text">{row.text}</span>
-                      {row.kind === 'nfr' && row.target && <span className="pg-matrix__target">{row.target}</span>}
+                      {req && <span className="pg-matrix__text">{req.text}</span>}
+                      {req?.kind === 'nfr' && req.target && <span className="pg-matrix__target">{req.target}</span>}
+                      {/* Текст требования правят в документе требований, свой
+                          критерий — прямо здесь: больше он нигде не живёт. */}
+                      {own &&
+                        (readOnly ? (
+                          <span className="pg-matrix__text">{own.text}</span>
+                        ) : (
+                          <textarea
+                            className="pg-matrix__criterion"
+                            rows={1}
+                            value={own.text}
+                            placeholder={t('comp.criterionPlaceholder')}
+                            aria-label={t('comp.criterionLabel')}
+                            onChange={(event) => renameCriterion(own.id, event.currentTarget.value)}
+                          />
+                        ))}
                     </th>
                     {matrix.options.map((option) => {
                       const value = cell(row.id, option);
@@ -289,7 +374,7 @@ function MatrixDialog({ node, group, requirements, patch, onClose, t, readOnly }
                             {/* Три отметки рядом, а не одна по кругу: видно, из чего
                                 выбирают, и нужная ставится одним щелчком. Повторный
                                 щелчок по выбранной снимает её. */}
-                            <div className="pg-matrix__marks" role="radiogroup" aria-label={row.id}>
+                            <div className="pg-matrix__marks" role="radiogroup" aria-label={row.label}>
                               {(['yes', 'partial', 'no'] as MatrixScore[]).map((score) => (
                                 <button
                                   key={score}
@@ -318,7 +403,8 @@ function MatrixDialog({ node, group, requirements, patch, onClose, t, readOnly }
                       );
                     })}
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
               {matrix.options.length > 0 && (
                 <tfoot>
@@ -328,10 +414,10 @@ function MatrixDialog({ node, group, requirements, patch, onClose, t, readOnly }
                       <td key={option} className={option === node.tech ? 'is-chosen' : ''}>
                         <div className="pg-matrix__total">
                           <span className="pg-matrix__bar">
-                            <span style={{ width: `${rows.length ? (fits(option) / rows.length) * 100 : 0}%` }} />
+                            <span style={{ width: `${allRows.length ? (fits(option) / allRows.length) * 100 : 0}%` }} />
                           </span>
                           <b>
-                            {fits(option)} / {rows.length}
+                            {fits(option)} / {allRows.length}
                           </b>
                         </div>
                       </td>
@@ -546,10 +632,14 @@ export function InspectorPanel({ design, update, t, lang, selection, readOnly, s
         ...current,
         edges: current.edges.map((item) => (item.id === edge.id ? { ...item, ...value } : item)),
       }));
+    const context = isContextEdge(edge);
+    const upstream = upstreamEnd(edge);
+    const downstream = upstream === 'source' ? 'target' : 'source';
     return (
       <div className="pg-panel">
         <p className="pg-edge-route">
-          {name(edge.source)} <i className="codicon codicon-arrow-right" aria-hidden="true" /> {name(edge.target)}
+          {name(edge.source)}{' '}
+          <i className={`codicon codicon-${context ? 'dash' : 'arrow-right'}`} aria-hidden="true" /> {name(edge.target)}
         </p>
         <fieldset className="pg-plain" disabled={readOnly}>
           <label className="pg-field">
@@ -566,20 +656,80 @@ export function InspectorPanel({ design, update, t, lang, selection, readOnly, s
               ))}
             </datalist>
           </label>
+          {/*
+            Одна и та же линия читается двумя способами: кто кого вызывает или
+            кто под чью модель подстраивается. Выбор — у связи, а не у схемы:
+            на одной доске бывают и вызовы, и отношения контекстов.
+          */}
           <fieldset className="pg-field pg-segmented">
-            <legend className="pg-field__label">{t('inspect.mode')}</legend>
-            {(['sync', 'async'] as const).map((mode) => (
-              <label key={mode} className={edge.mode === mode ? 'is-on' : ''}>
-                <input type="radio" name="pg-edge-mode" checked={edge.mode === mode} onChange={() => patch({ mode })} />
-                {t(`inspect.${mode}`)}
+            <legend className="pg-field__label">{t('inspect.notation')}</legend>
+            {(['call', 'context'] as const).map((kind) => (
+              <label key={kind} className={context === (kind === 'context') ? 'is-on' : ''}>
+                <input
+                  type="radio"
+                  name="pg-edge-notation"
+                  checked={context === (kind === 'context')}
+                  onChange={() => patch({ notation: kind === 'context' ? 'context' : undefined })}
+                />
+                {t(`inspect.notation.${kind}`)}
               </label>
             ))}
           </fieldset>
+          {context ? (
+            <>
+              <p className="pg-hint">{t('inspect.contextHint')}</p>
+              {/* Паттерн — свободный текст с подсказками: на картах пишут и OHS/PL вместе, и своё. */}
+              {(
+                [
+                  ['upstream', upstream, 'upstreamPattern', UPSTREAM_PATTERNS],
+                  ['downstream', downstream, 'downstreamPattern', DOWNSTREAM_PATTERNS],
+                ] as const
+              ).map(([role, end, field, presets]) => (
+                <label className="pg-field" key={role}>
+                  <span className="pg-field__label">
+                    <span className={`pg-edge-mark pg-edge-mark--${role === 'upstream' ? 'up' : 'down'} pg-edge-mark--inline`}>
+                      {role === 'upstream' ? 'U' : 'D'}
+                    </span>{' '}
+                    {t(`inspect.${role}`)}: {name(edge[end])}
+                  </span>
+                  <input
+                    className="pg-input"
+                    list={`pg-edge-${role}`}
+                    value={edge[field] ?? ''}
+                    placeholder={t('inspect.pattern')}
+                    onChange={(event) => patch({ [field]: event.currentTarget.value || undefined })}
+                  />
+                  <datalist id={`pg-edge-${role}`}>
+                    {presets.map((preset) => (
+                      <option key={preset} value={preset} />
+                    ))}
+                  </datalist>
+                </label>
+              ))}
+            </>
+          ) : (
+            <fieldset className="pg-field pg-segmented">
+              <legend className="pg-field__label">{t('inspect.mode')}</legend>
+              {(['sync', 'async'] as const).map((mode) => (
+                <label key={mode} className={edge.mode === mode ? 'is-on' : ''}>
+                  <input type="radio" name="pg-edge-mode" checked={edge.mode === mode} onChange={() => patch({ mode })} />
+                  {t(`inspect.${mode}`)}
+                </label>
+              ))}
+            </fieldset>
+          )}
           {!readOnly && (
             <div className="pg-actions">
-              <button type="button" className="pg-button" onClick={() => patch({ source: edge.target, target: edge.source })}>
-                <i className="codicon codicon-arrow-swap" aria-hidden="true" /> {t('inspect.from')} ⇄ {t('inspect.to')}
-              </button>
+              {context ? (
+                // Меняются роли, а не концы линии: направление вызова, если к стрелке вернутся, останется прежним.
+                <button type="button" className="pg-button" onClick={() => patch({ upstream: downstream })}>
+                  <i className="codicon codicon-arrow-swap" aria-hidden="true" /> U ⇄ D
+                </button>
+              ) : (
+                <button type="button" className="pg-button" onClick={() => patch({ source: edge.target, target: edge.source })}>
+                  <i className="codicon codicon-arrow-swap" aria-hidden="true" /> {t('inspect.from')} ⇄ {t('inspect.to')}
+                </button>
+              )}
               <button
                 type="button"
                 className="pg-button pg-button--danger"

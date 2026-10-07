@@ -1056,7 +1056,7 @@ export default function Playground({ lang, repository }: Props) {
                         aria-pressed={reqView === name}
                         onClick={() => chooseReqView(name)}
                       >
-                        <i className={`codicon codicon-${name === 'edit' ? 'edit' : 'table'}`} aria-hidden="true" />{' '}
+                        <i className={`codicon codicon-${name === 'edit' ? 'list-unordered' : 'table'}`} aria-hidden="true" />{' '}
                         {t(`doc.view.${name}`)}
                       </button>
                     ))}
@@ -1067,11 +1067,11 @@ export default function Playground({ lang, repository }: Props) {
                     <RequirementsDoc design={view} t={t} draggable={!readOnly} />
                   </div>
                 ) : (
-                  <RequirementsPanel {...panelProps} />
+                  <RequirementsPanel {...panelProps} save={{ status, onServer: isCloudId(design.id) }} />
                 )}
               </>
             )}
-            {activeTab === 'api' && <ApiPanel design={view} update={updateView} t={t} readOnly={readOnly} />}
+            {activeTab === 'api' && <ApiPanel design={view} update={updateView} t={t} readOnly={readOnly} hints={perms.designHints} />}
             {activeTab === 'calc' && (
               <fieldset className="pg-plain" disabled={readOnly}>
                 <CalcPanel
